@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Petrochamp — Painel dos Jurados</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f7f5f3; margin: 0; padding: 24px; color: #1f2937; }
+  .card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 480px; margin: 0 auto 16px; }
+  h1 { color: #7a1a2e; font-size: 20px; text-align: center; margin: 0 0 8px; }
+  p.sub { text-align: center; color: #9ca3af; font-size: 13px; margin-top: 0; }
+  input, select { width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 14px; margin-bottom: 12px; }
+  button { width: 100%; padding: 12px; background: #7a1a2e; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hidden { display: none; }
+  .score-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .score-row span { font-size: 13px; color: #6b7280; flex: 1; }
+  .score-row input { width: 80px; margin-bottom: 0; text-align: center; }
+  .badge { display: inline-block; background: #7a1a2e1a; color: #7a1a2e; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; margin-bottom: 12px; }
+  .status { text-align: center; font-size: 13px; color: #16a34a; font-weight: 600; }
+</style>
+</head>
+<body>
+
+  <div id="registerCard" class="card">
+    <h1>PETROCHAMP</h1>
+    <p class="sub">Painel Remoto dos Jurados</p>
+    <input id="nameInput" type="text" placeholder="O teu código de jurado" style="text-transform: uppercase;" />
+    <button id="registerBtn">Entrar</button>
+    <p id="registerError" style="color:#dc2626; font-size:12px; text-align:center;"></p>
+  </div>
+
+  <div id="mainCard" class="card hidden">
+    <div class="badge" id="phaseLabel">Fase</div>
+    <h1 id="matchTitle" style="font-size:16px;">A aguardar equipas...</h1>
+    <select id="itemSelect"></select>
+    <div id="scoreArea"></div>
+    <button id="submitBtn">Confirmar Pontuação</button>
+    <p id="submitStatus" class="status"></p>
+  </div>
+
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script>
+  const socket = io(window.location.hostname + ':4000'.replace(/^/, ''), { transports: ['polling', 'websocket'] })
+  // Fallback simples: liga sempre à mesma máquina que serviu esta página, na porta 4000
+  const backendUrl = `http://${window.location.hostname}:4000`
+
+  let jurorId = null
+  let state = null
+  let evaluationItems = []
+  let selectedItemId = null
+
+  document.getElementById('registerBtn').onclick = () => {
+    const code = document.getElementById('nameInput').value.trim()
+    if (!code) return
+    socket.emit('juror:register', { code }, (res) => {
+      if (!res.success) {
+        document.getElementById('registerError').textContent = res.error
+        return
+      }
+      jurorId = res.jurorId
+      document.getElementById('registerCard').classList.add('hidden')
+      document.getElementById('mainCard').classList.remove('hidden')
+    })
+  }
+
+  socket.on('state:sync', (incoming) => {
+    state = incoming
+    document.getElementById('phaseLabel').textContent = `Fase ${incoming.phase}`
+    const teamA = incoming.teamA?.name ?? '?'
+    const teamB = incoming.teamB?.name ?? '?'
+    document.getElementById('matchTitle').textContent = `${teamA} vs ${teamB}`
+    fetchItems(incoming.phase)
+    renderScores()
+  })
+
+  async function fetchItems(phase) {
+    const res = await fetch(`${backendUrl}/api/evaluation-items?phase=${phase}`)
+    evaluationItems = await res.json()
+    const select = document.getElementById('itemSelect')
+    select.innerHTML = evaluationItems
+      .map((i) => `<option value="${i.id}">${i.type === 'analitica' ? 'Analítica' : 'Apresentação'} · ${i.maxPoints} pts</option>`)
+      .join('')
+    if (evaluationItems.length) selectedItemId = evaluationItems[0].id
+    select.onchange = (e) => {
+      selectedItemId = e.target.value
+      renderScores()
+    }
+    renderScores()
+  }
+
+  function renderScores() {
+    const item = evaluationItems.find((i) => i.id === selectedItemId)
+    if (!item || !state) return
+    const alreadySubmitted = state.jurorSubmittedItemIds?.includes(item.id)
+    const myEntry = state.jurorEntries?.find((e) => e.jurorId === jurorId && e.itemId === item.id)
+
+    document.getElementById('scoreArea').innerHTML = `
+      <div class="score-row">
+        <span>${state.teamA?.name ?? 'Equipa A'}</span>
+        <input id="scoreA" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreA ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />
+      </div>
+      <div class="score-row">
+        <span>${state.teamB?.name ?? 'Equipa B'}</span>
+        <input id="scoreB" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreB ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />
+      </div>
+    `
+    document.getElementById('submitBtn').disabled = alreadySubmitted
+    document.getElementById('submitStatus').textContent = alreadySubmitted ? 'Já confirmado ✓' : ''
+  }
+
+  document.getElementById('submitBtn').onclick = () => {
+    const item = evaluationItems.find((i) => i.id === selectedItemId)
+    if (!item || !jurorId) return
+    const scoreA = Number(document.getElementById('scoreA').value)
+    const scoreB = Number(document.getElementById('scoreB').value)
+    socket.emit('juror:setScore', { jurorId, itemId: item.id, scoreA, scoreB })
+    document.getElementById('submitStatus').textContent = 'Pontuação enviada ✓'
+  }
+</script>
+</body>
+</html>

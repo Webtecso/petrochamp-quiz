@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Petrochamp — Votação de Repescagem</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f7f5f3; margin: 0; padding: 24px; color: #1f2937; }
+  .card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 480px; margin: 0 auto 16px; }
+  h1 { color: #7a1a2e; font-size: 20px; text-align: center; margin: 0 0 8px; }
+  p.sub { text-align: center; color: #9ca3af; font-size: 13px; margin-top: 0; }
+  .team-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #f3f4f6; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .team-row .info { display: flex; flex-direction: column; }
+  .team-row .name { font-weight: 600; font-size: 14px; }
+  .team-row .inst { font-size: 11px; color: #9ca3af; }
+  .team-row button { background: #7a1a2e; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .votes { font-size: 12px; color: #7a1a2e; font-weight: 700; margin-top: 4px; }
+  .closed-msg { text-align: center; color: #9ca3af; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>PETROCHAMP</h1>
+    <p class="sub">Vota na tua equipa favorita para a Repescagem!</p>
+    <div id="teamsList"></div>
+    <p id="statusMsg" class="closed-msg"></p>
+  </div>
+
+<script>
+  const backendUrl = `http://${window.location.hostname}:4000`
+  let currentConfig = null
+
+  async function load() {
+    const res = await fetch(`${backendUrl}/api/repescagem/active`)
+    const data = await res.json()
+    if (!data || !data.config) {
+      document.getElementById('statusMsg').textContent = 'Nenhuma votação de repescagem disponível neste momento.'
+      return
+    }
+    currentConfig = data.config
+    render(data.tally)
+    document.getElementById('statusMsg').textContent = currentConfig.votingOpen
+      ? ''
+      : 'A votação já foi encerrada. Obrigado a quem participou!'
+  }
+
+  function render(tally) {
+    const list = document.getElementById('teamsList')
+    list.innerHTML = tally
+      .map(
+        (t) => `
+      <div class="team-row">
+        <div class="info">
+          <span class="name">${t.name}</span>
+          <span class="inst">${t.institution}</span>
+          <span class="votes">${t.votes} votos</span>
+        </div>
+        ${currentConfig.votingOpen ? `<button onclick="vote('${t.teamId}')">Votar</button>` : ''}
+      </div>
+    `
+      )
+      .join('')
+  }
+
+  async function vote(teamId) {
+    if (!currentConfig) return
+    await fetch(`${backendUrl}/api/repescagem/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ configId: currentConfig.id, teamId })
+    })
+    load()
+  }
+
+  load()
+  setInterval(load, 5000)
+</script>
+</body>
+</html>

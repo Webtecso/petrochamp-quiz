@@ -1,0 +1,5 @@
+-- CreateTable
+CREATE TABLE "LiveSession" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT DEFAULT 1,
+    "data" TEXT NOT NULL
+);

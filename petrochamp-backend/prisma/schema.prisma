@@ -1,0 +1,250 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Team {
+  id              String   @id @default(cuid())
+  name            String
+  institution     String
+  category        String
+  logoUrl         String?
+  group           String?
+  bracketPosition Int?
+  createdAt       DateTime @default(now())
+}
+
+model Question {
+  id           Int      @id @default(autoincrement())
+  championship String
+  text         String
+  imageUrl     String?
+  optionA      String
+  optionB      String
+  optionC      String
+  optionD      String
+  correctIndex Int
+  points       Int
+  phase        Int
+  createdAt    DateTime @default(now())
+}
+
+model TiebreakQuestion {
+  id           Int      @id @default(autoincrement())
+  championship String
+  text         String
+  imageUrl     String?
+  optionA      String
+  optionB      String
+  optionC      String
+  optionD      String
+  correctIndex Int
+  points       Int
+  phase        Int
+  createdAt    DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model Phase {
+  id                    Int      @id @default(autoincrement())
+  championship          String
+  order                 Int
+  label                 String
+  type                  String   @default("quiz")
+  useQuestions          Boolean  @default(true)
+  useJudges             Boolean  @default(false)
+  maxQuestions          Int?
+  questionsPerTeam      Int?
+  avoidRepeatQuestions  Boolean  @default(true)
+  useInitialScores      Boolean  @default(false)
+  initialScoreMaxPoints Int?
+  presentationMinutes   Int?
+  presentationWeight    Int?     @default(50)
+  quizWeight            Int?     @default(50)
+  createdAt             DateTime @default(now())
+}
+
+model PresentationDupla {
+  id        Int      @id @default(autoincrement())
+  phaseId   Int
+  order     Int
+  themeA    String
+  themeB    String?
+  teamAId   String
+  teamBId   String?
+  createdAt DateTime @default(now())
+}
+
+model PresentationCriteria {
+  id        Int      @id @default(autoincrement())
+  phaseId   Int
+  label     String
+  maxPoints Int
+  createdAt DateTime @default(now())
+}
+
+model PresentationScore {
+  id         Int      @id @default(autoincrement())
+  criteriaId Int
+  jurorId    String
+  teamId     String
+  score      Int
+  createdAt  DateTime @default(now())
+
+  @@unique([criteriaId, jurorId, teamId])
+}
+
+model LiveSession {
+  id   Int    @id @default(1)
+  data String
+}
+
+model BracketMatch {
+  id           Int      @id @default(autoincrement())
+  championship String
+  round        Int
+  slot         Int
+  groupName    String?
+  teamAId      String?
+  teamBId      String?
+  winnerId     String?
+  createdAt    DateTime @default(now())
+}
+
+model SuspensePhrase {
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model TiebreakMatch {
+  id           Int      @id @default(autoincrement())
+  championship String
+  phase        Int
+  teamAId      String
+  teamBId      String
+  teamAScore   Int      @default(0)
+  teamBScore   Int      @default(0)
+  winnerId     String?
+  resolved     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model Partner {
+  id        Int      @id @default(autoincrement())
+  name      String
+  logoUrl   String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model MatchHistory {
+  id              Int      @id @default(autoincrement())
+  championship    String
+  editionName     String?
+  phase           Int
+  phaseLabel      String
+  teamAId         String
+  teamAName       String
+  teamBId         String
+  teamBName       String
+  teamAScore      Int
+  teamBScore      Int
+  winnerId        String?
+  winnerName      String?
+  wasTiebreak     Boolean  @default(false)
+  deviceMode      String?
+  startedAt       DateTime
+  endedAt         DateTime
+  durationSeconds Int
+  createdAt       DateTime @default(now())
+}
+
+model RepescagemConfig {
+  id                    Int       @id @default(autoincrement())
+  championship          String
+  phase                 Int
+  maxRepescados         Int
+  votingDurationSeconds Int       @default(60)
+  votingOpen            Boolean   @default(false)
+  started               Boolean   @default(false)
+  startedAt             DateTime?
+  closedAt              DateTime?
+  createdAt             DateTime  @default(now())
+}
+
+model RepescagemVote {
+  id        Int      @id @default(autoincrement())
+  configId  Int
+  teamId    String
+  createdAt DateTime @default(now())
+}
+
+model ChampionshipHistory {
+  id               Int      @id @default(autoincrement())
+  championship     String
+  editionName      String
+  championTeamId   String?
+  championTeamName String?
+  finalRankingJson String
+  matchesJson      String
+  totalMatches     Int
+  startedAt        DateTime
+  endedAt          DateTime @default(now())
+  createdAt        DateTime @default(now())
+}
+
+model Juror {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model PhaseJurorAuthorization {
+  id      Int    @id @default(autoincrement())
+  phaseId Int
+  jurorId String
+
+  @@unique([phaseId, jurorId])
+}
+
+model EvaluationItem {
+  id           String   @id @default(cuid())
+  championship String
+  type         String
+  text         String
+  maxPoints    Int
+  phase        Int
+  scope        String   @default("single")
+  createdAt    DateTime @default(now())
+}
+
+model PresentationDocument {
+  id        Int      @id @default(autoincrement())
+  phaseId   Int
+  duplaId   Int
+  teamId    String
+  createdAt DateTime @default(now())
+  slides    PresentationSlide[]
+
+  @@unique([duplaId, teamId])
+}
+
+model PresentationSlide {
+  id         Int                  @id @default(autoincrement())
+  documentId Int
+  order      Int
+  imageUrl   String
+  document   PresentationDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, order])
+}

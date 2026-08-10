@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  --color-petro-dark: #4a0f1c;
+  --color-petro-primary: #7a1a2e;
+  --color-petro-bg: #f7f5f3;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}

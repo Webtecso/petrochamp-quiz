@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<title>Petrochamp - Teste Socket.IO</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+  button { padding: 8px 14px; margin: 4px; cursor: pointer; }
+  pre { background: #f4f4f4; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+  select { padding: 6px; margin: 4px; }
+</style>
+</head>
+<body>
+<h2>Petrochamp — Teste do Backend em Tempo Real</h2>
+<p>Estado da ligação: <b id="status">a ligar...</b></p>
+
+<div>
+  <select id="championshipSelect">
+    <option value="universitario">Universitário</option>
+    <option value="ensino_medio">Ensino Médio</option>
+    <option value="exibicao">Exibição</option>
+  </select>
+  <button onclick="selectChampionship()">Escolher Campeonato</button>
+</div>
+
+<div>
+  <select id="teamASelect"></select>
+  <select id="teamBSelect"></select>
+  <button onclick="loadTeams()">Carregar Equipas</button>
+  <button onclick="selectTeams()">Escolher as Duas Equipas</button>
+</div>
+
+<div>
+  <button onclick="socket.emit('moderator:startTimer')">Iniciar Tempo</button>
+  <button onclick="socket.emit('moderator:pauseTimer')">Pausar Tempo</button>
+  <button onclick="socket.emit('moderator:nextQuestion')">Próxima Pergunta</button>
+  <button onclick="socket.emit('moderator:addScore', {team: 'A', amount: 10})">+10 Equipa A</button>
+  <button onclick="socket.emit('moderator:addScore', {team: 'B', amount: 10})">+10 Equipa B</button>
+  <button onclick="socket.emit('moderator:finishMatch')">Finalizar Partida</button>
+</div>
+
+<h3>Estado ao vivo (o que todos os aparelhos recebem):</h3>
+<pre id="stateDisplay">a aguardar...</pre>
+
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script>
+  const socket = io('http://localhost:4000')
+
+  socket.on('connect', () => {
+    document.getElementById('status').textContent = 'Ligado ✓'
+  })
+  socket.on('disconnect', () => {
+    document.getElementById('status').textContent = 'Desligado'
+  })
+  socket.on('state:sync', (state) => {
+    document.getElementById('stateDisplay').textContent = JSON.stringify(state, null, 2)
+  })
+
+  function selectChampionship() {
+    const championship = document.getElementById('championshipSelect').value
+    socket.emit('moderator:selectChampionship', { championship })
+  }
+
+  async function loadTeams() {
+    const res = await fetch('http://localhost:4000/api/teams')
+    const teams = await res.json()
+    const optionsHtml = teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')
+    document.getElementById('teamASelect').innerHTML = optionsHtml
+    document.getElementById('teamBSelect').innerHTML = optionsHtml
+  }
+
+  function selectTeams() {
+    const teamAId = document.getElementById('teamASelect').value
+    const teamBId = document.getElementById('teamBSelect').value
+    socket.emit('moderator:selectTeams', { teamAId, teamBId })
+  }
+</script>
+</body>
+</html>
