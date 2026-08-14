@@ -3,21 +3,30 @@ import { prisma } from '../db'
 
 const router = Router()
 
-router.get('/', async (_req, res) => {
-  const phases = await prisma.phase.findMany({ orderBy: { order: 'asc' } })
+router.get('/', async (req, res) => {
+  const { championship } = req.query as { championship?: string }
+  const phases = await prisma.phase.findMany({
+    where: championship ? { championship } : undefined,
+    orderBy: { order: 'asc' }
+  })
   res.json(phases)
 })
 
 router.post('/', async (req, res) => {
-  const { label, useQuestions, useJudges, maxQuestions, questionsPerTeam } = req.body
-  if (!label) {
-    res.status(400).json({ error: 'label é obrigatório' })
+  const { championship, label, type, useQuestions, useJudges, maxQuestions, questionsPerTeam } = req.body
+  if (!label || !championship) {
+    res.status(400).json({ error: 'championship e label são obrigatórios' })
     return
   }
-  const maxOrder = await prisma.phase.aggregate({ _max: { order: true } })
+  const maxOrder = await prisma.phase.aggregate({
+    where: { championship },
+    _max: { order: true }
+  })
   const phase = await prisma.phase.create({
     data: {
+      championship,
       label,
+      type: type ?? 'quiz',
       useQuestions: useQuestions ?? true,
       useJudges: useJudges ?? false,
       maxQuestions: maxQuestions ?? null,
@@ -30,11 +39,11 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id)
-  const { label, useQuestions, useJudges, order, maxQuestions, questionsPerTeam } = req.body
+  const { label, type, useQuestions, useJudges, order, maxQuestions, questionsPerTeam } = req.body
   try {
     const phase = await prisma.phase.update({
       where: { id },
-      data: { label, useQuestions, useJudges, order, maxQuestions, questionsPerTeam }
+      data: { label, type, useQuestions, useJudges, order, maxQuestions, questionsPerTeam }
     })
     res.json(phase)
   } catch {

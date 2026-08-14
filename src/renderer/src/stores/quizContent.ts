@@ -3,6 +3,8 @@ import { api } from '../services/api'
 import type { QuizQuestion } from '../data/questions'
 import type { EvaluationItem } from '../data/evaluationItems'
 
+export { EvaluationItem }
+
 export const useQuizContentStore = defineStore('quizContent', {
   state: () => ({
     questions: [] as QuizQuestion[],

@@ -80,13 +80,6 @@ function confirmReset(): void {
           Jurados
         </button>
         <button
-          class="px-4 py-2 rounded-lg text-sm transition"
-          :class="isActive('/moderador/apresentacao') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
-          @click="go('/moderador/apresentacao')"
-        >
-          Apresentação
-        </button>
-        <button
           class="px-4 py-2 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
           :class="isActive('/moderador/configuracoes') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
           :disabled="battleInProgress"

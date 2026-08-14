@@ -24,7 +24,8 @@ import championshipHistoryRouter from './routes/championshipHistory'
 import presentationRouter from './routes/presentation'
 import presentationDocumentsRouter from './routes/presentationDocuments'
 import { registerSocketHandlers } from './socket'
-import { loadPersistedState } from './socket/liveState'
+import { loadPersistedState, liveState } from './socket/liveState'
+import { startPublicTunnel, stopPublicTunnel } from './services/tunnel'
 
 const app = express()
 app.use(cors())
@@ -61,7 +62,26 @@ const io = new Server(httpServer, {
   cors: { origin: '*' }
 })
 
+// Rota interna, chamada só pelo processo principal do Electron (nunca pelo
+// portal público) para publicar o URL do túnel Cloudflare assim que o
+// cloudflared o imprime no arranque. O broadcast faz a Projeção reagir.
+app.post('/api/internal/public-url', (req, res) => {
+  const { url } = req.body as { url?: string }
+  liveState.publicVotingUrl = url ?? null
+  io.emit('state:sync', liveState)
+  res.json({ success: true })
+})
+
 registerSocketHandlers(io)
+
+startPublicTunnel(() => {
+  io.emit('state:sync', liveState)
+})
+
+process.on('SIGINT', () => {
+  stopPublicTunnel()
+  process.exit(0)
+})
 
 const PORT = process.env.PORT || 4000
 

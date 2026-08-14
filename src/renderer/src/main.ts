@@ -12,13 +12,15 @@ import { useQuizContentStore } from './stores/quizContent'
 import { useSettingsStore } from './stores/settings'
 import { usePhasesStore } from './stores/phases'
 import { useJuradosStore } from './stores/jurados'
+import { loadSavedBackendHost } from './services/serverConfig'
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.mount('#app')
 
-if (!Capacitor.isNativePlatform()) {
+// Função auxiliar para inicializar stores e socket
+const initApp = () => {
   connectSocket()
 
   const campeonatoStore = useCampeonatoStore()
@@ -30,11 +32,6 @@ if (!Capacitor.isNativePlatform()) {
   useSettingsStore().fetchSettings()
   usePhasesStore().fetchPhases()
 
-  // CORRIGIDO: passa a verificar também se há uma Apresentação em curso —
-  // antes só olhava para teamA/teamB (Quiz), por isso uma sessão de
-  // Apresentação nunca era retomada, e pior: se sobrasse uma sessão de
-  // Quiz antiga persistida, o app forçava sempre a volta para lá, mesmo
-  // estando a testar Apresentação de propósito.
   getSocket().once(
     'state:sync',
     (state: { teamA?: unknown; teamB?: unknown; presentationFlow?: { stage?: string } }) => {
@@ -51,4 +48,16 @@ if (!Capacitor.isNativePlatform()) {
       }
     }
   )
+}
+
+if (!Capacitor.isNativePlatform()) {
+  initApp()
+} else {
+  loadSavedBackendHost().then((host) => {
+    if (host) {
+      initApp()
+    }
+    // Se não houver host guardado, o router já trata disto — o
+    // defaultPath nativo é '/servidor', por isso a app cai lá sozinha.
+  })
 }

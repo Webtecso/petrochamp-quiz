@@ -27,7 +27,9 @@ export const useLiveBracketStore = defineStore('liveBracket', {
     forTournamentBracket: (state) => {
       const total = state.matches.length ? Math.max(...state.matches.map((m) => m.round)) : 0
       if (total === 0) return null
-      const rounds = []
+
+      const rounds: { name: string; leftMatches: LiveBracketMatch[]; rightMatches: LiveBracketMatch[] }[] = []
+
       for (let r = 1; r < total; r++) {
         const roundMatches = state.matches.filter((m) => m.round === r).sort((a, b) => a.slot - b.slot)
         const half = Math.ceil(roundMatches.length / 2)
@@ -35,7 +37,8 @@ export const useLiveBracketStore = defineStore('liveBracket', {
         const name = remaining === 1 ? 'Meias-Finais' : remaining === 2 ? 'Quartas de Final' : `Ronda ${r}`
         rounds.push({ name, leftMatches: roundMatches.slice(0, half), rightMatches: roundMatches.slice(half) })
       }
-      const finalMatch = state.matches.find((m) => m.round === total) ?? { id: 'final' }
+
+      const finalMatch = state.matches.find((m) => m.round === total) ?? { id: 0 } as any // Cast forçado para evitar erro de tipo com objeto dummy
       return { rounds, finalMatch }
     }
   },
@@ -49,9 +52,6 @@ export const useLiveBracketStore = defineStore('liveBracket', {
       await fetch(`${getBackendUrl()}/api/bracket-live/${championship}/generate`, { method: 'POST' })
       await this.fetchBracket(championship)
     },
-    // NOVO: usa o DELETE /:championship que já existe no bracketLive.ts —
-    // apaga só o chaveamento ativo, nunca o histórico de campeonatos já
-    // finalizados (esses vivem numa tabela completamente separada).
     async clearBracket(championship: string): Promise<void> {
       await fetch(`${getBackendUrl()}/api/bracket-live/${championship}`, { method: 'DELETE' })
       this.matches = []

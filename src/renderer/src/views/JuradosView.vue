@@ -7,6 +7,7 @@ import { useSettingsStore } from '../stores/settings'
 import { usePhasesStore } from '../stores/phases'
 import { getBackendUrl } from '../services/backendConfig'
 import LogoMark from '../components/LogoMark.vue'
+import type { EvaluationItem } from '../data/evaluationItems'
 
 interface PresentationCriteria {
   id: number
@@ -20,9 +21,6 @@ const quizContent = useQuizContentStore()
 const settings = useSettingsStore()
 const phasesStore = usePhasesStore()
 
-// CORRIGIDO: removido o redirecionamento forçado para "Escolher Equipas".
-// Este painel já não depende de existir uma batalha 1x1 — pode estar em
-// três modos: batalha (Quiz), apresentação de projetos, ou à espera.
 onMounted(async () => {
   await phasesStore.fetchPhases(store.championship ?? undefined)
   await settings.fetchSettings()
@@ -45,6 +43,13 @@ const hasBattle = computed(() => !!store.teamA && !!store.teamB)
 
 const phaseConfig = computed(() => phasesStore.configFor(store.phase))
 const evaluationItems = computed(() => quizContent.itemsForPhase(store.phase))
+const openItems = computed(() => evaluationItems.value.filter((i) => i.mode !== 'multipla_escolha'))
+const multipleChoiceItems = computed(() => evaluationItems.value.filter((i) => i.mode === 'multipla_escolha'))
+
+function jurorsAllowedFor(item: EvaluationItem | undefined): typeof jurados.jurors {
+  if (!item || !item.jurorIds || item.jurorIds.length === 0) return jurados.jurors
+  return jurados.jurors.filter((j) => item.jurorIds!.includes(j.id))
+}
 
 const newJurorName = ref('')
 const registerError = ref('')
@@ -81,11 +86,12 @@ function confirmInitialScores(): void {
 }
 
 const selectedItemId = ref('')
-watch(evaluationItems, (items) => {
+watch(openItems, (items) => {
   if (!selectedItemId.value && items.length) selectedItemId.value = items[0].id
 })
-const selectedItem = computed(() => evaluationItems.value.find((i) => i.id === selectedItemId.value))
+const selectedItem = computed(() => openItems.value.find((i) => i.id === selectedItemId.value))
 const itemSubmitted = computed(() => (selectedItem.value ? jurados.isSubmitted(selectedItem.value.id) : false))
+const allowedJurorsForSelected = computed(() => jurorsAllowedFor(selectedItem.value))
 
 function scoreFor(jurorId: string, team: 'a' | 'b'): number {
   if (!selectedItem.value) return 0
@@ -349,11 +355,34 @@ const presentationStageLabel = computed(() => {
           </div>
         </div>
 
+        <!-- Perguntas de Múltipla Escolha — só mostra estado, sem inputs manuais -->
+        <div v-if="multipleChoiceItems.length" class="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
+          <h3 class="font-semibold text-sm text-gray-600 mb-3">Perguntas Analíticas de Múltipla Escolha</h3>
+          <p class="text-xs text-gray-400 mb-3">
+            Estas são corrigidas automaticamente pelo sistema — o Moderador ativa-as na grelha de perguntas normal.
+            Nada a fazer aqui, é só acompanhar.
+          </p>
+          <div
+            v-for="item in multipleChoiceItems"
+            :key="item.id"
+            class="flex items-center justify-between gap-3 border-b border-gray-50 py-2 last:border-0"
+            :class="store.currentAnalyticItemId === item.id ? 'bg-amber-50/50 -mx-2 px-2 rounded-lg' : ''"
+          >
+            <span class="text-sm truncate">{{ item.text }} <span class="text-amber-600 font-semibold">· {{ item.timeSeconds ?? 30 }}s · {{ item.maxPoints }} pts</span></span>
+            <span
+              v-if="store.currentAnalyticItemId === item.id"
+              class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase shrink-0"
+            >
+              Em curso
+            </span>
+          </div>
+        </div>
+
         <div class="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
           <h3 class="font-semibold text-sm text-gray-600 mb-3">Pergunta / Item a Avaliar</h3>
 
-          <div v-if="!evaluationItems.length" class="text-xs text-gray-400 text-center py-4">
-            Não há itens de avaliação cadastrados para a Fase {{ store.phase }}. Adiciona-os no Painel do Administrador.
+          <div v-if="!openItems.length" class="text-xs text-gray-400 text-center py-4">
+            Não há perguntas abertas cadastradas para a Fase {{ store.phase }}. Adiciona-as no Painel do Administrador.
           </div>
 
           <template v-else>
@@ -361,20 +390,24 @@ const presentationStageLabel = computed(() => {
               v-model="selectedItemId"
               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-petro-primary mb-3"
             >
-              <option v-for="item in evaluationItems" :key="item.id" :value="item.id">
+              <option v-for="item in openItems" :key="item.id" :value="item.id">
                 Analítica · {{ item.maxPoints }} pts {{ jurados.isSubmitted(item.id) ? '· ✓ avaliado' : '' }}
               </option>
             </select>
 
-            <p v-if="selectedItem" class="text-sm text-gray-500 mb-4">{{ selectedItem.text }}</p>
+            <p v-if="selectedItem" class="text-sm text-gray-500 mb-1">{{ selectedItem.text }}</p>
+            <p v-if="selectedItem?.jurorIds?.length" class="text-[11px] text-amber-600 mb-4">
+              Avaliação restrita aos jurados: {{ allowedJurorsForSelected.map((j) => j.name).join(', ') || '—' }}
+            </p>
+            <div v-else class="mb-4"></div>
 
-            <div v-if="jurados.jurors.length === 0" class="text-xs text-gray-400 text-center py-4">
-              Regista pelo menos um jurado para começar a pontuar (localmente ou pelo portal remoto).
+            <div v-if="allowedJurorsForSelected.length === 0" class="text-xs text-gray-400 text-center py-4">
+              Regista pelo menos um jurado (dos atribuídos a esta pergunta) para começar a pontuar.
             </div>
 
             <div v-else class="flex flex-col gap-3">
               <div
-                v-for="j in jurados.jurors"
+                v-for="j in allowedJurorsForSelected"
                 :key="j.id"
                 class="flex items-center justify-between gap-3 border border-gray-100 rounded-xl px-4 py-3 flex-wrap"
               >

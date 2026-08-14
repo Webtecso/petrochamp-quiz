@@ -5,7 +5,10 @@ import http from 'http'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+const CLOUDFLARED_PATH = 'C:\\Program Files (x86)\\cloudflared\\cloudflared.exe'
+
 let backendProcess: ChildProcess | null = null
+let tunnelProcess: ChildProcess | null = null
 
 function startLocalBackend(): void {
   if (backendProcess) return
@@ -48,6 +51,59 @@ function waitForBackend(url: string, timeoutMs: number): Promise<void> {
     }
     attempt()
   })
+}
+
+function reportPublicUrl(url: string): void {
+  const publicPortalUrl = `${url}/portal/votacao.html`
+  const body = JSON.stringify({ url: publicPortalUrl })
+  const req = http.request(
+    'http://localhost:4000/api/internal/public-url',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    },
+    (res) => res.resume()
+  )
+  req.on('error', (err) => console.error('Falha ao reportar URL público:', err))
+  req.end(body)
+}
+
+function startPublicTunnel(): void {
+  if (tunnelProcess) return
+  console.log('A arrancar túnel público (cloudflared)...')
+  tunnelProcess = spawn(CLOUDFLARED_PATH, ['tunnel', '--url', 'http://localhost:4000'])
+
+  tunnelProcess.on('error', (err) => {
+    console.error('Falha ao arrancar o túnel público (cloudflared não encontrado?):', err)
+    tunnelProcess = null
+  })
+
+  const urlRegex = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/
+
+  function handleOutput(chunk: Buffer): void {
+    const text = chunk.toString()
+    console.log('[cloudflared]', text)
+    const match = text.match(urlRegex)
+    if (match) {
+      console.log('Túnel público disponível em:', match[0])
+      reportPublicUrl(match[0])
+    }
+  }
+
+  tunnelProcess.stdout?.on('data', handleOutput)
+  tunnelProcess.stderr?.on('data', handleOutput) // cloudflared escreve o URL no stderr
+
+  tunnelProcess.on('exit', (code) => {
+    console.log('Túnel público terminou, código:', code)
+    tunnelProcess = null
+  })
+}
+
+function stopPublicTunnel(): void {
+  if (tunnelProcess) {
+    tunnelProcess.kill()
+    tunnelProcess = null
+  }
 }
 
 function createModeratorWindow(): void {
@@ -133,6 +189,8 @@ app.whenReady().then(async () => {
     console.error('Não foi possível confirmar o arranque do backend local:', error)
   }
 
+  startPublicTunnel()
+
   createModeratorWindow()
   createProjectionWindow()
 
@@ -146,6 +204,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   stopLocalBackend()
+  stopPublicTunnel()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -153,4 +212,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopLocalBackend()
+  stopPublicTunnel()
 })

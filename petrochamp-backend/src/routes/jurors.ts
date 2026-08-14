@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db'
-import { generateJoinCode } from '../socket/liveState'
+import { generateJurorCode } from '../socket/liveState'
 
 const router = Router()
 
@@ -15,11 +15,11 @@ router.post('/', async (req, res) => {
     res.status(400).json({ error: 'name é obrigatório' })
     return
   }
-  let code = generateJoinCode()
+  let code = generateJurorCode()
   for (let i = 0; i < 5; i++) {
     const exists = await prisma.juror.findUnique({ where: { code } })
     if (!exists) break
-    code = generateJoinCode()
+    code = generateJurorCode()
   }
   const juror = await prisma.juror.create({ data: { name, code } })
   res.status(201).json(juror)

@@ -5,118 +5,540 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Petrochamp — Painel dos Jurados</title>
 <style>
+  :root {
+    --petro-primary: #7a1a2e;
+    --petro-dark: #4a0f1c;
+    --petro-gold: #d4a94b;
+  }
+
   * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #f7f5f3; margin: 0; padding: 24px; color: #1f2937; }
-  .card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 480px; margin: 0 auto 16px; }
-  h1 { color: #7a1a2e; font-size: 20px; text-align: center; margin: 0 0 8px; }
-  p.sub { text-align: center; color: #9ca3af; font-size: 13px; margin-top: 0; }
-  input, select { width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 14px; margin-bottom: 12px; }
-  button { width: 100%; padding: 12px; background: #7a1a2e; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .hidden { display: none; }
-  .score-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-  .score-row span { font-size: 13px; color: #6b7280; flex: 1; }
-  .score-row input { width: 80px; margin-bottom: 0; text-align: center; }
-  .badge { display: inline-block; background: #7a1a2e1a; color: #7a1a2e; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; margin-bottom: 12px; }
-  .status { text-align: center; font-size: 13px; color: #16a34a; font-weight: 600; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    color: #1f2937;
+    background-color: var(--petro-dark);
+    background-image:
+      linear-gradient(180deg, rgba(20,6,10,0.75) 0%, rgba(20,6,10,0.92) 100%),
+      url('projecao-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .logo {
+    color: #fff;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 1px;
+    text-align: center;
+    margin-bottom: 4px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .logo span { color: var(--petro-gold); }
+
+  .tagline {
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    text-align: center;
+    margin-bottom: 24px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .card {
+    background: rgba(255,255,255,0.97);
+    backdrop-filter: blur(6px);
+    border-radius: 20px;
+    padding: 28px 24px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto 16px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  h1 {
+    color: var(--petro-primary);
+    font-size: 19px;
+    text-align: center;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+  p.sub { text-align: center; color: #9ca3af; font-size: 13px; margin: 0 0 20px; }
+
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 6px;
+    margin-top: 14px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input, select {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    font-size: 15px;
+    transition: border-color 0.15s;
+    background: #fafafa;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--petro-primary);
+    background: #fff;
+  }
+  input#codeInput { text-transform: uppercase; letter-spacing: 2px; font-weight: 700; text-align: center; }
+
+  button {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--petro-primary), #5e1523);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    margin-top: 20px;
+    box-shadow: 0 4px 14px rgba(122,26,46,0.35);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+  .hidden { display: none !important; }
+
+  .error-msg {
+    color: #dc2626;
+    font-size: 12px;
+    text-align: center;
+    margin-top: 12px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 8px;
+  }
+
+  .welcome {
+    text-align: center;
+    color: #fff;
+    font-size: 13px;
+    margin-bottom: 12px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+  .welcome b { color: var(--petro-gold); }
+
+  .badge {
+    display: inline-block;
+    background: var(--petro-primary);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 5px 14px;
+    border-radius: 9999px;
+    margin-bottom: 14px;
+  }
+
+  .stagebadge {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--petro-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+
+  .theme {
+    text-align: center;
+    color: #6b7280;
+    font-size: 13px;
+    margin: 0 0 18px;
+  }
+
+  .score-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    background: #fafafa;
+    border: 1px solid #f0f0f0;
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .score-row span {
+    font-size: 13px;
+    color: #4b5563;
+    font-weight: 500;
+    flex: 1;
+  }
+  .score-row input {
+    width: 74px;
+    padding: 8px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--petro-primary);
+  }
+
+  .waiting {
+    text-align: center;
+    font-size: 13px;
+    color: #9ca3af;
+    padding: 28px 10px;
+    line-height: 1.5;
+  }
+
+  .status {
+    text-align: center;
+    font-size: 13px;
+    color: #16a34a;
+    font-weight: 700;
+    margin-top: 14px;
+  }
+
+  .team-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--petro-primary);
+    margin-bottom: 2px;
+  }
 </style>
 </head>
 <body>
 
+  <div class="logo">PETRO<span>CHAMP</span></div>
+  <div class="tagline">Painel Remoto dos Jurados</div>
+
   <div id="registerCard" class="card">
-    <h1>PETROCHAMP</h1>
-    <p class="sub">Painel Remoto dos Jurados</p>
-    <input id="nameInput" type="text" placeholder="O teu código de jurado" style="text-transform: uppercase;" />
+    <h1>Identificação do Jurado</h1>
+    <p class="sub">Insere o teu nome e o código dado pelo Administrador</p>
+
+    <label for="nameInput">Nome</label>
+    <input id="nameInput" type="text" placeholder="O teu nome" autocomplete="name" />
+
+    <label for="codeInput">Código (4 dígitos)</label>
+    <input id="codeInput" type="text" placeholder="0000" inputmode="numeric" maxlength="4" />
+
     <button id="registerBtn">Entrar</button>
-    <p id="registerError" style="color:#dc2626; font-size:12px; text-align:center;"></p>
+    <p id="registerError" class="error-msg hidden"></p>
   </div>
 
-  <div id="mainCard" class="card hidden">
+  <!-- ===== MODO BATALHA (Quiz) ===== -->
+  <div id="quizCard" class="card hidden">
     <div class="badge" id="phaseLabel">Fase</div>
-    <h1 id="matchTitle" style="font-size:16px;">A aguardar equipas...</h1>
+    <div class="team-title" id="matchTitle">A aguardar equipas...</div>
+    <div id="mcItemsArea"></div>
+    <label for="itemSelect">Pergunta / Item</label>
     <select id="itemSelect"></select>
-    <div id="scoreArea"></div>
+    <div id="scoreArea" style="margin-top: 16px;"></div>
     <button id="submitBtn">Confirmar Pontuação</button>
     <p id="submitStatus" class="status"></p>
   </div>
 
+  <!-- ===== MODO APRESENTAÇÃO DE PROJETOS ===== -->
+  <div id="presentationCard" class="card hidden">
+    <div class="badge" id="presPhaseLabel">Fase</div>
+    <span class="stagebadge" id="presStageLabel"></span>
+    <div class="team-title" id="presTeamName">A aguardar apresentação...</div>
+    <p class="theme" id="presTheme"></p>
+    <div id="presWaiting" class="waiting hidden"></div>
+    <div id="presNoCriteria" class="waiting hidden">Nenhum critério cadastrado para esta fase.</div>
+    <div id="presScoreArea"></div>
+    <button id="presSubmitBtn" class="hidden">Confirmar Avaliação</button>
+    <p id="presSubmitStatus" class="status"></p>
+  </div>
+
+  <p id="welcomeMsg" class="welcome hidden"></p>
+
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 <script>
-  const socket = io(window.location.hostname + ':4000'.replace(/^/, ''), { transports: ['polling', 'websocket'] })
-  // Fallback simples: liga sempre à mesma máquina que serviu esta página, na porta 4000
   const backendUrl = `http://${window.location.hostname}:4000`
+  const socket = io(backendUrl, { transports: ['polling', 'websocket'] })
 
   let jurorId = null
+  let jurorName = null
   let state = null
+
+  // ---- Modo Batalha (Quiz) ----
   let evaluationItems = []
+  let multipleChoiceItems = []
+  let openItems = []
   let selectedItemId = null
 
+  // ---- Modo Apresentação ----
+  let phasesCache = {}
+  let criteriaCache = {}
+  let currentPhaseRecord = null
+
+  function showError(msg) {
+    const el = document.getElementById('registerError')
+    el.textContent = msg
+    el.classList.remove('hidden')
+  }
+
   document.getElementById('registerBtn').onclick = () => {
-    const code = document.getElementById('nameInput').value.trim()
-    if (!code) return
+    const name = document.getElementById('nameInput').value.trim()
+    const code = document.getElementById('codeInput').value.trim().toUpperCase()
+    document.getElementById('registerError').classList.add('hidden')
+
+    if (!name) { showError('Introduz o teu nome.'); return }
+    if (!code) { showError('Introduz o código de jurado.'); return }
+
     socket.emit('juror:register', { code }, (res) => {
       if (!res.success) {
-        document.getElementById('registerError').textContent = res.error
+        showError(res.error)
         return
       }
       jurorId = res.jurorId
+      jurorName = name
       document.getElementById('registerCard').classList.add('hidden')
-      document.getElementById('mainCard').classList.remove('hidden')
+      const welcome = document.getElementById('welcomeMsg')
+      welcome.innerHTML = `Bem-vindo(a), <b>${jurorName}</b>`
+      welcome.classList.remove('hidden')
+      render()
     })
   }
 
-  socket.on('state:sync', (incoming) => {
+  socket.on('state:sync', async (incoming) => {
     state = incoming
-    document.getElementById('phaseLabel').textContent = `Fase ${incoming.phase}`
-    const teamA = incoming.teamA?.name ?? '?'
-    const teamB = incoming.teamB?.name ?? '?'
-    document.getElementById('matchTitle').textContent = `${teamA} vs ${teamB}`
-    fetchItems(incoming.phase)
-    renderScores()
+    if (jurorId === null) return
+    await resolveCurrentPhase()
+    render()
   })
 
-  async function fetchItems(phase) {
-    const res = await fetch(`${backendUrl}/api/evaluation-items?phase=${phase}`)
-    evaluationItems = await res.json()
-    const select = document.getElementById('itemSelect')
-    select.innerHTML = evaluationItems
-      .map((i) => `<option value="${i.id}">${i.type === 'analitica' ? 'Analítica' : 'Apresentação'} · ${i.maxPoints} pts</option>`)
-      .join('')
-    if (evaluationItems.length) selectedItemId = evaluationItems[0].id
-    select.onchange = (e) => {
-      selectedItemId = e.target.value
-      renderScores()
+  async function resolveCurrentPhase() {
+    if (!state?.championship) {
+      currentPhaseRecord = null
+      return
     }
-    renderScores()
+    if (!phasesCache[state.championship]) {
+      try {
+        const res = await fetch(`${backendUrl}/api/phases?championship=${state.championship}`)
+        phasesCache[state.championship] = await res.json()
+      } catch {
+        phasesCache[state.championship] = []
+      }
+    }
+    const phases = phasesCache[state.championship]
+    currentPhaseRecord = phases.find((p) => p.order === state.phase) ?? null
   }
 
-  function renderScores() {
-    const item = evaluationItems.find((i) => i.id === selectedItemId)
-    if (!item || !state) return
+  async function loadCriteria(phaseId) {
+    if (criteriaCache[phaseId]) return criteriaCache[phaseId]
+    try {
+      const res = await fetch(`${backendUrl}/api/presentation/criteria?phaseId=${phaseId}`)
+      const data = await res.json()
+      criteriaCache[phaseId] = data
+      return data
+    } catch {
+      return []
+    }
+  }
+
+  function isPresentationPhase() {
+    return currentPhaseRecord?.type === 'apresentacao' || currentPhaseRecord?.type === 'apresentacao_quiz'
+  }
+
+  async function render() {
+    if (jurorId === null || !state) return
+
+    document.getElementById('quizCard').classList.add('hidden')
+    document.getElementById('presentationCard').classList.add('hidden')
+
+    if (isPresentationPhase()) {
+      document.getElementById('presentationCard').classList.remove('hidden')
+      await renderPresentation()
+    } else if (state.teamA && state.teamB) {
+      document.getElementById('quizCard').classList.remove('hidden')
+      document.getElementById('phaseLabel').textContent = `Fase ${state.phase}`
+      const teamA = state.teamA?.name ?? '?'
+      const teamB = state.teamB?.name ?? '?'
+      document.getElementById('matchTitle').textContent = `${teamA} vs ${teamB}`
+      await fetchQuizItems(state.phase)
+      renderQuizScores()
+    } else {
+      document.getElementById('quizCard').classList.remove('hidden')
+      document.getElementById('phaseLabel').textContent = `Fase ${state.phase}`
+      document.getElementById('matchTitle').textContent = 'A aguardar equipas...'
+      document.getElementById('mcItemsArea').innerHTML = ''
+      document.getElementById('itemSelect').innerHTML = ''
+      document.getElementById('scoreArea').innerHTML = ''
+      document.getElementById('submitBtn').disabled = true
+    }
+  }
+
+  // ==================== MODO BATALHA (Quiz) ====================
+
+  async function fetchQuizItems(phase) {
+    const res = await fetch(`${backendUrl}/api/evaluation-items?phase=${phase}`)
+    evaluationItems = await res.json()
+    multipleChoiceItems = evaluationItems.filter((i) => i.mode === 'multipla_escolha')
+    openItems = evaluationItems.filter((i) => i.mode !== 'multipla_escolha')
+
+    const select = document.getElementById('itemSelect')
+    select.innerHTML = openItems
+      .map((i) => `<option value="${i.id}">Analítica · ${i.maxPoints} pts</option>`)
+      .join('')
+    if (openItems.length) selectedItemId = openItems[0].id
+    select.onchange = (e) => {
+      selectedItemId = e.target.value
+      renderQuizScores()
+    }
+  }
+
+  function jurorsAllowedFor(item) {
+    if (!item || !item.jurorIds || item.jurorIds.length === 0) return true
+    return item.jurorIds.includes(jurorId)
+  }
+
+  function renderQuizScores() {
+    const item = openItems.find((i) => i.id === selectedItemId)
+    const mcArea = document.getElementById('mcItemsArea')
+    if (mcArea) {
+      mcArea.innerHTML = multipleChoiceItems.length
+        ? multipleChoiceItems
+            .map(
+              (i) => `    <div class="score-row">      <span>${i.text} (${i.timeSeconds ?? 30}s · ${i.maxPoints} pts)</span>      ${state?.currentAnalyticItemId === i.id ? '<span style="color:#d97706;font-weight:700;font-size:11px;">EM CURSO</span>' : ''}    </div>  `
+            )
+            .join('')
+        : ''
+    }
+
+    if (!item || !state) {
+      document.getElementById('scoreArea').innerHTML = ''
+      return
+    }
+
+    if (!jurorsAllowedFor(item)) {
+      document.getElementById('scoreArea').innerHTML =
+        '<p style="font-size:12px;color:#9ca3af;text-align:center;">Esta pergunta está reservada a outros jurados.</p>'
+      document.getElementById('submitBtn').disabled = true
+      return
+    }
+
     const alreadySubmitted = state.jurorSubmittedItemIds?.includes(item.id)
     const myEntry = state.jurorEntries?.find((e) => e.jurorId === jurorId && e.itemId === item.id)
 
-    document.getElementById('scoreArea').innerHTML = `
-      <div class="score-row">
-        <span>${state.teamA?.name ?? 'Equipa A'}</span>
-        <input id="scoreA" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreA ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />
-      </div>
-      <div class="score-row">
-        <span>${state.teamB?.name ?? 'Equipa B'}</span>
-        <input id="scoreB" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreB ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />
-      </div>
-    `
+    document.getElementById('scoreArea').innerHTML = `    <div class="score-row">      <span>${state.teamA?.name ?? 'Equipa A'}</span>      <input id="scoreA" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreA ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />    </div>    <div class="score-row">      <span>${state.teamB?.name ?? 'Equipa B'}</span>      <input id="scoreB" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreB ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />    </div>  `
     document.getElementById('submitBtn').disabled = alreadySubmitted
     document.getElementById('submitStatus').textContent = alreadySubmitted ? 'Já confirmado ✓' : ''
   }
 
   document.getElementById('submitBtn').onclick = () => {
-    const item = evaluationItems.find((i) => i.id === selectedItemId)
+    const item = openItems.find((i) => i.id === selectedItemId)
     if (!item || !jurorId) return
     const scoreA = Number(document.getElementById('scoreA').value)
     const scoreB = Number(document.getElementById('scoreB').value)
     socket.emit('juror:setScore', { jurorId, itemId: item.id, scoreA, scoreB })
     document.getElementById('submitStatus').textContent = 'Pontuação enviada ✓'
+  }
+
+  // ==================== MODO APRESENTAÇÃO DE PROJETOS ====================
+
+  const stageLabels = {
+    idle: 'A aguardar o Moderador',
+    countdown: 'A preparar a apresentação...',
+    presenting: 'Em apresentação',
+    concluded: 'Apresentação concluída — a avaliar'
+  }
+
+  async function renderPresentation() {
+    const flow = state.presentationFlow
+    document.getElementById('presPhaseLabel').textContent = `Fase ${state.phase}`
+    document.getElementById('presStageLabel').textContent = stageLabels[flow.stage] ?? ''
+    document.getElementById('presTeamName').textContent = flow.teamName ?? 'A aguardar apresentação...'
+    document.getElementById('presTheme').textContent = flow.theme ? `Tema: ${flow.theme}` : ''
+
+    const waitingEl = document.getElementById('presWaiting')
+    const noCriteriaEl = document.getElementById('presNoCriteria')
+    const scoreAreaEl = document.getElementById('presScoreArea')
+    const submitBtn = document.getElementById('presSubmitBtn')
+    const statusEl = document.getElementById('presSubmitStatus')
+
+    waitingEl.classList.add('hidden')
+    noCriteriaEl.classList.add('hidden')
+    submitBtn.classList.add('hidden')
+    scoreAreaEl.innerHTML = ''
+    statusEl.textContent = ''
+
+    if (flow.stage === 'idle') {
+      waitingEl.classList.remove('hidden')
+      waitingEl.textContent = 'A aguardar o Moderador iniciar a apresentação de uma equipa.'
+      return
+    }
+
+    if (flow.stage !== 'concluded') {
+      waitingEl.classList.remove('hidden')
+      waitingEl.textContent = 'A avaliação fica disponível assim que o Moderador finalizar a apresentação desta equipa.'
+      return
+    }
+
+    if (!currentPhaseRecord) return
+    const criteria = await loadCriteria(currentPhaseRecord.id)
+    if (!criteria.length) {
+      noCriteriaEl.classList.remove('hidden')
+      return
+    }
+
+    const alreadySubmitted = flow.jurorsSubmitted.includes(jurorId)
+
+    scoreAreaEl.innerHTML = criteria
+      .map((c) => {
+        const entry = flow.criteriaScores.find((e) => e.jurorId === jurorId && e.criteriaId === c.id)
+        return `
+          <div class="score-row">
+            <span>${c.label} (máx. ${c.maxPoints})</span>
+            <input
+              class="pres-score-input"
+              data-criteria-id="${c.id}"
+              data-max="${c.maxPoints}"
+              type="number" min="0" max="${c.maxPoints}"
+              value="${entry?.score ?? 0}"
+              ${alreadySubmitted ? 'disabled' : ''}
+            />
+          </div>
+        `
+      })
+      .join('')
+
+    scoreAreaEl.querySelectorAll('.pres-score-input').forEach((input) => {
+      input.onchange = (e) => {
+        const criteriaId = Number(e.target.dataset.criteriaId)
+        const max = Number(e.target.dataset.max)
+        let score = Number(e.target.value)
+        if (Number.isNaN(score)) score = 0
+        score = Math.max(0, Math.min(max, score))
+        e.target.value = score
+        socket.emit('juror:setPresentationScore', { jurorId, criteriaId, score })
+      }
+    })
+
+    if (alreadySubmitted) {
+      statusEl.textContent = 'Avaliação enviada ✓'
+    } else {
+      submitBtn.classList.remove('hidden')
+    }
+  }
+
+  document.getElementById('presSubmitBtn').onclick = () => {
+    if (!jurorId) return
+    socket.emit('juror:submitPresentationEvaluation', { jurorId })
+    document.getElementById('presSubmitStatus').textContent = 'Avaliação enviada ✓'
+    document.getElementById('presSubmitBtn').classList.add('hidden')
   }
 </script>
 </body>

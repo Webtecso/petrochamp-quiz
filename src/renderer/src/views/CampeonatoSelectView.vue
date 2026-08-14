@@ -44,6 +44,13 @@ async function choose(type: ChampionshipType): Promise<void> {
   if (phaseCounts.value[type] === 0) return
   await store.selectChampionship(type, editionName.value.trim())
   await phasesStore.fetchPhases(type)
+
+  const firstPhase = phasesStore.phases.find((p) => p.order === 1)
+  if (firstPhase?.type === 'apresentacao' || firstPhase?.type === 'apresentacao_quiz') {
+    router.push('/moderador/apresentacao')
+    return
+  }
+
   const hasBracket = !!getBracketFor(type)
   const isTabletOrPhone = Capacitor.isNativePlatform()
   if (isTabletOrPhone && hasBracket) {

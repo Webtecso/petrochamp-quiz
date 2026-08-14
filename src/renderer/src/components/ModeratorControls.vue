@@ -3,13 +3,11 @@ defineProps<{
   isRunning: boolean
   dashboardDisabled: boolean
   canFinish: boolean
-  canNext: boolean
 }>()
 
 const emit = defineEmits<{
   start: []
   pause: []
-  next: []
   finish: []
   dashboard: []
 }>()
@@ -30,13 +28,6 @@ const emit = defineEmits<{
       @click="isRunning ? emit('pause') : emit('start')"
     >
       {{ isRunning ? 'Pausar Tempo' : 'Iniciar Tempo' }}
-    </button>
-    <button
-      class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-      :disabled="!canNext"
-      @click="emit('next')"
-    >
-      Próxima Pergunta
     </button>
     <button
       class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm disabled:opacity-30 disabled:cursor-not-allowed"

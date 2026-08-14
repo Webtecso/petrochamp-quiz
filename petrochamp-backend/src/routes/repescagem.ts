@@ -9,6 +9,14 @@ function nextPowerOfTwo(n: number): number {
   return p
 }
 
+function getClientIp(req: import('express').Request): string {
+  const cf = req.headers['cf-connecting-ip']
+  if (typeof cf === 'string') return cf
+  const xff = req.headers['x-forwarded-for']
+  if (typeof xff === 'string') return xff.split(',')[0].trim()
+  return req.ip ?? 'unknown'
+}
+
 export async function getEligibleTeams(championship: string, phase: number) {
   const matches = await prisma.matchHistory.findMany({ where: { championship, phase } })
   const loserIds = new Set<string>()
@@ -128,15 +136,42 @@ router.get('/active', async (_req, res) => {
   res.json({ config, tally })
 })
 
+router.get('/has-voted', async (req, res) => {
+  const { configId, voterToken } = req.query as { configId?: string; voterToken?: string }
+  if (!configId || !voterToken) {
+    res.json({ voted: false })
+    return
+  }
+  const existing = await prisma.repescagemVote.findUnique({
+    where: { configId_voterToken: { configId: Number(configId), voterToken } }
+  })
+  res.json({ voted: !!existing })
+})
+
 router.post('/vote', async (req, res) => {
-  const { configId, teamId } = req.body
+  const { configId, teamId, voterToken } = req.body
+  if (!voterToken) {
+    res.status(400).json({ error: 'Identificador de dispositivo em falta.' })
+    return
+  }
   const config = await prisma.repescagemConfig.findUnique({ where: { id: configId } })
   if (!config || !config.votingOpen) {
     res.status(400).json({ error: 'Votação não está aberta' })
     return
   }
-  await prisma.repescagemVote.create({ data: { configId, teamId } })
-  res.status(201).json({ success: true })
+  try {
+    await prisma.repescagemVote.create({
+      data: { configId, teamId, voterToken, voterIp: getClientIp(req) }
+    })
+    res.status(201).json({ success: true })
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      res.status(409).json({ error: 'Já votaste nesta votação.' })
+      return
+    }
+    console.error(err)
+    res.status(500).json({ error: 'Falha ao registar o voto.' })
+  }
 })
 
 router.post('/:id/generate-bracket', async (req, res) => {

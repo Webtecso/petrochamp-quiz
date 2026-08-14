@@ -30,6 +30,7 @@ interface MatchCodes {
 
 interface TiebreakState {
   active: boolean
+  pending: boolean
   matchId: number | null
   currentQuestionId: number | null
   usedQuestionIds: number[]
@@ -134,6 +135,11 @@ interface LiveState {
   initialScoreEntries: InitialScoreEntry[]
   initialScoresConfirmed: boolean
   presentationFlow: PresentationFlowState
+  currentItemSource: 'question' | 'analytic' | null
+  currentAnalyticItemId: string | null
+  currentItemMode: 'multipla_escolha' | 'aberta' | null
+  awaitingJuryEvaluation: boolean
+  moderatorAdjusting: boolean
   podium: {
     active: boolean
     phaseNumber: number
@@ -141,6 +147,8 @@ interface LiveState {
     isGrandFinal: boolean
     entries: PodiumEntry[]
   }
+  publicVotingUrl: string | null
+  publicVotingStatus: 'idle' | 'starting' | 'online' | 'failed'
   repescagemReveal: RepescagemRevealState
 }
 
@@ -198,7 +206,7 @@ export const useCampeonatoStore = defineStore('campeonato', {
     teamACorrect: null,
     teamBCorrect: null,
     countdown: { active: false, value: 0 },
-    tiebreak: { active: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] },
+    tiebreak: { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] },
     podiumReveal: { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false },
     phaseTransition: { stage: 'idle' },
     phaseFlow: { stage: 'idle', suspensePhrase: null },
@@ -207,6 +215,11 @@ export const useCampeonatoStore = defineStore('campeonato', {
     initialScoreEntries: [],
     initialScoresConfirmed: false,
     presentationFlow: defaultPresentationFlow(),
+    currentItemSource: null,
+    currentAnalyticItemId: null,
+    currentItemMode: null,
+    awaitingJuryEvaluation: false,
+    moderatorAdjusting: false,
     podium: {
       active: false,
       phaseNumber: 1,
@@ -214,6 +227,8 @@ export const useCampeonatoStore = defineStore('campeonato', {
       isGrandFinal: false,
       entries: []
     },
+    publicVotingUrl: null,
+    publicVotingStatus: 'idle',
     repescagemReveal: { stage: 'idle', countdownValue: 0, configId: null, repescadaNames: [] }
   }),
   actions: {
@@ -248,6 +263,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     forceQuestion(questionId: number) {
       getSocket().emit('moderator:forceQuestion', { questionId })
+    },
+    endOpenQuestion() {
+      getSocket().emit('moderator:endOpenQuestion')
     },
     submitPlayerAnswer(team: 'A' | 'B', optionLabel: string) {
       getSocket().emit('player:submitAnswer', { team, optionLabel })
@@ -335,6 +353,12 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     prevPresentationPage() {
       getSocket().emit('moderator:presentationPrevPage')
+    },
+    enterAdmin() {
+      getSocket().emit('moderator:enterAdmin')
+    },
+    exitAdmin() {
+      getSocket().emit('moderator:exitAdmin')
     }
   }
 })

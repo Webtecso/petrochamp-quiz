@@ -23,7 +23,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="bg-white rounded-2xl shadow p-8 text-center" :class="imageUrl ? 'w-[600px]' : 'w-[520px]'">
+  <div class="bg-white rounded-2xl shadow p-6 sm:p-8 text-center w-full" :class="imageUrl ? 'max-w-[600px]' : 'max-w-[520px]'">
     <div class="flex items-center justify-between mb-4 text-xs">
       <span class="bg-petro-primary/10 text-petro-primary px-2 py-1 rounded-full">EM JOGO</span>
       <span class="text-gray-400">PERGUNTA {{ questionNumber }} DE {{ totalQuestions }}</span>

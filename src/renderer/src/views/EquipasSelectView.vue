@@ -51,8 +51,19 @@ const isLastPhaseFlow = computed(() => store.phase >= phasesStore.totalPhases)
 function onShowPartners(): void {
   store.showPartners()
 }
+
 function onStartNextPhase(): void {
   store.startNextPhase()
+
+  const nextPhaseOrder = Math.min(store.phase + 1, phasesStore.totalPhases)
+  const nextPhase = phasesStore.phases.find((p) => p.order === nextPhaseOrder)
+
+  if (nextPhase?.type === 'apresentacao' || nextPhase?.type === 'apresentacao_quiz') {
+    router.push('/moderador/apresentacao')
+  }
+  // Se for quiz, não fazemos nada — o componente EquipasView continuará montado
+  // e, assim que o estado sync chegar via socket (stage: 'idle'), ele mostrará
+  // automaticamente o chaveamento/confrontos.
 }
 
 async function openRepescagemVoting(): Promise<void> {
@@ -103,6 +114,7 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
     v-if="store.phaseFlow.stage !== 'idle'"
     class="flex-1 flex flex-col items-center justify-center px-10 py-12 gap-6 text-center max-w-md mx-auto"
   >
+    <!-- Repescagem Template -->
     <template v-if="store.phaseFlow.stage === 'repescagem'">
       <h1 class="text-2xl font-bold text-amber-700">Repescagem — Fase {{ store.phase }}</h1>
       <p v-if="repescagemError" class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-sm">
@@ -163,6 +175,8 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
         </button>
       </template>
     </template>
+
+    <!-- Rankings e Institucional -->
     <template v-else-if="store.phaseFlow.stage === 'ranking'">
       <h1 class="text-2xl font-bold text-petro-primary">Ranking da Fase {{ store.phase }}</h1>
       <p class="text-sm text-gray-500">O ranking está a ser mostrado na Projeção.</p>
@@ -193,6 +207,8 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
         Ir para o Pódio
       </RouterLink>
     </template>
+
+    <!-- Suspense/Próxima Fase -->
     <template v-else-if="store.phaseFlow.stage === 'suspense'">
       <h1 class="text-2xl font-bold text-petro-primary">A entrar na fase seguinte</h1>
       <p class="text-sm text-gray-500 italic max-w-xs">"{{ store.phaseFlow.suspensePhrase }}"</p>
@@ -202,6 +218,7 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
     </template>
   </div>
 
+  <!-- Ecrã de Escolha de Confronto (quando stage === 'idle') -->
   <div v-else class="flex-1 flex flex-col items-center justify-center px-10 py-12 gap-8">
     <h1 class="text-2xl font-bold text-petro-primary">Escolha o Próximo Confronto</h1>
     <template v-if="hasBracket">

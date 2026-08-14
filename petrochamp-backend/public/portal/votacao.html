@@ -4,77 +4,210 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Petrochamp — Votação de Repescagem</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <style>
+  :root {
+    --petro-primary: #7a1a2e;
+    --petro-dark: #4a0f1c;
+    --petro-gold: #d4a94b;
+  }
+
   * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #f7f5f3; margin: 0; padding: 24px; color: #1f2937; }
-  .card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 480px; margin: 0 auto 16px; }
-  h1 { color: #7a1a2e; font-size: 20px; text-align: center; margin: 0 0 8px; }
-  p.sub { text-align: center; color: #9ca3af; font-size: 13px; margin-top: 0; }
-  .team-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #f3f4f6; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    color: #1f2937;
+    background-color: var(--petro-dark);
+    background-image:
+      linear-gradient(180deg, rgba(20,6,10,0.75) 0%, rgba(20,6,10,0.92) 100%),
+      url('projecao-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .logo {
+    color: #fff;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 1px;
+    text-align: center;
+    margin-bottom: 4px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .logo span { color: var(--petro-gold); }
+
+  .tagline {
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    text-align: center;
+    margin-bottom: 24px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .card {
+    background: rgba(255,255,255,0.97);
+    backdrop-filter: blur(6px);
+    border-radius: 20px;
+    padding: 28px 24px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto 16px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  h1 {
+    color: var(--petro-primary);
+    font-size: 19px;
+    text-align: center;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+  p.sub { text-align: center; color: #9ca3af; font-size: 13px; margin: 0 0 22px; }
+
+  .team-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1.5px solid #f0f0f0;
+    background: #fafafa;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+  }
   .team-row .info { display: flex; flex-direction: column; }
-  .team-row .name { font-weight: 600; font-size: 14px; }
-  .team-row .inst { font-size: 11px; color: #9ca3af; }
-  .team-row button { background: #7a1a2e; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 13px; cursor: pointer; }
-  .votes { font-size: 12px; color: #7a1a2e; font-weight: 700; margin-top: 4px; }
-  .closed-msg { text-align: center; color: #9ca3af; font-size: 13px; }
+  .team-row .name { font-weight: 700; font-size: 14px; color: #1f2937; }
+  .team-row .inst { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+  .team-row .votes { font-size: 12px; color: var(--petro-primary); font-weight: 700; margin-top: 4px; }
+
+  .team-row button {
+    background: linear-gradient(135deg, var(--petro-primary), #5e1523);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(122,26,46,0.3);
+    transition: transform 0.1s;
+    flex-shrink: 0;
+  }
+  .team-row button:active { transform: scale(0.96); }
+
+  .closed-msg {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+    padding: 8px 0 0;
+  }
 </style>
 </head>
 <body>
+
+  <div class="logo">PETRO<span>CHAMP</span></div>
+  <div class="tagline">Votação de Repescagem</div>
+
   <div class="card">
-    <h1>PETROCHAMP</h1>
-    <p class="sub">Vota na tua equipa favorita para a Repescagem!</p>
+    <h1>Vota na tua equipa favorita!</h1>
+    <p class="sub">Ajuda a decidir quem regressa à competição</p>
     <div id="teamsList"></div>
     <p id="statusMsg" class="closed-msg"></p>
   </div>
 
 <script>
-  const backendUrl = `http://${window.location.hostname}:4000`
+  const backendUrl = ''
+
+  function getVoterToken() {
+    let token = localStorage.getItem('petrochamp_voter_token')
+    if (!token) {
+      token = crypto.randomUUID()
+      localStorage.setItem('petrochamp_voter_token', token)
+    }
+    return token
+  }
+  const voterToken = getVoterToken()
+
   let currentConfig = null
+  let alreadyVoted = false
 
   async function load() {
     const res = await fetch(`${backendUrl}/api/repescagem/active`)
     const data = await res.json()
     if (!data || !data.config) {
+      document.getElementById('teamsList').innerHTML = ''
       document.getElementById('statusMsg').textContent = 'Nenhuma votação de repescagem disponível neste momento.'
+      currentConfig = null
       return
     }
     currentConfig = data.config
+
+    const voteCheck = await fetch(
+      `${backendUrl}/api/repescagem/has-voted?configId=${currentConfig.id}&voterToken=${voterToken}`
+    )
+    const voteData = await voteCheck.json()
+    alreadyVoted = !!voteData.voted
+
     render(data.tally)
-    document.getElementById('statusMsg').textContent = currentConfig.votingOpen
-      ? ''
-      : 'A votação já foi encerrada. Obrigado a quem participou!'
+
+    if (!currentConfig.votingOpen) {
+      document.getElementById('statusMsg').textContent = 'A votação já foi encerrada. Obrigado a quem participou!'
+    } else if (alreadyVoted) {
+      document.getElementById('statusMsg').textContent = 'Já registámos o teu voto. Obrigado por participar!'
+    } else {
+      document.getElementById('statusMsg').textContent = ''
+    }
   }
 
   function render(tally) {
     const list = document.getElementById('teamsList')
+    const showButtons = currentConfig.votingOpen && !alreadyVoted
     list.innerHTML = tally
       .map(
-        (t) => `
-      <div class="team-row">
-        <div class="info">
-          <span class="name">${t.name}</span>
-          <span class="inst">${t.institution}</span>
-          <span class="votes">${t.votes} votos</span>
-        </div>
-        ${currentConfig.votingOpen ? `<button onclick="vote('${t.teamId}')">Votar</button>` : ''}
-      </div>
-    `
+        (t) => `      <div class="team-row">        <div class="info">          <span class="name">${t.name}</span>          <span class="inst">${t.institution}</span>          <span class="votes">${t.votes} votos</span>        </div>        ${showButtons ? `<button onclick="vote('${t.teamId}')">Votar</button>` : ''}      </div>    `
       )
       .join('')
   }
 
   async function vote(teamId) {
-    if (!currentConfig) return
-    await fetch(`${backendUrl}/api/repescagem/vote`, {
+    if (!currentConfig || alreadyVoted) return
+    const res = await fetch(`${backendUrl}/api/repescagem/vote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ configId: currentConfig.id, teamId })
+      body: JSON.stringify({ configId: currentConfig.id, teamId, voterToken })
     })
+    if (res.status === 409) {
+      alreadyVoted = true
+    }
     load()
   }
 
+  const socket = io(backendUrl || undefined, { transports: ['websocket', 'polling'] })
+  let lastVotingSignature = ''
+
+  socket.on('state:sync', (state) => {
+    const signature = JSON.stringify({
+      stage: state?.repescagemReveal?.stage,
+      configId: state?.repescagemReveal?.configId
+    })
+    if (signature !== lastVotingSignature) {
+      lastVotingSignature = signature
+      load()
+    }
+  })
+
   load()
-  setInterval(load, 5000)
+  setInterval(load, 15000)
 </script>
 </body>
 </html>

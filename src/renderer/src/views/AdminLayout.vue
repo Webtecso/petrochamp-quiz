@@ -11,7 +11,8 @@ import LogoMark from '../components/LogoMark.vue'
         <RouterLink to="/admin/fases" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Fases</RouterLink>
         <RouterLink to="/admin/perguntas" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Perguntas</RouterLink>
         <RouterLink to="/admin/desempate" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Desempate</RouterLink>
-        <RouterLink to="/admin/avaliacao" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Avaliação (Jurados)</RouterLink>
+        <RouterLink to="/admin/avaliacao" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Avaliação (Analíticas)</RouterLink>
+        <RouterLink to="/admin/jurados" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Jurados</RouterLink>
         <RouterLink to="/admin/apresentacao" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Apresentação</RouterLink>
         <RouterLink to="/admin/chaveamento" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Chaveamento</RouterLink>
         <RouterLink to="/admin/repescagem" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Repescagem</RouterLink>

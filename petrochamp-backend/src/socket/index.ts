@@ -17,6 +17,7 @@ import {
 let timerHandle: ReturnType<typeof setInterval> | null = null
 let countdownHandle: ReturnType<typeof setInterval> | null = null
 let partnersTimerHandle: ReturnType<typeof setTimeout> | null = null
+let moderatorSocketId: string | null = null
 
 async function getQuestionTimeSeconds(): Promise<number> {
   const row = await prisma.setting.findUnique({ where: { key: 'questionTimeSeconds' } })
@@ -94,32 +95,94 @@ function applyPresentationWeighting(phaseConfig: { presentationWeight: number | 
   }
 }
 
-async function drawQuestionForTeam(team: 'A' | 'B'): Promise<void> {
+type PoolItem =
+  | { source: 'question'; id: number; timeSeconds: number; scope: 'single' }
+  | { source: 'analytic'; id: string; timeSeconds: number; scope: 'single' | 'all'; mode: 'multipla_escolha' | 'aberta' }
+
+async function buildPool(): Promise<PoolItem[]> {
+  const [questions, analyticItems, defaultTime] = await Promise.all([
+    prisma.question.findMany({ where: { phase: liveState.phase, championship: liveState.championship ?? undefined } }),
+    prisma.evaluationItem.findMany({
+      where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+    }),
+    getQuestionTimeSeconds()
+  ])
+  const pool: PoolItem[] = questions
+    .filter((q) => !liveState.usedQuestionIds.includes(q.id))
+    .map((q) => ({ source: 'question', id: q.id, timeSeconds: defaultTime, scope: 'single' }))
+  for (const item of analyticItems) {
+    if (liveState.usedAnalyticItemIds.includes(item.id)) continue
+    pool.push({
+      source: 'analytic',
+      id: item.id,
+      timeSeconds: item.timeSeconds ?? defaultTime,
+      scope: item.scope === 'all' ? 'all' : 'single',
+      mode: item.mode === 'multipla_escolha' ? 'multipla_escolha' : 'aberta'
+    })
+  }
+  return pool
+}
+
+async function drawNextItem(team: 'A' | 'B'): Promise<void> {
   const phaseConfig = await getCurrentPhaseConfig()
   const avoidRepeat = phaseConfig?.avoidRepeatQuestions ?? true
-  let pool = await prisma.question.findMany({
-    where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
-  })
-  if (avoidRepeat) {
-    const available = pool.filter((q) => !liveState.usedQuestionIds.includes(q.id))
-    if (available.length > 0) {
-      pool = available
-    } else {
-      liveState.usedQuestionIds = []
-    }
+
+  let pool = await buildPool()
+  if (avoidRepeat && pool.length === 0) {
+    liveState.usedQuestionIds = []
+    liveState.usedAnalyticItemIds = []
+    pool = await buildPool()
+  } else if (!avoidRepeat) {
+    // sem "evitar repetição": monta o pool ignorando os já usados
+    const [questions, analyticItems, defaultTime] = await Promise.all([
+      prisma.question.findMany({ where: { phase: liveState.phase, championship: liveState.championship ?? undefined } }),
+      prisma.evaluationItem.findMany({
+        where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+      }),
+      getQuestionTimeSeconds()
+    ])
+    pool = [
+      ...questions.map((q) => ({ source: 'question' as const, id: q.id, timeSeconds: defaultTime, scope: 'single' as const })),
+      ...analyticItems.map((it) => ({
+        source: 'analytic' as const,
+        id: it.id,
+        timeSeconds: it.timeSeconds ?? defaultTime,
+        scope: (it.scope === 'all' ? 'all' : 'single') as 'single' | 'all',
+        mode: (it.mode === 'multipla_escolha' ? 'multipla_escolha' : 'aberta') as 'multipla_escolha' | 'aberta'
+      }))
+    ]
   }
+
   if (pool.length === 0) {
     liveState.currentQuestionId = null
+    liveState.currentItemSource = null
+    liveState.currentAnalyticItemId = null
+    liveState.currentItemMode = null
     return
   }
+
   const chosen = pool[Math.floor(Math.random() * pool.length)]
-  liveState.currentQuestionId = chosen.id
-  liveState.usedQuestionIds.push(chosen.id)
-  liveState.activeTeam = team
   liveState.currentQuestionIndex += 1
-  liveState.timeLeft = await getQuestionTimeSeconds()
   liveState.isRunning = false
+  liveState.awaitingJuryEvaluation = false
   resetAnswerState()
+
+  if (chosen.source === 'question') {
+    liveState.currentItemSource = 'question'
+    liveState.currentItemMode = null
+    liveState.currentQuestionId = chosen.id
+    liveState.currentAnalyticItemId = null
+    liveState.usedQuestionIds.push(chosen.id)
+    liveState.activeTeam = team
+  } else {
+    liveState.currentItemSource = 'analytic'
+    liveState.currentItemMode = chosen.mode
+    liveState.currentAnalyticItemId = chosen.id
+    liveState.currentQuestionId = null
+    liveState.usedAnalyticItemIds.push(chosen.id)
+    liveState.activeTeam = team // relevante só para scope 'single'; em 'all' as duas respondem de qualquer forma
+  }
+  liveState.timeLeft = chosen.timeSeconds
 }
 
 async function roundQuestionsComplete(): Promise<boolean> {
@@ -219,6 +282,9 @@ export function registerSocketHandlers(io: Server): void {
           liveState.timeLeft -= 1
         } else {
           liveState.isRunning = false
+          if (liveState.currentItemSource === 'analytic' && liveState.currentItemMode === 'aberta') {
+            liveState.awaitingJuryEvaluation = true
+          }
         }
         changed = true
       }
@@ -250,6 +316,22 @@ export function registerSocketHandlers(io: Server): void {
   io.on('connection', (socket: Socket) => {
     console.log('Cliente ligado:', socket.id)
     socket.emit('state:sync', liveState)
+
+    socket.on('moderator:enterAdmin', () => {
+      moderatorSocketId = socket.id
+      const hasActivity = (!!liveState.teamA && !!liveState.teamB) || liveState.presentationFlow.stage !== 'idle'
+      if (hasActivity && !liveState.moderatorAdjusting) {
+        liveState.moderatorAdjusting = true
+        broadcast()
+      }
+    })
+
+    socket.on('moderator:exitAdmin', () => {
+      if (liveState.moderatorAdjusting) {
+        liveState.moderatorAdjusting = false
+        broadcast()
+      }
+    })
 
     socket.on(
       'moderator:selectChampionship',
@@ -308,7 +390,7 @@ export function registerSocketHandlers(io: Server): void {
         broadcast()
         callback?.(true)
         startCountdown(10, async () => {
-          await drawQuestionForTeam('A')
+          await drawNextItem('A')
         })
       }
     )
@@ -325,13 +407,15 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on('moderator:nextQuestion', async () => {
       const otherTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
-      await drawQuestionForTeam(otherTeam)
+      await drawNextItem(otherTeam)
       broadcast()
     })
 
     socket.on('moderator:forceQuestion', async (payload: { questionId: number }) => {
       const question = await prisma.question.findUnique({ where: { id: payload.questionId } })
       if (!question || question.phase !== liveState.phase) return
+      liveState.currentItemSource = 'question'
+      liveState.currentAnalyticItemId = null
       liveState.currentQuestionId = payload.questionId
       if (!liveState.usedQuestionIds.includes(payload.questionId)) {
         liveState.usedQuestionIds.push(payload.questionId)
@@ -353,20 +437,73 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on('player:submitAnswer', async (payload: { team: 'A' | 'B'; optionLabel: string }) => {
       if (liveState.tiebreak.active) return
+
+      if (liveState.currentItemSource === 'analytic') {
+        if (liveState.currentItemMode === 'aberta') return
+        if (!liveState.currentAnalyticItemId) return
+        if (payload.team === 'A' && liveState.teamAAnswer) return
+        if (payload.team === 'B' && liveState.teamBAnswer) return
+
+        const item = await prisma.evaluationItem.findUnique({ where: { id: liveState.currentAnalyticItemId } })
+        if (!item) return
+        if (item.scope !== 'all' && payload.team !== liveState.activeTeam) return
+
+        if (payload.team === 'A') liveState.teamAAnswer = payload.optionLabel
+        else liveState.teamBAnswer = payload.optionLabel
+
+        const isCorrect = labelToIndex(payload.optionLabel) === item.correctIndex
+        if (payload.team === 'A') {
+          liveState.teamACorrect = isCorrect
+          liveState.teamAAnsweredCount += 1
+          if (isCorrect) liveState.teamAScore += item.maxPoints
+        } else {
+          liveState.teamBCorrect = isCorrect
+          liveState.teamBAnsweredCount += 1
+          if (isCorrect) liveState.teamBScore += item.maxPoints
+        }
+        liveState.isRunning = false
+        broadcast()
+
+        const readyToAdvance = item.scope === 'all' ? liveState.teamAAnswer && liveState.teamBAnswer : true
+
+        if (readyToAdvance) {
+          setTimeout(async () => {
+            if (await roundQuestionsComplete()) {
+              liveState.currentQuestionId = null
+              liveState.currentItemSource = null
+              liveState.currentAnalyticItemId = null
+              broadcast()
+              return
+            }
+            const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
+            await drawNextItem(nextTeam)
+            broadcast()
+          }, 2500)
+        }
+        return
+      }
+
+      // Pergunta normal (Question)
       if (payload.team !== liveState.activeTeam) return
       if (liveState.currentQuestionId === null) return
       if (payload.team === 'A' && liveState.teamAAnswer) return
       if (payload.team === 'B' && liveState.teamBAnswer) return
+
+      if (payload.team === 'A') liveState.teamAAnswer = payload.optionLabel
+      else liveState.teamBAnswer = payload.optionLabel
+
       const question = await prisma.question.findUnique({ where: { id: liveState.currentQuestionId } })
-      if (!question) return
+      if (!question) {
+        if (payload.team === 'A') liveState.teamAAnswer = null
+        else liveState.teamBAnswer = null
+        return
+      }
       const isCorrect = labelToIndex(payload.optionLabel) === question.correctIndex
       if (payload.team === 'A') {
-        liveState.teamAAnswer = payload.optionLabel
         liveState.teamACorrect = isCorrect
         liveState.teamAAnsweredCount += 1
         if (isCorrect) liveState.teamAScore += question.points
       } else {
-        liveState.teamBAnswer = payload.optionLabel
         liveState.teamBCorrect = isCorrect
         liveState.teamBAnsweredCount += 1
         if (isCorrect) liveState.teamBScore += question.points
@@ -380,40 +517,65 @@ export function registerSocketHandlers(io: Server): void {
           return
         }
         const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
-        await drawQuestionForTeam(nextTeam)
+        await drawNextItem(nextTeam)
         broadcast()
       }, 2500)
     })
 
+    // NOVO — o moderador pode terminar manualmente uma pergunta aberta antes
+    // do tempo acabar, passando o item para avaliação do júri.
+    socket.on('moderator:endOpenQuestion', () => {
+      if (liveState.currentItemSource !== 'analytic' || liveState.currentItemMode !== 'aberta') return
+      liveState.isRunning = false
+      liveState.awaitingJuryEvaluation = true
+      broadcast()
+    })
+
     socket.on('moderator:startTiebreak', async () => {
       if (!liveState.teamA || !liveState.teamB || !liveState.championship) return
-      const match = await prisma.tiebreakMatch.create({
-        data: {
-          championship: liveState.championship,
-          phase: liveState.phase,
-          teamAId: liveState.teamA.id,
-          teamBId: liveState.teamB.id
-        }
-      })
-      liveState.tiebreak = { active: true, matchId: match.id, currentQuestionId: null, usedQuestionIds: [] }
-      await drawTiebreakQuestion()
-      liveState.timeLeft = await getQuestionTimeSeconds()
-      resetAnswerState()
+      if (liveState.tiebreak.pending || liveState.tiebreak.active) return
+
+      liveState.tiebreak.pending = true
       broadcast()
+
+      startCountdown(5, async () => {
+        if (!liveState.teamA || !liveState.teamB || !liveState.championship) return
+        const match = await prisma.tiebreakMatch.create({
+          data: {
+            championship: liveState.championship,
+            phase: liveState.phase,
+            teamAId: liveState.teamA.id,
+            teamBId: liveState.teamB.id
+          }
+        })
+        liveState.tiebreak = { active: true, pending: false, matchId: match.id, currentQuestionId: null, usedQuestionIds: [] }
+        await drawTiebreakQuestion()
+        liveState.timeLeft = await getQuestionTimeSeconds()
+        resetAnswerState()
+      })
     })
 
     socket.on('tiebreak:submitAnswer', async (payload: { team: 'A' | 'B'; optionLabel: string }) => {
       if (!liveState.tiebreak.active || liveState.tiebreak.currentQuestionId === null) return
       if (payload.team === 'A' && liveState.teamAAnswer) return
       if (payload.team === 'B' && liveState.teamBAnswer) return
-      const question = await prisma.tiebreakQuestion.findUnique({ where: { id: liveState.tiebreak.currentQuestionId } })
-      if (!question) return
-      const isCorrect = labelToIndex(payload.optionLabel) === question.correctIndex
+
       if (payload.team === 'A') {
         liveState.teamAAnswer = payload.optionLabel
-        liveState.teamACorrect = isCorrect
       } else {
         liveState.teamBAnswer = payload.optionLabel
+      }
+
+      const question = await prisma.tiebreakQuestion.findUnique({ where: { id: liveState.tiebreak.currentQuestionId } })
+      if (!question) {
+        if (payload.team === 'A') liveState.teamAAnswer = null
+        else liveState.teamBAnswer = null
+        return
+      }
+      const isCorrect = labelToIndex(payload.optionLabel) === question.correctIndex
+      if (payload.team === 'A') {
+        liveState.teamACorrect = isCorrect
+      } else {
         liveState.teamBCorrect = isCorrect
       }
       broadcast()
@@ -797,6 +959,7 @@ export function registerSocketHandlers(io: Server): void {
       if (!phaseConfig || (phaseConfig.type !== 'apresentacao' && phaseConfig.type !== 'apresentacao_quiz')) return
       if (liveState.presentationFlow.stage !== 'idle') return
       if (liveState.presentationFlow.presentedTeamIds.includes(payload.teamId)) return
+      liveState.bracketVisible = false
 
       const dupla = await prisma.presentationDupla.findUnique({ where: { id: payload.duplaId } })
       if (!dupla || (dupla.teamAId !== payload.teamId && dupla.teamBId !== payload.teamId)) return
@@ -1014,6 +1177,7 @@ export function registerSocketHandlers(io: Server): void {
       }
 
       liveState.jurors.push({ id: juror.id, name: juror.name })
+      socket.data.jurorId = juror.id
       broadcast()
       callback?.({ success: true, jurorId: juror.id })
     })
@@ -1040,7 +1204,10 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    socket.on('moderator:confirmEvaluation', (payload: { itemId: string }) => {
+    // ATUALIZADO — depois de confirmar a avaliação, se o item avaliado era o
+    // item ativo do sorteio (ex: pergunta aberta que ficou a aguardar o
+    // júri), avança automaticamente para o próximo item/equipa.
+    socket.on('moderator:confirmEvaluation', async (payload: { itemId: string }) => {
       if (liveState.jurorSubmittedItemIds.includes(payload.itemId)) return
       const relevant = liveState.jurorEntries.filter((e) => e.itemId === payload.itemId)
       const totalA = relevant.reduce((sum, e) => sum + e.scoreA, 0)
@@ -1048,6 +1215,27 @@ export function registerSocketHandlers(io: Server): void {
       liveState.teamAScore += totalA
       liveState.teamBScore += totalB
       liveState.jurorSubmittedItemIds.push(payload.itemId)
+
+      const wasActiveDraw =
+        liveState.currentItemSource === 'analytic' &&
+        liveState.currentAnalyticItemId === payload.itemId &&
+        liveState.awaitingJuryEvaluation
+
+      if (wasActiveDraw) {
+        liveState.teamAAnsweredCount += 1
+        liveState.teamBAnsweredCount += 1
+        liveState.awaitingJuryEvaluation = false
+        liveState.currentItemSource = null
+        liveState.currentAnalyticItemId = null
+        liveState.currentItemMode = null
+
+        if (await roundQuestionsComplete()) {
+          liveState.currentQuestionId = null
+        } else {
+          const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
+          await drawNextItem(nextTeam)
+        }
+      }
       broadcast()
     })
 
@@ -1103,6 +1291,17 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on('disconnect', () => {
       console.log('Cliente desligado:', socket.id)
+      if (socket.id === moderatorSocketId && liveState.moderatorAdjusting) {
+        liveState.moderatorAdjusting = false
+        moderatorSocketId = null
+        broadcast()
+      }
+      const jurorId = socket.data?.jurorId as string | undefined
+      if (jurorId) {
+        liveState.jurors = liveState.jurors.filter((j) => j.id !== jurorId)
+        liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== jurorId)
+        broadcast()
+      }
     })
   })
 }

@@ -33,6 +33,7 @@ export interface MatchCodes {
 
 export interface TiebreakState {
   active: boolean
+  pending: boolean
   matchId: number | null
   currentQuestionId: number | null
   usedQuestionIds: number[]
@@ -112,6 +113,8 @@ export interface PresentationFlowState {
   currentPage: number
 }
 
+export type PublicVotingStatus = 'idle' | 'starting' | 'online' | 'failed'
+
 export interface LiveState {
   championship: string | null
   editionName: string | null
@@ -154,6 +157,14 @@ export interface LiveState {
   initialScoresConfirmed: boolean
   presentationFlow: PresentationFlowState
   presentationPhaseScores: RankingEntry[]
+  publicVotingUrl: string | null
+  publicVotingStatus: PublicVotingStatus
+  currentItemSource: 'question' | 'analytic' | null
+  currentAnalyticItemId: string | null
+  usedAnalyticItemIds: string[]
+  currentItemMode: 'multipla_escolha' | 'aberta' | null
+  awaitingJuryEvaluation: boolean
+  moderatorAdjusting: boolean
   podium: {
     active: boolean
     phaseNumber: number
@@ -172,6 +183,10 @@ export function generateJoinCode(length = 6): string {
     code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
   }
   return code
+}
+
+export function generateJurorCode(): string {
+  return String(Math.floor(1000 + Math.random() * 9000))
 }
 
 function defaultPresentationFlow(): PresentationFlowState {
@@ -227,7 +242,7 @@ export const liveState: LiveState = {
   teamACorrect: null,
   teamBCorrect: null,
   countdown: { active: false, value: 0 },
-  tiebreak: { active: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] },
+  tiebreak: { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] },
   podiumReveal: { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false },
   repescagemReveal: { stage: 'idle', countdownValue: 0, configId: null, repescadaNames: [] },
   phaseTransition: { stage: 'idle' },
@@ -241,6 +256,14 @@ export const liveState: LiveState = {
   initialScoresConfirmed: false,
   presentationFlow: defaultPresentationFlow(),
   presentationPhaseScores: [],
+  publicVotingUrl: null,
+  publicVotingStatus: 'idle',
+  currentItemSource: null,
+  currentAnalyticItemId: null,
+  usedAnalyticItemIds: [],
+  currentItemMode: null,
+  awaitingJuryEvaluation: false,
+  moderatorAdjusting: false,
   podium: {
     active: false,
     phaseNumber: 1,
@@ -270,7 +293,7 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.timeLeft = questionTimeSeconds
   liveState.isRunning = false
   liveState.countdown = { active: false, value: 0 }
-  liveState.tiebreak = { active: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] }
+  liveState.tiebreak = { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] }
   liveState.matchStartedAt = null
   liveState.matchCodes = {
     teamACode: null,
@@ -285,6 +308,12 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.jurorSubmittedItemIds = []
   liveState.initialScoreEntries = []
   liveState.initialScoresConfirmed = false
+  liveState.currentItemSource = null
+  liveState.currentAnalyticItemId = null
+  liveState.usedAnalyticItemIds = []
+  liveState.currentItemMode = null
+  liveState.awaitingJuryEvaluation = false
+  liveState.moderatorAdjusting = false
   resetAnswerState()
 }
 
