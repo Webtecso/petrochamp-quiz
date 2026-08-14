@@ -82,11 +82,11 @@ watch(
     }
   }
 )
+
 const maxVotes = computed(() => Math.max(1, ...repescagemStore.tally.map((t) => t.votes)))
-
 const matchStarted = computed(() => !!store.teamA && !!store.teamB)
-
 const showBracketExplicit = ref(false)
+
 watch(
   () => store.championship,
   (newVal, oldVal) => {
@@ -126,6 +126,7 @@ const totalQuestionsForCounter = computed(() => {
   const perTeam = currentPhaseFull.value?.questionsPerTeam
   return perTeam ? perTeam * 2 : phaseQuestions.value.length
 })
+
 const teamAName = computed(() => store.teamA?.name ?? 'EQUIPA A')
 const teamALogo = computed(() => store.teamA?.logoUrl ?? null)
 const teamBName = computed(() => store.teamB?.name ?? 'EQUIPA B')
@@ -144,7 +145,6 @@ function formatImageUrl(url: string | null | undefined): string {
 }
 
 const slideCount = computed(() => Math.max(1, store.presentationFlow.slides?.length ?? 0))
-
 const startMessage = computed(() => {
   if (!store.championship) return 'A aguardar o início do evento...'
   const base = `A ${championshipLabels[store.championship]} vai começar dentro de momentos...`
@@ -153,7 +153,6 @@ const startMessage = computed(() => {
 
 const sortedPhaseRanking = computed(() => [...store.phaseRankings].sort((a, b) => b.score - a.score))
 const sortedChampionshipRanking = computed(() => [...store.championshipRankings].sort((a, b) => b.score - a.score))
-
 const highlightQualified = computed(() => store.eliminatedTeamIds.length > 0)
 
 const isPhaseBracketVisible = computed(() => {
@@ -176,6 +175,7 @@ const isBattleActiveState = computed(() => {
 
 <template>
   <div class="relative min-h-screen">
+    <!-- Fundo nítido (sem camada por cima) -->
     <div
       class="fixed inset-0 -z-10 bg-cover bg-center"
       :style="{ backgroundImage: `url(${projectionBg})` }"
@@ -188,18 +188,18 @@ const isBattleActiveState = computed(() => {
     </div>
 
     <!-- 1. TELA DE ESPERA INICIAL -->
-    <div v-if="!store.championship" class="min-h-screen bg-slate-950/85 flex flex-col items-center justify-center gap-6 p-10 text-white">
+    <div v-if="!store.championship" class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white">
       <div class="text-center flex flex-col items-center">
         <LogoMark class="mb-6 scale-125" />
         <h1 class="text-4xl font-extrabold mb-3 text-amber-400">Aguardando Seleção do Campeonato</h1>
-        <p class="text-slate-400 text-lg">O moderador irá iniciar a sessão a partir da consola de controlo.</p>
+        <p class="text-slate-200 text-lg">O moderador irá iniciar a sessão a partir da consola de controlo.</p>
       </div>
     </div>
 
     <!-- 2. Tela de Vencedor -->
     <div
       v-else-if="store.championReveal.active"
-      class="min-h-screen bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center gap-8 p-10 text-white champion-reveal"
+      class="min-h-screen relative overflow-hidden flex flex-col items-center justify-center gap-8 p-10 text-white champion-reveal"
     >
       <div
         v-for="n in 8"
@@ -216,7 +216,7 @@ const isBattleActiveState = computed(() => {
       <h1 class="text-5xl font-black text-amber-400 z-10 champion-name text-center">
         {{ store.championReveal.teamName ?? 'Campeã' }}
       </h1>
-      <p class="text-lg text-white/70 z-10 tracking-widest uppercase">
+      <p class="text-lg text-white/90 z-10 tracking-widest uppercase">
         Grande Campeã{{ store.editionName ? ' — ' + store.editionName : '' }}
       </p>
     </div>
@@ -247,7 +247,7 @@ const isBattleActiveState = computed(() => {
     <!-- 5. Sequência de Fim de Fase -->
     <div
       v-else-if="store.phaseFlow.stage === 'ranking'"
-      class="min-h-screen bg-petro-bg/85 flex flex-col items-center justify-center gap-6 p-10"
+      class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
     >
       <h2 class="text-2xl font-bold text-petro-primary">Ranking da Fase {{ store.phase }}</h2>
       <PhaseRankingBoard :rankings="store.phaseRankings" :eliminated-team-ids="store.eliminatedTeamIds" />
@@ -280,7 +280,7 @@ const isBattleActiveState = computed(() => {
     />
     <div
       v-else-if="store.repescagemReveal.stage === 'voting'"
-      class="min-h-screen bg-petro-dark/90 flex flex-col items-center justify-center gap-6 p-10 text-white"
+      class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white"
     >
       <h2 class="text-3xl font-bold text-amber-400">Vote na sua equipa favorita!</h2>
       <div class="flex flex-col gap-4 w-full max-w-2xl">
@@ -289,7 +289,7 @@ const isBattleActiveState = computed(() => {
             <span class="font-semibold">{{ t.name }}</span>
             <span class="font-bold text-amber-400">{{ t.votes }} votos</span>
           </div>
-          <div class="w-full h-4 bg-white/10 rounded-full overflow-hidden">
+          <div class="w-full h-4 bg-white/20 rounded-full overflow-hidden">
             <div
               class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
               :style="{ width: `${(t.votes / maxVotes) * 100}%` }"
@@ -300,15 +300,15 @@ const isBattleActiveState = computed(() => {
     </div>
     <div
       v-else-if="store.repescagemReveal.stage === 'results'"
-      class="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-6 p-10 text-white text-center repescagem-results"
+      class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center repescagem-results"
     >
       <h2 class="text-4xl font-black text-amber-400">ESTAS EQUIPAS ESTÃO DE VOLTA À COMPETIÇÃO!</h2>
-      <p class="text-sm text-white/60 uppercase tracking-widest">Escolhidas pelo público</p>
+      <p class="text-sm text-white/80 uppercase tracking-widest">Escolhidas pelo público</p>
       <div class="flex flex-col gap-3 w-full max-w-md">
         <div
           v-for="name in store.repescagemReveal.repescadaNames"
           :key="name"
-          class="bg-amber-500/10 border-2 border-amber-400 rounded-xl px-6 py-3 font-bold text-lg repescada-glow"
+          class="bg-amber-500/20 border-2 border-amber-400 rounded-xl px-6 py-3 font-bold text-lg repescada-glow"
         >
           {{ name }}
         </div>
@@ -327,7 +327,7 @@ const isBattleActiveState = computed(() => {
       transparent
     />
 
-    <!-- 6.6 Em apresentação — modo documento (PDF convertido em slides) ou modo padrão -->
+    <!-- 6.6 Em apresentação — modo documento -->
     <div
       v-else-if="store.presentationFlow.stage === 'presenting' && store.presentationFlow.presentationMode === 'document'"
       class="min-h-screen bg-black relative overflow-hidden"
@@ -343,7 +343,6 @@ const isBattleActiveState = computed(() => {
           </span>
         </div>
       </div>
-
       <div
         class="absolute inset-0 flex transition-transform duration-500 ease-in-out"
         :style="{
@@ -361,13 +360,14 @@ const isBattleActiveState = computed(() => {
         </div>
       </div>
     </div>
+
     <div
       v-else-if="store.presentationFlow.stage === 'presenting'"
-      class="min-h-screen bg-petro-dark/90 flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
+      class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
     >
       <h2 class="text-sm uppercase tracking-widest text-amber-400 font-bold">Apresentação de Projetos</h2>
       <p class="text-4xl font-black">{{ store.presentationFlow.teamName }}</p>
-      <p class="text-lg text-white/70">Tema: {{ store.presentationFlow.theme }}</p>
+      <p class="text-lg text-white/80">Tema: {{ store.presentationFlow.theme }}</p>
       <div class="text-7xl font-black text-amber-400 mt-4">
         {{ String(Math.floor(store.presentationFlow.timeLeft / 60)).padStart(2, '0') }}:{{ String(store.presentationFlow.timeLeft % 60).padStart(2, '0') }}
       </div>
@@ -376,7 +376,7 @@ const isBattleActiveState = computed(() => {
     <!-- 6.7 Apresentação Concluída -->
     <div
       v-else-if="store.presentationFlow.stage === 'concluded'"
-      class="min-h-screen bg-slate-950/90 flex flex-col items-center justify-center gap-4 p-10 text-white text-center"
+      class="min-h-screen flex flex-col items-center justify-center gap-4 p-10 text-white text-center"
     >
       <h2 class="text-3xl font-black text-amber-400">Apresentação Concluída</h2>
       <p class="text-xl">Muito obrigado, {{ store.presentationFlow.teamName }}!</p>
@@ -385,7 +385,7 @@ const isBattleActiveState = computed(() => {
     <!-- 7. CHAVEAMENTO -->
     <div
       v-else-if="isPhaseBracketVisible"
-      class="min-h-screen bg-[#F8F9FA]/85 flex flex-col items-center justify-center gap-8 px-10 py-10 bracket-container"
+      class="min-h-screen flex flex-col items-center justify-center gap-8 px-10 py-10 bracket-container"
     >
       <TournamentBracket
         :rounds="bracket.rounds"
@@ -420,7 +420,7 @@ const isBattleActiveState = computed(() => {
     <!-- 10. BATALHA ATIVA -->
     <div
       v-else-if="isBattleActiveState"
-      class="h-screen w-screen bg-[#F4F5F7]/85 flex flex-col justify-between p-6 select-none overflow-hidden battle-container"
+      class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container"
     >
       <header class="grid grid-cols-3 items-center px-4 py-2 w-full max-w-7xl mx-auto shrink-0">
         <div class="flex items-center justify-start">
@@ -437,7 +437,7 @@ const isBattleActiveState = computed(() => {
         </div>
         <div class="flex flex-col items-center justify-center text-center">
           <LogoMark />
-          <span class="text-[10px] font-bold text-gray-400 tracking-widest uppercase mt-1 whitespace-nowrap">
+          <span class="text-[10px] font-bold text-gray-600 tracking-widest uppercase mt-1 whitespace-nowrap">
             O QUIZ COMPETITIVO DO MUNDO DO PETRÓLEO
           </span>
         </div>
@@ -445,6 +445,7 @@ const isBattleActiveState = computed(() => {
           <TimerRing :seconds="store.timeLeft" />
         </div>
       </header>
+
       <main class="flex-1 flex flex-col items-center justify-center my-4 px-4 w-full max-w-6xl mx-auto min-h-0">
         <div class="w-full h-full bg-white rounded-3xl p-8 md:p-10 shadow-2xl border border-gray-100/90 relative overflow-hidden flex flex-col justify-center">
           <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 via-red-600 to-blue-600"></div>
@@ -496,6 +497,7 @@ const isBattleActiveState = computed(() => {
           </div>
         </div>
       </main>
+
       <footer class="w-full max-w-7xl mx-auto px-4 mt-2 shrink-0">
         <div class="relative w-full h-20 rounded-2xl bg-[#0a0f1d] border border-amber-500/30 shadow-2xl overflow-hidden flex items-stretch">
           <div
@@ -573,7 +575,6 @@ const isBattleActiveState = computed(() => {
       <h2 class="text-2xl font-bold text-white">Ranking Final do Campeonato</h2>
       <PhaseRankingBoard :rankings="sortedChampionshipRanking" :eliminated-team-ids="[]" />
     </div>
-
     <div
       v-if="store.phaseRankingReveal.visible"
       class="fixed inset-0 z-50 bg-petro-bg/90 flex flex-col items-center justify-center gap-6 p-10"
