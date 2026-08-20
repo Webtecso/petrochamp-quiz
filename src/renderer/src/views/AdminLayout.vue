@@ -1,5 +1,19 @@
 <script setup lang="ts">
 import LogoMark from '../components/LogoMark.vue'
+import { useRouter } from 'vue-router'
+import { adminLogout } from '../services/adminAuth'
+
+const router = useRouter()
+const isLocalAccess =
+  typeof window === 'undefined' ||
+  !window.location.protocol.startsWith('http') ||
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1'
+
+async function logout(): Promise<void> {
+  await adminLogout()
+  router.replace('/admin/login')
+}
 </script>
 
 <template>
@@ -19,8 +33,13 @@ import LogoMark from '../components/LogoMark.vue'
         <RouterLink to="/admin/suspense" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Suspense</RouterLink>
         <RouterLink to="/admin/parceiros" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Parceiros</RouterLink>
         <RouterLink to="/admin/historico" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Histórico</RouterLink>
+        <RouterLink to="/admin/moderadores" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Moderadores</RouterLink>
         <RouterLink to="/admin/configuracoes" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Configurações</RouterLink>
-        <RouterLink to="/moderador" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition">← Voltar ao Moderador</RouterLink>
+        <RouterLink
+          v-if="isLocalAccess"
+          to="/moderador"
+          class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition">← Voltar ao Moderador</RouterLink>
+        <button class="px-4 py-2 rounded-lg text-sm text-red-300 hover:text-red-100 transition" @click="logout">Sair</button>
       </div>
     </nav>
     <main class="flex-1 px-8 py-8">

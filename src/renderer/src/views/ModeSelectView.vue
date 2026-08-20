@@ -8,6 +8,7 @@ import { useQuizContentStore } from '../stores/quizContent'
 import { useSettingsStore } from '../stores/settings'
 import { usePhasesStore } from '../stores/phases'
 import { useJuradosStore } from '../stores/jurados'
+import { useModeratorStore } from '../stores/moderator'
 import LogoMark from '../components/LogoMark.vue'
 
 const router = useRouter()
@@ -25,7 +26,8 @@ function choose(mode: DeviceMode): void {
   useSettingsStore().fetchSettings()
   usePhasesStore().fetchPhases()
 
-  router.push('/moderador/campeonato')
+  const moderatorStore = useModeratorStore()
+  router.push(moderatorStore.isLoggedIn ? '/moderador/campeonato' : '/moderador/login')
 }
 </script>
 

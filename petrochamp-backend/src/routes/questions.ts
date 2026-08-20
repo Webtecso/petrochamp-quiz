@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
@@ -34,7 +36,7 @@ router.get('/', async (req, res) => {
   res.json(questions.map(toApiShape))
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const { championship, text, imageUrl, options, correctIndex, points, phase } = req.body
 
   if (!text || !championship || !Array.isArray(options) || options.length !== 4) {
@@ -56,6 +58,7 @@ router.post('/', async (req, res) => {
         phase: Number(phase) || 1
       }
     })
+    emitConfigUpdated('questions', championship)
     res.status(201).json(toApiShape(question))
   } catch (error: any) {
     console.error('Erro detalhado ao criar pergunta no Prisma:', error)
@@ -63,7 +66,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   const { text, imageUrl, options, correctIndex, points, phase } = req.body
 
@@ -82,6 +85,7 @@ router.put('/:id', async (req, res) => {
         phase: Number(phase) || 1
       }
     })
+    emitConfigUpdated('questions', question.championship)
     res.json(toApiShape(question))
   } catch (error: any) {
     console.error('Erro detalhado ao atualizar pergunta:', error)
@@ -89,10 +93,11 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   try {
-    await prisma.question.delete({ where: { id } })
+    const existing = await prisma.question.delete({ where: { id } })
+    emitConfigUpdated('questions', existing.championship)
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Pergunta não encontrada' })

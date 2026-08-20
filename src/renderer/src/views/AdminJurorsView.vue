@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { usePhasesStore } from '../stores/phases'
-import { getBackendUrl } from '../services/backendConfig'
+import { adminFetch } from '../services/adminAuth'
 import type { ChampionshipType } from '../stores/campeonato'
 
 interface Juror {
@@ -30,8 +30,10 @@ const championshipOptions: { value: ChampionshipType; label: string }[] = [
 ]
 
 async function loadJurors(): Promise<void> {
-  const res = await fetch(`${getBackendUrl()}/api/jurors`)
-  jurors.value = await res.json()
+  const res = await adminFetch('/api/jurors')
+  if (res.ok) {
+    jurors.value = await res.json()
+  }
 }
 
 async function loadPhases(): Promise<void> {
@@ -45,8 +47,10 @@ async function loadAuthorizations(): Promise<void> {
     authorizations.value = []
     return
   }
-  const res = await fetch(`${getBackendUrl()}/api/jurors/authorizations?phaseId=${selectedPhaseId.value}`)
-  authorizations.value = await res.json()
+  const res = await adminFetch(`/api/jurors/authorizations?phaseId=${selectedPhaseId.value}`)
+  if (res.ok) {
+    authorizations.value = await res.json()
+  }
 }
 
 onMounted(async () => {
@@ -65,11 +69,10 @@ async function toggleAuthorization(jurorId: string): Promise<void> {
   if (!selectedPhaseId.value) return
   const existing = authorizations.value.find((a) => a.jurorId === jurorId)
   if (existing) {
-    await fetch(`${getBackendUrl()}/api/jurors/authorizations/${existing.id}`, { method: 'DELETE' })
+    await adminFetch(`/api/jurors/authorizations/${existing.id}`, { method: 'DELETE' })
   } else {
-    await fetch(`${getBackendUrl()}/api/jurors/authorizations`, {
+    await adminFetch('/api/jurors/authorizations', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phaseId: selectedPhaseId.value, jurorId })
     })
   }
@@ -80,9 +83,8 @@ async function addJuror(): Promise<void> {
   if (!newJurorName.value.trim()) return
   errorMsg.value = ''
   try {
-    const res = await fetch(`${getBackendUrl()}/api/jurors`, {
+    const res = await adminFetch('/api/jurors', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newJurorName.value.trim() })
     })
     if (!res.ok) throw new Error()
@@ -96,7 +98,7 @@ async function addJuror(): Promise<void> {
 async function removeJuror(id: string): Promise<void> {
   const ok = confirm('Remover este jurado? O código dele deixa de funcionar.')
   if (!ok) return
-  await fetch(`${getBackendUrl()}/api/jurors/${id}`, { method: 'DELETE' })
+  await adminFetch(`/api/jurors/${id}`, { method: 'DELETE' })
   await loadJurors()
   await loadAuthorizations()
 }

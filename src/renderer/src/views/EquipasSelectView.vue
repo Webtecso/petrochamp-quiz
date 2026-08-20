@@ -48,6 +48,13 @@ onMounted(async () => {
 const hasBracket = computed(() => liveBracketStore.matches.length > 0)
 const isLastPhaseFlow = computed(() => store.phase >= phasesStore.totalPhases)
 
+function goToEquipas(): void {
+  if (store.phaseFlow.stage === 'quizIntro') {
+    store.confirmQuizIntro()
+  }
+  router.push('/moderador/equipas')
+}
+
 function onShowPartners(): void {
   store.showPartners()
 }
@@ -174,6 +181,15 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
           Continuar sem/depois da repescagem →
         </button>
       </template>
+    </template>
+
+    <!-- Intro do Quiz -->
+    <template v-else-if="store.phaseFlow.stage === 'quizIntro'">
+      <h1 class="text-2xl font-bold text-petro-primary">Introdução do Quiz em curso</h1>
+      <p class="text-sm text-gray-500">A apresentação inicial do quiz está a ser exibida na Projeção.</p>
+      <button class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold" @click="goToEquipas">
+        Ir para Escolha de Equipas
+      </button>
     </template>
 
     <!-- Rankings e Institucional -->

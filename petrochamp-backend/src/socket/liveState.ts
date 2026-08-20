@@ -58,7 +58,16 @@ export interface PhaseTransitionState {
 }
 
 export interface PhaseFlowState {
-  stage: 'idle' | 'repescagem' | 'ranking' | 'partnersPending' | 'partners' | 'webtec' | 'organizer' | 'suspense'
+  stage:
+    | 'idle'
+    | 'repescagem'
+    | 'ranking'
+    | 'partnersPending'
+    | 'partners'
+    | 'webtec'
+    | 'organizer'
+    | 'suspense'
+    | 'quizIntro'
   suspensePhrase: string | null
 }
 
@@ -113,6 +122,12 @@ export interface PresentationFlowState {
   currentPage: number
 }
 
+export interface ModeratorInfo {
+  id: string
+  name: string
+  role: 'principal' | 'secundario'
+}
+
 export type PublicVotingStatus = 'idle' | 'starting' | 'online' | 'failed'
 
 export interface LiveState {
@@ -151,20 +166,24 @@ export interface LiveState {
   championReveal: ChampionRevealState
   bracketVisible: boolean
   jurors: JurorInfo[]
+  expectedJurorCount: number
   jurorEntries: JurorScoreEntry[]
   jurorSubmittedItemIds: string[]
   initialScoreEntries: InitialScoreEntry[]
   initialScoresConfirmed: boolean
   presentationFlow: PresentationFlowState
   presentationPhaseScores: RankingEntry[]
+  presentationRoundReady: boolean
   publicVotingUrl: string | null
   publicVotingStatus: PublicVotingStatus
+  adminAccessedRemotely: boolean
   currentItemSource: 'question' | 'analytic' | null
   currentAnalyticItemId: string | null
   usedAnalyticItemIds: string[]
   currentItemMode: 'multipla_escolha' | 'aberta' | null
   awaitingJuryEvaluation: boolean
   moderatorAdjusting: boolean
+  activeModerators: ModeratorInfo[]
   podium: {
     active: boolean
     phaseNumber: number
@@ -186,6 +205,10 @@ export function generateJoinCode(length = 6): string {
 }
 
 export function generateJurorCode(): string {
+  return String(Math.floor(1000 + Math.random() * 9000))
+}
+
+export function generateModeratorCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000))
 }
 
@@ -250,20 +273,24 @@ export const liveState: LiveState = {
   championReveal: { active: false, teamName: null, logoUrl: null },
   bracketVisible: false,
   jurors: [],
+  expectedJurorCount: 0,
   jurorEntries: [],
   jurorSubmittedItemIds: [],
   initialScoreEntries: [],
   initialScoresConfirmed: false,
   presentationFlow: defaultPresentationFlow(),
   presentationPhaseScores: [],
+  presentationRoundReady: false,
   publicVotingUrl: null,
   publicVotingStatus: 'idle',
+  adminAccessedRemotely: false,
   currentItemSource: null,
   currentAnalyticItemId: null,
   usedAnalyticItemIds: [],
   currentItemMode: null,
   awaitingJuryEvaluation: false,
   moderatorAdjusting: false,
+  activeModerators: [],
   podium: {
     active: false,
     phaseNumber: 1,
@@ -364,6 +391,9 @@ export async function loadPersistedState(): Promise<void> {
         ...liveState.presentationFlow,
         slides: Array.isArray(liveState.presentationFlow?.slides) ? liveState.presentationFlow.slides : []
       }
+      liveState.publicVotingUrl = null
+      liveState.publicVotingStatus = 'idle'
+      liveState.adminAccessedRemotely = false
       console.log('Estado da partida recuperado do último encerramento.')
     }
   } catch (error) {

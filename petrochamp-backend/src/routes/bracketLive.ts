@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
@@ -17,8 +18,6 @@ function roundLabel(round: number, total: number): string {
   return `Ronda ${round}`
 }
 
-// Cria automaticamente as Fases que faltarem para cobrir todas as rondas do
-// chaveamento — nunca apaga fases já existentes, só acrescenta as que faltam.
 async function ensurePhasesForRounds(championship: string, totalRounds: number): Promise<void> {
   const existing = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
   for (let round = 1; round <= totalRounds; round++) {
@@ -38,8 +37,6 @@ async function ensurePhasesForRounds(championship: string, totalRounds: number):
   }
 }
 
-// Se uma equipa ficar sozinha num confronto (número ímpar de equipas), ela
-// avança automaticamente sem batalha — em cascata, ronda a ronda.
 async function resolveByesRecursively(championship: string, totalRounds: number): Promise<void> {
   for (let round = 1; round < totalRounds; round++) {
     const matches = await prisma.bracketMatch.findMany({ where: { championship, round, winnerId: null } })
@@ -62,6 +59,41 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
         }
       }
     }
+  }
+}
+
+// Cria/atualiza as PresentationDuplas de uma ronda específica, sempre que
+// essa ronda corresponder a uma fase de Apresentação (pura ou + Quiz) e já
+// tiver equipas definidas nos confrontos. Chamada tanto ao gerar o
+// chaveamento (Ronda 1) como sempre que uma equipa avança para uma ronda
+// seguinte (ver recordBracketResult em socket/index.ts) — assim as duplas
+// nunca dessincronizam do chaveamento, seja qual for a ronda escolhida
+// para ser de Apresentação.
+export async function syncPresentationDuplasForRound(championship: string, round: number): Promise<void> {
+  const phase = await prisma.phase.findFirst({ where: { championship, order: round } })
+  if (!phase || (phase.type !== 'apresentacao' && phase.type !== 'apresentacao_quiz')) return
+
+  const matches = await prisma.bracketMatch.findMany({
+    where: { championship, round },
+    orderBy: { slot: 'asc' }
+  })
+  const existingDuplas = await prisma.presentationDupla.findMany({ where: { phaseId: phase.id } })
+
+  let order = existingDuplas.length + 1
+  for (const m of matches) {
+    if (!m.teamAId) continue
+    const already = existingDuplas.some((d) => d.teamAId === m.teamAId && d.teamBId === (m.teamBId ?? null))
+    if (already) continue
+    await prisma.presentationDupla.create({
+      data: {
+        phaseId: phase.id,
+        order: order++,
+        themeA: '',
+        themeB: m.teamBId ? '' : null,
+        teamAId: m.teamAId,
+        teamBId: m.teamBId ?? null
+      }
+    })
   }
 }
 
@@ -97,7 +129,7 @@ router.get('/:championship', async (req, res) => {
   res.json({ championship, matches: shaped })
 })
 
-router.post('/:championship/generate', async (req, res) => {
+router.post('/:championship/generate', requireAdmin, async (req, res) => {
   const { championship } = req.params
   await prisma.bracketMatch.deleteMany({ where: { championship } })
 
@@ -144,11 +176,17 @@ router.post('/:championship/generate', async (req, res) => {
   await resolveByesRecursively(championship, totalRounds)
   await ensurePhasesForRounds(championship, totalRounds)
 
+  // Sincroniza duplas para todas as rondas já preenchidas neste momento
+  // (normalmente só a Ronda 1, a não ser que resolveByesRecursively já
+  // tenha avançado alguma equipa automaticamente por falta de adversário).
+  for (let round = 1; round <= totalRounds; round++) {
+    await syncPresentationDuplasForRound(championship, round)
+  }
+
   res.status(201).json({ success: true, totalRounds })
 })
 
-// Novo — "Eliminar Chaveamento": apaga só os confrontos, mantém equipas e histórico.
-router.delete('/:championship', async (req, res) => {
+router.delete('/:championship', requireAdmin, async (req, res) => {
   const { championship } = req.params
   await prisma.bracketMatch.deleteMany({ where: { championship } })
   res.status(204).send()

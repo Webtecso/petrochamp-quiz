@@ -6,6 +6,7 @@ import { useQuizContentStore } from '../stores/quizContent'
 import { useTiebreakQuestionsStore } from '../stores/tiebreakQuestions'
 import { useModeStore } from '../stores/mode'
 import { usePhasesStore } from '../stores/phases'
+import { startConfigSync } from '../services/configSync'
 import LogoMark from '../components/LogoMark.vue'
 import TeamScoreCard from '../components/TeamScoreCard.vue'
 import QuestionPanel from '../components/QuestionPanel.vue'
@@ -48,6 +49,9 @@ watch(
 )
 
 onMounted(async () => {
+  store.listenToServer()
+  startConfigSync()
+
   await phasesStore.fetchPhases(store.championship ?? undefined)
   await quizContent.fetchQuestions(store.championship ?? undefined)
   await quizContent.fetchEvaluationItems(store.championship ?? undefined)

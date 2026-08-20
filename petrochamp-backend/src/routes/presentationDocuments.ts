@@ -3,6 +3,7 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs/promises'
 import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
@@ -20,9 +21,6 @@ const upload = multer({
 
 const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads', 'presentations')
 
-// Detecta a ordem pelo número no fim do nome do ficheiro — é assim que o
-// PowerPoint exporta: "Slide1.PNG", "Apresentacao12.png", etc. Ficheiros
-// sem número vão para o fim, pela ordem em que chegaram.
 function extractOrder(filename: string, fallbackIndex: number): number {
   const match = filename.match(/(\d+)(?=\.[^.]*$)/)
   if (match) return Number(match[1])
@@ -42,7 +40,7 @@ router.get('/', async (req, res) => {
   res.json(docs)
 })
 
-router.post('/', upload.array('files'), async (req, res) => {
+router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
   try {
     const { duplaId, teamId } = req.body as { duplaId?: string; teamId?: string }
     const files = req.files as Express.Multer.File[] | undefined
@@ -57,8 +55,6 @@ router.post('/', upload.array('files'), async (req, res) => {
       return
     }
 
-    // "orders" explícito (enviado pelo Admin depois de reordenar
-    // manualmente) tem prioridade sobre a deteção automática pelo nome.
     const ordersRaw = req.body.orders as string | string[] | undefined
     let explicitOrders: number[] | null = null
     if (ordersRaw) {
@@ -75,7 +71,6 @@ router.post('/', upload.array('files'), async (req, res) => {
     const folder = path.join(UPLOADS_ROOT, String(dupla.phaseId), teamId)
     await fs.mkdir(folder, { recursive: true })
 
-    // Re-carregar substitui sempre o conjunto de slides anterior por completo.
     const existing = await prisma.presentationDocument.findUnique({
       where: { duplaId_teamId: { duplaId: Number(duplaId), teamId } },
       include: { slides: true }
@@ -112,7 +107,7 @@ router.post('/', upload.array('files'), async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   try {
     const doc = await prisma.presentationDocument.findUnique({ where: { id }, include: { slides: true } })

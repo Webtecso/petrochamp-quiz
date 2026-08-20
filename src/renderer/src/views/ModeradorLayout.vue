@@ -3,11 +3,11 @@ import { computed } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { useRouter, useRoute } from 'vue-router'
 import LogoMark from '../components/LogoMark.vue'
-import { useModeStore } from '../stores/mode'
 import { useCampeonatoStore } from '../stores/campeonato'
+import { useModeratorStore } from '../stores/moderator'
 
-const modeStore = useModeStore()
 const store = useCampeonatoStore()
+const moderatorStore = useModeratorStore()
 const router = useRouter()
 const route = useRoute()
 const isTabletOrPhone = Capacitor.isNativePlatform()
@@ -30,13 +30,40 @@ function confirmReset(): void {
   const ok = confirm(message)
   if (ok) {
     store.resetChampionship()
-    router.push('/moderador/equipas')
+    // ATUALIZADO — em vez de assumir sempre '/moderador/equipas' (errado
+    // quando a Fase 1 é de Apresentação, ou Apresentação+Quiz), navega
+    // para '/moderador' e deixa o guard do router (resumeRoute) decidir o
+    // ecrã certo com base no tipo real da fase corrente, tal como já faz
+    // ao reabrir a app ou voltar do Admin.
+    router.push('/moderador')
   }
 }
+
+// Banner do link do Admin — aparece sempre que o app abre, e só desaparece
+// depois de alguém aceder ao Admin remotamente (pelo túnel) pela primeira
+// vez nesta sessão do backend. Acesso local nunca o esconde.
+const showAdminBanner = computed(() => !store.adminAccessedRemotely)
+
+const adminSetupUrl = computed(() => {
+  if (!store.publicVotingUrl) return null
+  const base = store.publicVotingUrl.split('/portal/')[0]
+  return `${base}/#/admin/login`
+})
 </script>
 
 <template>
   <div class="min-h-screen bg-petro-bg flex flex-col">
+    <div
+      v-if="showAdminBanner"
+      class="bg-amber-400 text-petro-dark px-6 py-2 flex items-center justify-center gap-2 text-sm font-semibold flex-wrap text-center"
+    >
+      🔗 Painel Admin remoto disponível.
+      <span v-if="adminSetupUrl">
+        Aceda a <a :href="adminSetupUrl" target="_blank" class="underline">{{ adminSetupUrl }}</a> para entrar.
+      </span>
+      <span v-else>Aguardando o link público ficar disponível...</span>
+    </div>
+
     <nav class="flex items-center justify-between gap-3 bg-petro-dark px-6 py-3 flex-wrap">
       <LogoMark size="sm" />
       <div class="flex items-center gap-2 flex-wrap">
@@ -50,10 +77,9 @@ function confirmReset(): void {
         </button>
         <button
           class="px-4 py-2 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
-          :class="isActive('/moderador/campeonato') || isActive('/moderador/equipas') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
-          :disabled="battleInProgress && !isActive('/moderador/equipas')"
-          @click="go('/moderador/campeonato')"
-        >
+          :class="isActive('/moderador/modo') || isActive('/moderador/campeonato') || isActive('/moderador/equipas') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
+          :disabled="!!store.championship"
+          @click="go('/moderador/modo')">
           Nova Partida
         </button>
         <button
@@ -94,11 +120,17 @@ function confirmReset(): void {
         >
           ⚙ Admin
         </button>
-        <!-- CORRIGIDO: já não fica bloqueado durante uma batalha — é
-             precisamente a saída de emergência para quando algo prende o
-             moderador numa rodada que não consegue terminar. O confirm()
-             já protege contra cliques acidentais. -->
+        <span v-if="moderatorStore.isLoggedIn" class="text-[11px] text-white/70 px-2 flex items-center gap-1">
+          👤 {{ moderatorStore.session?.name }}
+          <span
+            class="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase"
+            :class="moderatorStore.isPrincipal ? 'bg-amber-400 text-petro-dark' : 'bg-white/20 text-white'"
+          >
+            {{ moderatorStore.isPrincipal ? 'Principal' : 'Secundário' }}
+          </span>
+        </span>
         <button
+          v-if="!moderatorStore.isLoggedIn || moderatorStore.isPrincipal"
           class="px-3 py-2 rounded-lg text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 transition"
           @click="confirmReset"
         >

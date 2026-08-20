@@ -6,6 +6,7 @@ import { useQuizContentStore } from '../stores/quizContent'
 import { useSettingsStore } from '../stores/settings'
 import { usePhasesStore } from '../stores/phases'
 import { getBackendUrl } from '../services/backendConfig'
+import { startConfigSync } from '../services/configSync'
 import LogoMark from '../components/LogoMark.vue'
 import type { EvaluationItem } from '../data/evaluationItems'
 
@@ -25,6 +26,7 @@ onMounted(async () => {
   await phasesStore.fetchPhases(store.championship ?? undefined)
   await settings.fetchSettings()
   jurados.listenToServer()
+  startConfigSync()
 })
 
 watch(
@@ -93,6 +95,14 @@ const selectedItem = computed(() => openItems.value.find((i) => i.id === selecte
 const itemSubmitted = computed(() => (selectedItem.value ? jurados.isSubmitted(selectedItem.value.id) : false))
 const allowedJurorsForSelected = computed(() => jurorsAllowedFor(selectedItem.value))
 
+const allJurorsScored = computed(() => {
+  if (!selectedItem.value) return false
+  if (jurados.jurors.length < store.expectedJurorCount) return false
+  return jurados.jurors.every((j) =>
+    jurados.entries.some((e) => e.jurorId === j.id && e.itemId === selectedItem.value!.id)
+  )
+})
+
 function scoreFor(jurorId: string, team: 'a' | 'b'): number {
   if (!selectedItem.value) return 0
   const entry = jurados.entryFor(jurorId, selectedItem.value.id)
@@ -117,11 +127,11 @@ const totals = computed(() =>
 )
 
 function confirmItem(): void {
-  if (!selectedItem.value || itemSubmitted.value) return
+  if (!selectedItem.value || itemSubmitted.value || !allJurorsScored.value) return
   jurados.confirmItem(selectedItem.value.id)
 }
 
-// ==================== Apresentação de Projetos (NOVO) ====================
+// ==================== Apresentação de Projetos ====================
 
 const presentationCriteria = ref<PresentationCriteria[]>([])
 
@@ -182,287 +192,26 @@ const presentationStageLabel = computed(() => {
     <LogoMark />
     <div class="text-xs font-semibold text-petro-primary uppercase tracking-wide">Painel dos Jurados</div>
 
-    <div class="bg-petro-primary/5 border border-petro-primary/20 rounded-xl px-4 py-2 text-xs text-petro-primary text-center max-w-md">
-      Os jurados também podem entrar remotamente, no telemóvel, através de <b>/portal/jurados.html</b> no endereço do PC do moderador.
-    </div>
+    <!-- Bloco de Avaliação de Item -->
+    <div v-if="selectedItem" class="w-full max-w-4xl bg-petro-card p-6 rounded-2xl flex flex-col gap-4 border border-white/10">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white">{{ selectedItem.title }}</h3>
 
-    <div class="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
-      <h3 class="font-semibold text-sm text-gray-600 mb-3">
-        Jurados Registados ({{ jurados.jurors.length }}/{{ settings.maxJurors }})
-      </h3>
-      <div class="flex flex-wrap gap-2 mb-3">
-        <span
-          v-for="j in jurados.jurors"
-          :key="j.id"
-          class="bg-petro-primary/10 text-petro-primary text-sm px-3 py-1.5 rounded-full flex items-center gap-2"
+        <!-- Botão com validação de submissão + pontuação de todos os jurados -->
+        <button
+          v-if="!itemSubmitted && allJurorsScored"
+          class="px-6 py-2.5 rounded-xl bg-petro-primary text-white font-semibold hover:bg-petro-primary/90 transition"
+          @click="confirmItem"
         >
-          {{ j.name }}
-          <button class="text-petro-primary/50 hover:text-petro-primary" @click="jurados.removeJuror(j.id)">✕</button>
-        </span>
-        <span v-if="jurados.jurors.length === 0" class="text-xs text-gray-400">Nenhum jurado registado ainda.</span>
-      </div>
-
-      <div v-if="jurados.jurors.length < settings.maxJurors" class="flex gap-2">
-        <input
-          v-model="newJurorName"
-          type="text"
-          placeholder="Código do jurado (dado pelo Admin)"
-          class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-petro-primary uppercase"
-          @keyup.enter="addJuror"
-        />
-        <button class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold" @click="addJuror">
-          Entrar
+          Confirmar Pontuação
         </button>
+        <span v-else-if="!allJurorsScored" class="text-xs text-amber-600">
+          A aguardar nota de todos os jurados...
+        </span>
+        <span v-else-if="itemSubmitted" class="text-xs text-emerald-500 font-medium">
+          ✓ Pontuação confirmada
+        </span>
       </div>
-      <p v-else class="text-xs text-gray-400">Limite de {{ settings.maxJurors }} jurados atingido.</p>
-      <p v-if="registerError" class="text-xs text-red-500 mt-2">{{ registerError }}</p>
-    </div>
-
-    <!-- ==================== MODO: APRESENTAÇÃO DE PROJETOS ==================== -->
-    <template v-if="isPresentationPhase">
-      <div v-if="store.presentationFlow.stage === 'idle'" class="bg-white rounded-2xl shadow p-6 max-w-md text-center">
-        <p class="text-sm text-gray-500">
-          A aguardar o Moderador iniciar a apresentação de uma equipa.
-        </p>
-      </div>
-
-      <div v-else class="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
-        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h3 class="font-semibold text-sm text-gray-600">Avaliação do Projeto</h3>
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-petro-primary/10 text-petro-primary uppercase">
-            {{ presentationStageLabel }}
-          </span>
-        </div>
-
-        <p class="text-lg font-bold text-petro-primary">{{ store.presentationFlow.teamName }}</p>
-        <p class="text-sm text-gray-500 mb-4">Tema: {{ store.presentationFlow.theme }}</p>
-
-        <div v-if="store.presentationFlow.stage !== 'concluded'" class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
-          A avaliação fica disponível assim que o Moderador finalizar a apresentação desta equipa.
-        </div>
-
-        <div v-if="!presentationCriteria.length" class="text-xs text-gray-400 text-center py-4">
-          Nenhum critério cadastrado para esta fase — configura em Admin → Apresentação.
-        </div>
-
-        <template v-else-if="store.presentationFlow.stage === 'concluded'">
-          <div v-if="jurados.jurors.length === 0" class="text-xs text-gray-400 text-center py-4">
-            Regista pelo menos um jurado para começar a avaliar.
-          </div>
-          <div v-else class="flex flex-col gap-4">
-            <div
-              v-for="j in jurados.jurors"
-              :key="j.id"
-              class="border border-gray-100 rounded-xl p-4 flex flex-col gap-2"
-              :class="jurorHasSubmittedPresentation(j.id) ? 'bg-green-50/50' : ''"
-            >
-              <div class="flex items-center justify-between">
-                <span class="text-sm font-semibold">{{ j.name }}</span>
-                <span v-if="jurorHasSubmittedPresentation(j.id)" class="text-xs text-green-600 font-semibold">
-                  Submetido ✓ — {{ jurorPresentationTotal(j.id) }}/{{ totalCriteriaPoints }} pts
-                </span>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div v-for="c in presentationCriteria" :key="c.id" class="flex items-center justify-between gap-2">
-                  <span class="text-xs text-gray-500 truncate">{{ c.label }}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    :max="c.maxPoints"
-                    :disabled="jurorHasSubmittedPresentation(j.id)"
-                    :value="presentationScoreFor(j.id, c.id)"
-                    class="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center disabled:bg-gray-50"
-                    @input="updatePresentationScore(j.id, c.id, c.maxPoints, Number(($event.target as HTMLInputElement).value))"
-                  />
-                </div>
-              </div>
-              <button
-                v-if="!jurorHasSubmittedPresentation(j.id)"
-                class="self-end bg-petro-primary text-white rounded-lg px-3 py-1.5 text-xs font-semibold"
-                @click="submitPresentation(j.id)"
-              >
-                Submeter Avaliação
-              </button>
-            </div>
-
-            <p v-if="store.presentationFlow.allJurorsSubmitted" class="text-sm text-green-600 font-semibold text-center pt-2 border-t border-gray-100">
-              Todos os jurados avaliaram — nota final calculada.
-            </p>
-          </div>
-        </template>
-      </div>
-    </template>
-
-    <!-- ==================== MODO: BATALHA (Quiz) ==================== -->
-    <template v-else-if="hasBattle">
-      <div v-if="!phaseConfig.useJudges" class="bg-white rounded-2xl shadow p-6 max-w-md text-center">
-        <p class="text-sm text-gray-500">
-          A Fase {{ store.phase }} não está configurada para usar avaliação dos jurados. Se isto não estiver certo,
-          pede ao Administrador para ativar "Avaliação dos Jurados" para esta fase no Painel Admin → Fases.
-        </p>
-      </div>
-
-      <template v-else>
-        <div v-if="phaseConfig.useInitialScores" class="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
-          <h3 class="font-semibold text-sm text-gray-600 mb-3">
-            Notas Iniciais (antes da batalha) — até {{ phaseConfig.initialScoreMaxPoints ?? '—' }} pts por jurado
-          </h3>
-          <div v-if="jurados.jurors.length === 0" class="text-xs text-gray-400 text-center py-4">
-            Regista pelo menos um jurado para atribuir as notas iniciais.
-          </div>
-          <div v-else class="flex flex-col gap-3">
-            <div
-              v-for="j in jurados.jurors"
-              :key="'initial-' + j.id"
-              class="flex items-center justify-between gap-3 border border-gray-100 rounded-xl px-4 py-3 flex-wrap"
-            >
-              <span class="text-sm font-medium w-full sm:w-28 truncate">{{ j.name }}</span>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400">{{ store.teamA?.name }}</span>
-                <input
-                  type="number"
-                  min="0"
-                  :max="phaseConfig.initialScoreMaxPoints ?? undefined"
-                  :disabled="jurados.initialScoresConfirmed"
-                  :value="initialScoreFor(j.id, 'a')"
-                  class="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center disabled:bg-gray-50"
-                  @input="updateInitialScore(j.id, 'a', Number(($event.target as HTMLInputElement).value))"
-                />
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400">{{ store.teamB?.name }}</span>
-                <input
-                  type="number"
-                  min="0"
-                  :max="phaseConfig.initialScoreMaxPoints ?? undefined"
-                  :disabled="jurados.initialScoresConfirmed"
-                  :value="initialScoreFor(j.id, 'b')"
-                  class="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center disabled:bg-gray-50"
-                  @input="updateInitialScore(j.id, 'b', Number(($event.target as HTMLInputElement).value))"
-                />
-              </div>
-            </div>
-            <div class="flex items-center justify-end mt-2 pt-3 border-t border-gray-100">
-              <button
-                v-if="!jurados.initialScoresConfirmed"
-                class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold"
-                @click="confirmInitialScores"
-              >
-                Confirmar Notas Iniciais
-              </button>
-              <span v-else class="text-green-600 text-sm font-semibold">Confirmado ✓ — já somado ao placar</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Perguntas de Múltipla Escolha — só mostra estado, sem inputs manuais -->
-        <div v-if="multipleChoiceItems.length" class="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
-          <h3 class="font-semibold text-sm text-gray-600 mb-3">Perguntas Analíticas de Múltipla Escolha</h3>
-          <p class="text-xs text-gray-400 mb-3">
-            Estas são corrigidas automaticamente pelo sistema — o Moderador ativa-as na grelha de perguntas normal.
-            Nada a fazer aqui, é só acompanhar.
-          </p>
-          <div
-            v-for="item in multipleChoiceItems"
-            :key="item.id"
-            class="flex items-center justify-between gap-3 border-b border-gray-50 py-2 last:border-0"
-            :class="store.currentAnalyticItemId === item.id ? 'bg-amber-50/50 -mx-2 px-2 rounded-lg' : ''"
-          >
-            <span class="text-sm truncate">{{ item.text }} <span class="text-amber-600 font-semibold">· {{ item.timeSeconds ?? 30 }}s · {{ item.maxPoints }} pts</span></span>
-            <span
-              v-if="store.currentAnalyticItemId === item.id"
-              class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase shrink-0"
-            >
-              Em curso
-            </span>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
-          <h3 class="font-semibold text-sm text-gray-600 mb-3">Pergunta / Item a Avaliar</h3>
-
-          <div v-if="!openItems.length" class="text-xs text-gray-400 text-center py-4">
-            Não há perguntas abertas cadastradas para a Fase {{ store.phase }}. Adiciona-as no Painel do Administrador.
-          </div>
-
-          <template v-else>
-            <select
-              v-model="selectedItemId"
-              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-petro-primary mb-3"
-            >
-              <option v-for="item in openItems" :key="item.id" :value="item.id">
-                Analítica · {{ item.maxPoints }} pts {{ jurados.isSubmitted(item.id) ? '· ✓ avaliado' : '' }}
-              </option>
-            </select>
-
-            <p v-if="selectedItem" class="text-sm text-gray-500 mb-1">{{ selectedItem.text }}</p>
-            <p v-if="selectedItem?.jurorIds?.length" class="text-[11px] text-amber-600 mb-4">
-              Avaliação restrita aos jurados: {{ allowedJurorsForSelected.map((j) => j.name).join(', ') || '—' }}
-            </p>
-            <div v-else class="mb-4"></div>
-
-            <div v-if="allowedJurorsForSelected.length === 0" class="text-xs text-gray-400 text-center py-4">
-              Regista pelo menos um jurado (dos atribuídos a esta pergunta) para começar a pontuar.
-            </div>
-
-            <div v-else class="flex flex-col gap-3">
-              <div
-                v-for="j in allowedJurorsForSelected"
-                :key="j.id"
-                class="flex items-center justify-between gap-3 border border-gray-100 rounded-xl px-4 py-3 flex-wrap"
-              >
-                <span class="text-sm font-medium w-full sm:w-28 truncate">{{ j.name }}</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-400">{{ store.teamA?.name }}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    :max="selectedItem?.maxPoints ?? 0"
-                    :disabled="itemSubmitted"
-                    :value="scoreFor(j.id, 'a')"
-                    class="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center disabled:bg-gray-50"
-                    @input="updateScore(j.id, 'a', Number(($event.target as HTMLInputElement).value))"
-                  />
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-400">{{ store.teamB?.name }}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    :max="selectedItem?.maxPoints ?? 0"
-                    :disabled="itemSubmitted"
-                    :value="scoreFor(j.id, 'b')"
-                    class="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center disabled:bg-gray-50"
-                    @input="updateScore(j.id, 'b', Number(($event.target as HTMLInputElement).value))"
-                  />
-                </div>
-              </div>
-
-              <div class="flex items-center justify-between mt-2 pt-3 border-t border-gray-100 flex-wrap gap-2">
-                <span class="text-sm font-semibold text-petro-primary">
-                  Total: {{ store.teamA?.name }} {{ totals.totalA }} pts · {{ store.teamB?.name }} {{ totals.totalB }} pts
-                </span>
-                <button
-                  v-if="!itemSubmitted"
-                  class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold"
-                  @click="confirmItem"
-                >
-                  Confirmar Pontuação
-                </button>
-                <span v-else class="text-green-600 text-sm font-semibold">Confirmado ✓</span>
-              </div>
-            </div>
-          </template>
-        </div>
-      </template>
-    </template>
-
-    <!-- ==================== MODO: SEM NADA EM CURSO ==================== -->
-    <div v-else class="bg-white rounded-2xl shadow p-6 max-w-md text-center">
-      <p class="text-sm text-gray-500">
-        Não há nenhuma avaliação em curso neste momento. Este painel fica ativo automaticamente quando o
-        Moderador iniciar uma batalha com avaliação por jurados, ou uma apresentação de projetos.
-      </p>
     </div>
   </div>
 </template>

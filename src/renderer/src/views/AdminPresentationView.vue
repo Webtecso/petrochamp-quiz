@@ -3,6 +3,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { usePhasesStore } from '../stores/phases'
 import { useTeamsStore } from '../stores/teams'
 import { getBackendUrl } from '../services/backendConfig'
+import { adminFetch } from '../services/adminAuth'
 import type { ChampionshipType } from '../stores/campeonato'
 
 interface Dupla {
@@ -89,58 +90,17 @@ onMounted(async () => {
 watch(selectedChampionship, loadPhases)
 watch(selectedPhaseId, loadAll)
 
-const teamsForChampionship = computed(() =>
-  teamsStore.teams.filter((t) => t.category === selectedChampionship.value)
-)
-
-const newDuplaThemeA = ref('')
-const newDuplaThemeB = ref('')
-const newDuplaTeamA = ref('')
-const newDuplaTeamB = ref('')
-
-async function addDupla(): Promise<void> {
-  if (!newDuplaThemeA.value.trim() || !newDuplaTeamA.value || !selectedPhaseId.value) return
-  errorMsg.value = ''
-  try {
-    const res = await fetch(`${getBackendUrl()}/api/presentation/duplas`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phaseId: selectedPhaseId.value,
-        themeA: newDuplaThemeA.value.trim(),
-        themeB: newDuplaThemeB.value.trim() || undefined,
-        teamAId: newDuplaTeamA.value,
-        teamBId: newDuplaTeamB.value || undefined
-      })
-    })
-    if (!res.ok) throw new Error()
-    newDuplaThemeA.value = ''
-    newDuplaThemeB.value = ''
-    newDuplaTeamA.value = ''
-    newDuplaTeamB.value = ''
-    await loadAll()
-  } catch {
-    errorMsg.value = 'Falha ao criar a dupla.'
-  }
-}
-
 const editingTheme = ref<Record<string, string>>({})
 
 async function saveTheme(duplaId: number, team: 'A' | 'B'): Promise<void> {
   const key = `${duplaId}:${team}`
   const theme = editingTheme.value[key]?.trim()
   if (!theme) return
-  await fetch(`${getBackendUrl()}/api/presentation/duplas/${duplaId}/theme`, {
+  await adminFetch(`/api/presentation/duplas/${duplaId}/theme`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ team, theme })
   })
   delete editingTheme.value[key]
-  await loadAll()
-}
-
-async function removeDupla(id: number): Promise<void> {
-  await fetch(`${getBackendUrl()}/api/presentation/duplas/${id}`, { method: 'DELETE' })
   await loadAll()
 }
 
@@ -151,9 +111,8 @@ async function addCriteria(): Promise<void> {
   if (!newCriteriaLabel.value.trim() || !selectedPhaseId.value) return
   errorMsg.value = ''
   try {
-    const res = await fetch(`${getBackendUrl()}/api/presentation/criteria`, {
+    const res = await adminFetch('/api/presentation/criteria', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         phaseId: selectedPhaseId.value,
         label: newCriteriaLabel.value.trim(),
@@ -170,7 +129,7 @@ async function addCriteria(): Promise<void> {
 }
 
 async function removeCriteria(id: number): Promise<void> {
-  await fetch(`${getBackendUrl()}/api/presentation/criteria/${id}`, { method: 'DELETE' })
+  await adminFetch(`/api/presentation/criteria/${id}`, { method: 'DELETE' })
   await loadAll()
 }
 
@@ -237,7 +196,7 @@ async function confirmUpload(duplaId: number, teamId: string): Promise<void> {
       formData.append('files', s.file)
       formData.append('orders', String(s.order))
     }
-    const res = await fetch(`${getBackendUrl()}/api/presentation-documents`, { method: 'POST', body: formData })
+    const res = await adminFetch('/api/presentation-documents', { method: 'POST', body: formData })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       throw new Error(data.error)
@@ -252,7 +211,7 @@ async function confirmUpload(duplaId: number, teamId: string): Promise<void> {
 }
 
 async function removeDocument(id: number): Promise<void> {
-  await fetch(`${getBackendUrl()}/api/presentation-documents/${id}`, { method: 'DELETE' })
+  await adminFetch(`/api/presentation-documents/${id}`, { method: 'DELETE' })
   await loadAll()
 }
 </script>
@@ -277,31 +236,20 @@ async function removeDocument(id: number): Promise<void> {
     <p v-if="errorMsg" class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{{ errorMsg }}</p>
 
     <div v-if="selectedPhaseId" class="bg-white rounded-2xl shadow p-6">
-      <h2 class="font-semibold text-petro-primary mb-4">Duplas, Temas e Documentos</h2>
-      <div class="grid grid-cols-2 gap-3 mb-2">
-        <input v-model="newDuplaThemeA" type="text" placeholder="Tema — Equipa A" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-        <input v-model="newDuplaThemeB" type="text" placeholder="Tema — Equipa B (opcional)" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-      </div>
-      <div class="grid grid-cols-2 gap-3 mb-3">
-        <select v-model="newDuplaTeamA" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
-          <option value="">Equipa A</option>
-          <option v-for="t in teamsForChampionship" :key="t.id" :value="t.id">{{ t.name }}</option>
-        </select>
-        <select v-model="newDuplaTeamB" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
-          <option value="">Equipa B (opcional)</option>
-          <option v-for="t in teamsForChampionship" :key="t.id" :value="t.id">{{ t.name }}</option>
-        </select>
-      </div>
-      <button class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold mb-4" @click="addDupla">
-        Adicionar Dupla
-      </button>
+      <h2 class="font-semibold text-petro-primary mb-2">Duplas, Temas e Documentos</h2>
+      <p class="text-xs text-gray-400 mb-4">
+        As duplas são geradas automaticamente ao criares o Chaveamento em Admin → Chaveamento. Aqui só editas o
+        tema de cada equipa, e carregas os slides/critérios.
+      </p>
 
-      <div v-if="!duplas.length" class="text-xs text-gray-400">Nenhuma dupla cadastrada ainda.</div>
+      <div v-if="!duplas.length" class="text-xs text-gray-400">
+        Nenhuma dupla ainda — gera o Chaveamento em Admin → Chaveamento para esta fase ficar preenchida
+        automaticamente.
+      </div>
 
       <div v-for="d in duplas" :key="d.id" class="border-b border-gray-50 py-3 last:border-0">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-semibold">Dupla #{{ d.order }}</span>
-          <button class="text-xs text-red-400 underline" @click="removeDupla(d.id)">Remover dupla</button>
         </div>
 
         <!-- Equipa A -->
@@ -339,7 +287,6 @@ async function removeDocument(id: number): Promise<void> {
             </div>
           </div>
 
-          <!-- Pré-visualização + reordenação, antes de confirmar -->
           <div v-if="pendingByTeam[`${d.id}:${d.teamAId}`]" class="mt-2 flex flex-wrap gap-2">
             <div
               v-for="(s, i) in pendingByTeam[`${d.id}:${d.teamAId}`]"
@@ -401,7 +348,6 @@ async function removeDocument(id: number): Promise<void> {
             </div>
           </div>
 
-          <!-- Pré-visualização + reordenação, antes de confirmar -->
           <div v-if="pendingByTeam[`${d.id}:${d.teamBId}`]" class="mt-2 flex flex-wrap gap-2">
             <div
               v-for="(s, i) in pendingByTeam[`${d.id}:${d.teamBId}`]"

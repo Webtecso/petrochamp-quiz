@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
@@ -26,7 +28,7 @@ router.get('/', async (req, res) => {
   res.json(phases)
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const {
     championship,
     label,
@@ -68,13 +70,11 @@ router.post('/', async (req, res) => {
       order: (maxOrder._max.order ?? 0) + 1
     }
   })
+  emitConfigUpdated('phases', championship)
   res.status(201).json(phase)
 })
 
-// NOVO: troca a ordem de duas fases de forma atómica, arrastando com elas
-// todas as perguntas/itens já cadastrados (que só referenciam por número
-// de ordem) — evita que trocar ▲▼ misture o conteúdo de fases diferentes.
-router.post('/swap', async (req, res) => {
+router.post('/swap', requireAdmin, async (req, res) => {
   const { firstId, secondId } = req.body as { firstId?: number; secondId?: number }
   if (!firstId || !secondId) {
     res.status(400).json({ error: 'firstId e secondId são obrigatórios' })
@@ -92,7 +92,7 @@ router.post('/swap', async (req, res) => {
 
   const championship = first.championship
   const orderA = first.order
-  const orderB = second.order  // Usa um número temporário para evitar colisão de índice único (order)  // durante a troca.
+  const orderB = second.order
   const TEMP_ORDER = -1
 
   await prisma.phase.update({ where: { id: first.id }, data: { order: TEMP_ORDER } })
@@ -112,10 +112,11 @@ router.post('/swap', async (req, res) => {
   await prisma.evaluationItem.updateMany({ where: { phase: TEMP_ORDER, championship }, data: { phase: orderB } })
 
   const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+  emitConfigUpdated('phases', championship)
   res.json({ success: true, phases })
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   const {
     label,
@@ -152,25 +153,29 @@ router.put('/:id', async (req, res) => {
         quizWeight
       }
     })
+    emitConfigUpdated('phases', phase.championship)
     res.json(phase)
   } catch {
     res.status(404).json({ error: 'Fase não encontrada' })
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   try {
     const existing = await prisma.phase.findUnique({ where: { id } })
     await prisma.phase.delete({ where: { id } })
-    if (existing) await renumberPhases(existing.championship)
+    if (existing) {
+      await renumberPhases(existing.championship)
+      emitConfigUpdated('phases', existing.championship)
+    }
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Fase não encontrada' })
   }
 })
 
-router.post('/repair-numbering', async (req, res) => {
+router.post('/repair-numbering', requireAdmin, async (req, res) => {
   const { championship } = req.body as { championship?: string }
   if (!championship) {
     res.status(400).json({ error: 'championship é obrigatório' })
@@ -178,6 +183,7 @@ router.post('/repair-numbering', async (req, res) => {
   }
   await renumberPhases(championship)
   const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+  emitConfigUpdated('phases', championship)
   res.json({ success: true, phases })
 })
 

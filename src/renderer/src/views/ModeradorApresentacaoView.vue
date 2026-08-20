@@ -137,8 +137,10 @@ function advanceNext(): void {
 
 function goNext(): void {
   if (isCompositePhase.value) {
+    store.confirmQuizIntro()
     router.push('/moderador/equipas')
   } else {
+    store.confirmPresentationRanking()
     router.push('/moderador/ranking')
   }
 }
@@ -270,12 +272,19 @@ function goNext(): void {
         <div v-if="!store.presentationFlow.allJurorsSubmitted" class="flex flex-col gap-2">
           <p class="text-sm text-gray-500">A aguardar avaliação dos jurados...</p>
           <p class="text-xs text-gray-400">
-            {{ store.presentationFlow.jurorsSubmitted.length }} de {{ jurados.jurors.length }} jurados já submeteram
+            {{ store.presentationFlow.jurorsSubmitted.length }} de {{ store.expectedJurorCount }} jurados já submeteram
           </p>
         </div>
         <div v-else class="flex flex-col gap-3">
           <p class="text-green-600 text-sm font-semibold">Avaliação concluída ✓</p>
-          <button class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold self-center" @click="advanceNext">
+          <button
+            v-if="store.presentationRoundReady"
+            class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold self-center"
+            @click="store.confirmPresentationRanking()"
+          >
+            Ir para o Ranking
+          </button>
+          <button v-else class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold self-center" @click="advanceNext">
             Avançar
           </button>
         </div>

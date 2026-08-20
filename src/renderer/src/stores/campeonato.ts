@@ -132,9 +132,11 @@ interface LiveState {
   phaseFlow: PhaseFlowState
   championReveal: ChampionRevealState
   bracketVisible: boolean
+  expectedJurorCount: number
   initialScoreEntries: InitialScoreEntry[]
   initialScoresConfirmed: boolean
   presentationFlow: PresentationFlowState
+  presentationRoundReady: boolean
   currentItemSource: 'question' | 'analytic' | null
   currentAnalyticItemId: string | null
   currentItemMode: 'multipla_escolha' | 'aberta' | null
@@ -149,6 +151,7 @@ interface LiveState {
   }
   publicVotingUrl: string | null
   publicVotingStatus: 'idle' | 'starting' | 'online' | 'failed'
+  adminAccessedRemotely: boolean
   repescagemReveal: RepescagemRevealState
 }
 
@@ -212,9 +215,11 @@ export const useCampeonatoStore = defineStore('campeonato', {
     phaseFlow: { stage: 'idle', suspensePhrase: null },
     championReveal: { active: false, teamName: null, logoUrl: null },
     bracketVisible: false,
+    expectedJurorCount: 0,
     initialScoreEntries: [],
     initialScoresConfirmed: false,
     presentationFlow: defaultPresentationFlow(),
+    presentationRoundReady: false,
     currentItemSource: null,
     currentAnalyticItemId: null,
     currentItemMode: null,
@@ -229,9 +234,16 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     publicVotingUrl: null,
     publicVotingStatus: 'idle',
+    adminAccessedRemotely: false,
     repescagemReveal: { stage: 'idle', countdownValue: 0, configId: null, repescadaNames: [] }
   }),
   actions: {
+    enterAdmin() {
+      this.adminAccessedRemotely = true
+    },
+    exitAdmin() {
+      this.adminAccessedRemotely = false
+    },
     listenToServer() {
       getSocket().on('state:sync', (incoming: LiveState) => {
         this.$patch((state) => {
@@ -257,6 +269,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     pauseTimer() {
       getSocket().emit('moderator:pauseTimer')
+    },
+    confirmQuizIntro() {
+      getSocket().emit('moderator:confirmQuizIntro')
     },
     nextQuestion() {
       getSocket().emit('moderator:nextQuestion')
@@ -345,6 +360,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     submitPresentationEvaluation(jurorId: string) {
       getSocket().emit('juror:submitPresentationEvaluation', { jurorId })
     },
+    confirmPresentationRanking() {
+      getSocket().emit('moderator:confirmPresentationRanking')
+    },
     advanceToNextPresentation() {
       getSocket().emit('moderator:advanceToNextPresentation')
     },
@@ -353,12 +371,6 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     prevPresentationPage() {
       getSocket().emit('moderator:presentationPrevPage')
-    },
-    enterAdmin() {
-      getSocket().emit('moderator:enterAdmin')
-    },
-    exitAdmin() {
-      getSocket().emit('moderator:exitAdmin')
     }
   }
 })

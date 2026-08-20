@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
@@ -18,7 +20,7 @@ router.get('/', async (req, res) => {
   )
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const { championship, type, mode, text, imageUrl, optionA, optionB, optionC, optionD, correctIndex, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
   if (!championship || !type || !text || !maxPoints || !phase) {
     return res.status(400).json({ error: 'championship, type, text, maxPoints e phase são obrigatórios' })
@@ -49,10 +51,11 @@ router.post('/', async (req, res) => {
     },
     include: { jurorAssignments: true }
   })
+  emitConfigUpdated('evaluationItems', championship)
   res.status(201).json({ ...item, jurorIds: item.jurorAssignments.map((a) => a.jurorId) })
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   const { type, mode, text, imageUrl, optionA, optionB, optionC, optionD, correctIndex, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
   try {
@@ -80,16 +83,18 @@ router.put('/:id', async (req, res) => {
       },
       include: { jurorAssignments: true }
     })
+    emitConfigUpdated('evaluationItems', item.championship)
     res.json({ ...item, jurorIds: item.jurorAssignments.map((a) => a.jurorId) })
   } catch {
     res.status(404).json({ error: 'Item não encontrado' })
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {
-    await prisma.evaluationItem.delete({ where: { id } })
+    const existing = await prisma.evaluationItem.delete({ where: { id } })
+    emitConfigUpdated('evaluationItems', existing.championship)
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Item não encontrado' })

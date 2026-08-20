@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useQuizContentStore } from '../stores/quizContent'
 import { useSettingsStore } from '../stores/settings'
@@ -9,6 +9,7 @@ import { useSuspensePhrasesStore } from '../stores/suspensePhrases'
 import { useRepescagemStore } from '../stores/repescagem'
 import { getBracketFor } from '../data/bracket'
 import { getBackendUrl } from '../services/backendConfig'
+import { startConfigSync } from '../services/configSync'
 import LogoMark from '../components/LogoMark.vue'
 import PhaseBadge from '../components/PhaseBadge.vue'
 import TimerRing from '../components/TimerRing.vue'
@@ -40,7 +41,10 @@ const championshipLabels: Record<string, string> = {
 onMounted(async () => {
   try {
     store.listenToServer()
+    startConfigSync()
     await quizContent.fetchQuestions(store.championship ?? undefined)
+    await quizContent.fetchEvaluationItems(store.championship ?? undefined)
+    await quizContent.fetchTiebreakQuestions(store.championship ?? undefined) // NOVO
     await settings.fetchSettings()
     await phasesStore.fetchPhases(store.championship ?? undefined)
     await suspensePhrases.fetchPhrases()
@@ -64,6 +68,7 @@ watch(
   async (newVal) => {
     if (!newVal) return
     await quizContent.fetchQuestions(newVal)
+    await quizContent.fetchTiebreakQuestions(newVal) // NOVO
     await phasesStore.fetchPhases(newVal)
   }
 )
@@ -85,17 +90,6 @@ watch(
 
 const maxVotes = computed(() => Math.max(1, ...repescagemStore.tally.map((t) => t.votes)))
 const matchStarted = computed(() => !!store.teamA && !!store.teamB)
-const showBracketExplicit = ref(false)
-
-watch(
-  () => store.championship,
-  (newVal, oldVal) => {
-    if (newVal && newVal !== oldVal) {
-      showBracketExplicit.value = true
-    }
-  },
-  { immediate: false }
-)
 
 const bracket = computed(() => {
   if (store.championship && liveBracketStore.matches?.length) {
@@ -122,6 +116,11 @@ const bracket = computed(() => {
 const phaseQuestions = computed(() => quizContent.questionsForPhase(store.phase))
 const currentQuestion = computed(() => phaseQuestions.value.find((q) => q.id === store.currentQuestionId))
 const currentPhaseFull = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
+
+const isPresentationPhaseNow = computed(
+  () => currentPhaseFull.value?.type === 'apresentacao' || currentPhaseFull.value?.type === 'apresentacao_quiz'
+)
+
 const totalQuestionsForCounter = computed(() => {
   const perTeam = currentPhaseFull.value?.questionsPerTeam
   return perTeam ? perTeam * 2 : phaseQuestions.value.length
@@ -132,6 +131,13 @@ const teamALogo = computed(() => store.teamA?.logoUrl ?? null)
 const teamBName = computed(() => store.teamB?.name ?? 'EQUIPA B')
 const teamBLogo = computed(() => store.teamB?.logoUrl ?? null)
 const questionImage = computed(() => currentQuestion.value?.imageUrl ?? null)
+
+// NOVO — pergunta de desempate ativa, espelha currentQuestion mas usa
+// store.tiebreak.currentQuestionId e a lista carregada de TiebreakQuestion.
+const currentTiebreakQuestion = computed(() =>
+  quizContent.tiebreakQuestionsForPhase(store.phase).find((q) => q.id === store.tiebreak.currentQuestionId)
+)
+const tiebreakQuestionImage = computed(() => currentTiebreakQuestion.value?.imageUrl ?? null)
 
 function formatImageUrl(url: string | null | undefined): string {
   if (!url) return ''
@@ -165,7 +171,7 @@ const isPhaseBracketVisible = computed(() => {
     store.presentationFlow.stage === 'idle' &&
     !store.championReveal.active &&
     !matchStarted.value
-  return notInSpecialScreen && (store.bracketVisible || showBracketExplicit.value)
+  return notInSpecialScreen && store.bracketVisible
 })
 
 const isBattleActiveState = computed(() => {
@@ -382,6 +388,13 @@ const isBattleActiveState = computed(() => {
       <p class="text-xl">Muito obrigado, {{ store.presentationFlow.teamName }}!</p>
     </div>
 
+    <!-- 6.8 Introdução ao Quiz -->
+    <SuspenseScreen
+      v-else-if="store.phaseFlow.stage === 'quizIntro'"
+      message="Vamos entrar agora para a Batalha de Quiz — as equipas vão disputar para a eliminação!"
+      transparent
+    />
+
     <!-- 7. CHAVEAMENTO -->
     <div
       v-else-if="isPhaseBracketVisible"
@@ -396,17 +409,134 @@ const isBattleActiveState = computed(() => {
       />
     </div>
 
-    <!-- 8.5 Empate -->
-    <SuspenseScreen
-      v-else-if="store.tiebreak.active"
-      message="Empate! Vamos disputar o desempate..."
+    <!--
+      8.4 Desempate — pendente (5s de contagem antes de sortear a 1ª pergunta).
+      IMPORTANTE: fica ANTES do bloco 8 (countdown genérico) porque
+      startCountdown() no backend usa o MESMO liveState.countdown para este
+      contador de 5s do desempate e também para o de 10s ao escolher equipas —
+      sem esta verificação aqui, o countdown do desempate caía no bloco 8
+      genérico, sem mensagem de contexto nenhuma.
+    -->
+    <CountdownScreen
+      v-else-if="store.tiebreak.pending"
+      :seconds="store.countdown.value"
+      message="Empate! Vamos ao desempate..."
       transparent
     />
+
+    <!-- 8.5 Desempate — ativo, com pergunta e respostas em tempo real -->
+    <div
+      v-else-if="store.tiebreak.active"
+      class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container tiebreak-container"
+    >
+      <header class="flex flex-col items-center justify-center gap-2 px-4 py-3 w-full max-w-7xl mx-auto shrink-0">
+        <div class="bg-red-600 text-white text-xs font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg animate-pulse">
+          Desempate
+        </div>
+        <TimerRing :seconds="store.timeLeft" />
+      </header>
+
+      <main class="flex-1 flex flex-col items-center justify-center my-4 px-4 w-full max-w-6xl mx-auto min-h-0">
+        <div v-if="currentTiebreakQuestion" class="w-full h-full bg-white rounded-3xl p-8 md:p-10 shadow-2xl border-2 border-red-400/70 relative overflow-hidden flex flex-col justify-center">
+          <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-red-600 via-amber-500 to-red-600"></div>
+          <div
+            class="flex w-full h-full gap-8 md:gap-12 transition-all duration-500"
+            :class="tiebreakQuestionImage ? 'flex-col lg:flex-row lg:items-stretch' : 'flex-col items-center justify-center py-8'"
+          >
+            <div
+              class="flex flex-col gap-6 justify-center transition-all duration-500"
+              :class="tiebreakQuestionImage ? 'flex-1 min-w-[40%]' : 'w-full max-w-4xl items-center text-center'"
+            >
+              <div
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide bg-red-50 text-red-700 border border-red-200/60"
+                :class="tiebreakQuestionImage ? 'self-start' : 'self-center'"
+              >
+                <span>⚔️</span> PERGUNTA DE DESEMPATE
+              </div>
+              <h1
+                class="font-extrabold text-slate-800 leading-tight md:leading-snug transition-all duration-300"
+                :class="[
+                  currentTiebreakQuestion.text && currentTiebreakQuestion.text.length > 120 ? 'text-2xl md:text-3xl' : 'text-3xl md:text-5xl',
+                  tiebreakQuestionImage ? 'text-left' : 'text-center'
+                ]"
+              >
+                {{ currentTiebreakQuestion.text }}
+              </h1>
+              <div class="w-full mt-2 text-left">
+                <AnswerOptions
+                  :options="currentTiebreakQuestion.options"
+                  :correct-index="currentTiebreakQuestion.correctIndex"
+                  :team-a-answer="store.teamAAnswer"
+                  :team-b-answer="store.teamBAnswer"
+                  :team-a-correct="store.teamACorrect"
+                  :team-b-correct="store.teamBCorrect"
+                />
+              </div>
+            </div>
+            <div
+              v-if="tiebreakQuestionImage"
+              class="flex-[1.5] flex justify-center items-center bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-red-200 group relative min-h-[300px]"
+            >
+              <img
+                :src="formatImageUrl(tiebreakQuestionImage)"
+                alt="Imagem Ilustrativa"
+                class="absolute inset-0 w-full h-full object-contain p-2"
+              />
+            </div>
+          </div>
+        </div>
+        <!-- Fallback: sem pool de perguntas de desempate cadastradas para esta fase -->
+        <div v-else class="text-white text-center text-lg">
+          A aguardar pergunta de desempate do moderador...
+        </div>
+      </main>
+
+      <footer class="w-full max-w-7xl mx-auto px-4 mt-2 shrink-0">
+        <div class="relative w-full h-20 rounded-2xl bg-[#0a0f1d] border border-red-500/40 shadow-2xl overflow-hidden flex items-stretch">
+          <div class="relative flex-1 bg-gradient-to-r from-[#800010] via-[#60000c] to-[#3a0007] flex items-center justify-start pl-6 pr-12 text-white [clip-path:polygon(0_0,100%_0,85%_100%,0_100%)] z-10">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-full bg-white flex items-center justify-center p-1 shadow-md border-2 border-red-400/60 shrink-0">
+                <img v-if="teamALogo" :src="formatImageUrl(teamALogo)" :alt="teamAName" class="w-full h-full object-contain rounded-full" />
+                <span v-else class="text-gray-900 font-black text-lg">{{ teamAName.slice(0, 3).toUpperCase() }}</span>
+              </div>
+              <span class="text-xl md:text-2xl font-black tracking-wider uppercase text-white drop-shadow">{{ teamAName }}</span>
+            </div>
+          </div>
+          <div class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+            <div class="bg-[#0a0f1d] px-8 py-2 border-x-2 border-red-400 shadow-2xl transform -skew-x-12 flex items-center justify-center">
+              <span class="transform skew-x-12 text-2xl md:text-3xl font-black text-white tracking-widest">VS</span>
+            </div>
+          </div>
+          <div class="relative flex-1 bg-gradient-to-l from-[#002b66] via-[#001d47] to-[#000d24] flex items-center justify-end pr-6 pl-12 text-white [clip-path:polygon(15%_0,100%_0,100%_100%,0_100%)] z-10 ml-auto">
+            <div class="flex items-center gap-4 flex-row-reverse">
+              <div class="w-14 h-14 rounded-full bg-white flex items-center justify-center p-1 shadow-md border-2 border-red-400/60 shrink-0">
+                <img v-if="teamBLogo" :src="formatImageUrl(teamBLogo)" :alt="teamBName" class="w-full h-full object-contain rounded-full" />
+                <span v-else class="text-gray-900 font-black text-lg">{{ teamBName.slice(0, 3).toUpperCase() }}</span>
+              </div>
+              <span class="text-xl md:text-2xl font-black tracking-wider uppercase text-white drop-shadow">{{ teamBName }}</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
 
     <!-- 8. Contagem Regressiva Geral -->
     <CountdownScreen
       v-else-if="store.countdown.active"
       :seconds="store.countdown.value"
+      transparent
+    />
+
+    <SuspenseScreen
+      v-else-if="isPresentationPhaseNow && store.presentationRoundReady"
+      message="Todas as apresentações desta fase foram avaliadas — o Moderador vai revelar o ranking."
+      transparent
+    />
+
+    <!-- 9a. Entre apresentações (fase de Apresentação, ninguém a apresentar agora) -->
+    <SuspenseScreen
+      v-else-if="isPresentationPhaseNow && store.presentationFlow.stage === 'idle' && store.phaseFlow.stage === 'idle' && !matchStarted"
+      message="A próxima apresentação vai começar dentro de instantes. Aguardem."
       transparent
     />
 

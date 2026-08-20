@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
@@ -8,7 +10,7 @@ router.get('/', async (_req, res) => {
   res.json(teams)
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const { name, institution, category, logoUrl, group, bracketPosition } = req.body
   if (!name || !institution || !category) {
     return res.status(400).json({ error: 'name, institution e category são obrigatórios' })
@@ -23,10 +25,11 @@ router.post('/', async (req, res) => {
       bracketPosition: bracketPosition ?? null
     }
   })
+  emitConfigUpdated('teams', category)
   res.status(201).json(team)
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   const { name, institution, category, logoUrl, group, bracketPosition } = req.body
   try {
@@ -41,16 +44,19 @@ router.put('/:id', async (req, res) => {
         bracketPosition: bracketPosition ?? null
       }
     })
+    emitConfigUpdated('teams', category)
     res.json(team)
   } catch {
     res.status(404).json({ error: 'Equipa não encontrada' })
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {
+    const existing = await prisma.team.findUnique({ where: { id } })
     await prisma.team.delete({ where: { id } })
+    emitConfigUpdated('teams', existing?.category)
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Equipa não encontrada' })

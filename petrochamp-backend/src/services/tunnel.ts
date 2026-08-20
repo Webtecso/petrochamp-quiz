@@ -14,6 +14,7 @@ let broadcastFn: (() => void) | null = null
 let startupTimeoutHandle: ReturnType<typeof setTimeout> | null = null
 let restartCount = 0
 let manuallyStopped = false
+let outputBuffer = ''
 
 export type TunnelStatus = 'idle' | 'starting' | 'online' | 'failed'
 
@@ -22,16 +23,13 @@ function setStatus(status: TunnelStatus): void {
   broadcastFn?.()
 }
 
-// Em produção (Electron empacotado), process.resourcesPath aponta para a
-// pasta de recursos do instalador, onde o extraResources copiou o binário.
-// Em desenvolvimento, cai para o cloudflared instalado globalmente no PATH.
 function resolveCloudflaredPath(): string {
   const resourcesPath = (process as any).resourcesPath as string | undefined
   if (resourcesPath) {
     const bundled = path.join(resourcesPath, 'cloudflared', 'cloudflared.exe')
     if (fs.existsSync(bundled)) return bundled
   }
-  return 'cloudflared' // fallback: usa o do PATH, útil em dev sem Electron
+  return 'cloudflared'
 }
 
 function stripAnsi(text: string): string {
@@ -46,9 +44,14 @@ function clearStartupTimeout(): void {
 }
 
 function handleOutput(chunk: Buffer): void {
-  const text = stripAnsi(chunk.toString())
   if (liveState.publicVotingUrl) return
-  const match = text.match(URL_REGEX)
+
+  outputBuffer += stripAnsi(chunk.toString())
+  if (outputBuffer.length > 5000) {
+    outputBuffer = outputBuffer.slice(-2000)
+  }
+
+  const match = outputBuffer.match(URL_REGEX)
   if (match) {
     clearStartupTimeout()
     liveState.publicVotingUrl = `${match[0]}/portal/votacao.html`
@@ -62,6 +65,8 @@ function launch(): void {
   const cloudflaredPath = resolveCloudflaredPath()
   console.log('[tunnel] A iniciar túnel Cloudflare com:', cloudflaredPath)
   setStatus('starting')
+  outputBuffer = ''
+  liveState.publicVotingUrl = null
 
   try {
     tunnelProcess = spawn(cloudflaredPath, ['tunnel', '--url', LOCAL_TARGET])

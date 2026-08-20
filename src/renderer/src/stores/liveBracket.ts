@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { getBackendUrl } from '../services/backendConfig'
+import { adminFetch } from '../services/adminAuth'
 
 export interface LiveBracketTeam {
   id: string
@@ -49,11 +50,11 @@ export const useLiveBracketStore = defineStore('liveBracket', {
       this.matches = data.matches
     },
     async generate(championship: string) {
-      await fetch(`${getBackendUrl()}/api/bracket-live/${championship}/generate`, { method: 'POST' })
+      await adminFetch(`/api/bracket-live/${championship}/generate`, { method: 'POST' })
       await this.fetchBracket(championship)
     },
     async clearBracket(championship: string): Promise<void> {
-      await fetch(`${getBackendUrl()}/api/bracket-live/${championship}`, { method: 'DELETE' })
+      await adminFetch(`/api/bracket-live/${championship}`, { method: 'DELETE' })
       this.matches = []
     }
   }

@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
@@ -16,30 +18,17 @@ router.get('/duplas', async (req, res) => {
   res.json(duplas)
 })
 
-router.post('/duplas', async (req, res) => {
-  const { phaseId, themeA, themeB, teamAId, teamBId } = req.body
-  if (!phaseId || !themeA || !teamAId) {
-    res.status(400).json({ error: 'phaseId, themeA e teamAId são obrigatórios' })
-    return
-  }
-  const maxOrder = await prisma.presentationDupla.aggregate({
-    where: { phaseId },
-    _max: { order: true }
+// As duplas passam a ser geradas automaticamente a partir do Chaveamento
+// (ver syncPresentationDuplasForRound em routes/bracketLive.ts). Criar à mão
+// deixaria de bater certo com os confrontos reais do chaveamento, por isso
+// esta rota já não permite criação manual — só devolve um erro explicativo.
+router.post('/duplas', requireAdmin, async (_req, res) => {
+  res.status(400).json({
+    error: 'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
   })
-  const dupla = await prisma.presentationDupla.create({
-    data: {
-      phaseId,
-      themeA,
-      themeB: teamBId ? (themeB || null) : null,
-      teamAId,
-      teamBId: teamBId || null,
-      order: (maxOrder._max.order ?? 0) + 1
-    }
-  })
-  res.status(201).json(dupla)
 })
 
-router.patch('/duplas/:id/theme', async (req, res) => {
+router.patch('/duplas/:id/theme', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   const { team, theme } = req.body as { team?: 'A' | 'B'; theme?: string }
   if (!team || !theme) {
@@ -51,16 +40,18 @@ router.patch('/duplas/:id/theme', async (req, res) => {
       where: { id },
       data: team === 'A' ? { themeA: theme } : { themeB: theme }
     })
+    emitConfigUpdated('presentation')
     res.json(dupla)
   } catch {
     res.status(404).json({ error: 'Dupla não encontrada' })
   }
 })
 
-router.delete('/duplas/:id', async (req, res) => {
+router.delete('/duplas/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   try {
     await prisma.presentationDupla.delete({ where: { id } })
+    emitConfigUpdated('presentation')
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Dupla não encontrada' })
@@ -80,7 +71,7 @@ router.get('/criteria', async (req, res) => {
   res.json(criteria)
 })
 
-router.post('/criteria', async (req, res) => {
+router.post('/criteria', requireAdmin, async (req, res) => {
   const { phaseId, label, maxPoints } = req.body
   if (!phaseId || !label || !maxPoints) {
     res.status(400).json({ error: 'phaseId, label e maxPoints são obrigatórios' })
@@ -89,13 +80,15 @@ router.post('/criteria', async (req, res) => {
   const criteria = await prisma.presentationCriteria.create({
     data: { phaseId, label, maxPoints: Number(maxPoints) }
   })
+  emitConfigUpdated('presentation')
   res.status(201).json(criteria)
 })
 
-router.delete('/criteria/:id', async (req, res) => {
+router.delete('/criteria/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   try {
     await prisma.presentationCriteria.delete({ where: { id } })
+    emitConfigUpdated('presentation')
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Critério não encontrado' })

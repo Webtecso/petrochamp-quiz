@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
-import { getBackendUrl } from '../services/backendConfig'
+import { adminFetch } from '../services/adminAuth'
 
 export interface Phase {
   id: number
@@ -94,18 +94,16 @@ export const usePhasesStore = defineStore('phases', {
       await this.fetchPhases(championship)
     },
     async swapPhases(firstId: number, secondId: number, championship: string) {
-      const res = await fetch(`${getBackendUrl()}/api/phases/swap`, {
+      const res = await adminFetch('/api/phases/swap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ firstId, secondId })
       })
       if (!res.ok) throw new Error('Falha ao trocar a ordem das fases')
       await this.fetchPhases(championship)
     },
     async repairNumbering(championship: string) {
-      const res = await fetch(`${getBackendUrl()}/api/phases/repair-numbering`, {
+      const res = await adminFetch('/api/phases/repair-numbering', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ championship })
       })
       if (!res.ok) throw new Error('Falha ao reparar numeração das fases')

@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import type { Server, Socket } from 'socket.io'
 import { prisma } from '../db'
 import { getEligibleTeams } from '../routes/repescagem'
+import { syncPresentationDuplasForRound } from '../routes/bracketLive'
 import {
   liveState,
   resetMatch,
@@ -18,6 +19,64 @@ let timerHandle: ReturnType<typeof setInterval> | null = null
 let countdownHandle: ReturnType<typeof setInterval> | null = null
 let partnersTimerHandle: ReturnType<typeof setTimeout> | null = null
 let moderatorSocketId: string | null = null
+let moderatorRegisteredEver = false
+
+// NOTA: 'moderator:resetChampionship' foi retirado desta lista de propósito
+// — é a saída de emergência para desencravar a app, e não deve depender de
+// estar autenticado como Principal (senão, assim que qualquer Moderador fizer
+// login algures, um socket sem login fica bloqueado e o botão deixa de
+// funcionar silenciosamente).
+const RESTRICTED_TO_PRINCIPAL = new Set([
+  'moderator:selectChampionship',
+  'moderator:finalizeChampionship',
+  'moderator:openRepescagemVoting',
+  'moderator:showPodium',
+  'moderator:hidePodium',
+  'moderator:startFinalPodiumSequence'
+])
+
+// NOVO (Bloco 4) — eventos que exigem uma área específica quando o socket é
+// Secundário. Eventos não listados aqui (e não em RESTRICTED_TO_PRINCIPAL)
+// ficam livres para qualquer moderador autenticado (ex: enterAdmin,
+// exitAdmin, resetChampionship — a saída de emergência continua sem área).
+const RESTRICTED_TO_AREA: Record<string, string> = {
+  // Quiz
+  'moderator:selectTeams': 'quiz',
+  'moderator:startTimer': 'quiz',
+  'moderator:pauseTimer': 'quiz',
+  'moderator:nextQuestion': 'quiz',
+  'moderator:forceQuestion': 'quiz',
+  'moderator:addScore': 'quiz',
+  'moderator:endOpenQuestion': 'quiz',
+  'moderator:startTiebreak': 'quiz',
+  'moderator:finishMatch': 'quiz',
+  'moderator:confirmQuizIntro': 'quiz',
+  'moderator:continueAfterRepescagem': 'quiz',
+  'moderator:showPartners': 'quiz',
+  'moderator:startNextPhase': 'quiz',
+  'moderator:advancePhase': 'quiz',
+  'moderator:showPhaseRanking': 'quiz',
+  'moderator:hidePhaseRanking': 'quiz',
+  'moderator:showPhaseTransition': 'quiz',
+  'moderator:hidePhaseTransition': 'quiz',
+  // Apresentação
+  'moderator:startPresentation': 'apresentacao',
+  'moderator:finishPresentation': 'apresentacao',
+  'moderator:presentationNextPage': 'apresentacao',
+  'moderator:presentationPrevPage': 'apresentacao',
+  'moderator:advanceToNextPresentation': 'apresentacao',
+  'moderator:confirmPresentationRanking': 'apresentacao',
+  // Jurados
+  'moderator:removeJuror': 'jurados',
+  'moderator:confirmEvaluation': 'jurados',
+  'moderator:confirmInitialScores': 'jurados',
+  // Repescagem
+  'moderator:closeRepescagemVoting': 'repescagem'
+}
+
+function hasRegisteredModerators(): boolean {
+  return liveState.activeModerators.length > 0 || moderatorRegisteredEver
+}
 
 async function getQuestionTimeSeconds(): Promise<number> {
   const row = await prisma.setting.findUnique({ where: { key: 'questionTimeSeconds' } })
@@ -63,6 +122,23 @@ async function getPresentationTeamIds(phaseId: number): Promise<string[]> {
     if (d.teamBId) ids.add(d.teamBId)
   }
   return Array.from(ids)
+}
+
+// NOVO — número de jurados esperados para a fase corrente. Se houver
+// atribuições explícitas (PhaseJurorAuthorization) para esta fase, é esse
+// número; senão, é o total de jurados cadastrados (modo aberto).
+async function getExpectedJurorCount(phaseId: number): Promise<number> {
+  const authCount = await prisma.phaseJurorAuthorization.count({ where: { phaseId } })
+  if (authCount > 0) return authCount // fase com jurados específicos atribuídos
+  return prisma.juror.count() // sem restrição: conta todos os jurados criados
+}
+
+// NOVO — recalcula liveState.expectedJurorCount a partir da fase corrente.
+// Não faz broadcast; quem chamar deve fazê-lo se estiver fora de um handler
+// que já broadcast no fim.
+async function refreshExpectedJurorCount(): Promise<void> {
+  const phaseConfig = await getCurrentPhaseConfig()
+  liveState.expectedJurorCount = phaseConfig ? await getExpectedJurorCount(phaseConfig.id) : 0
 }
 
 async function startPostRoundSequence(): Promise<void> {
@@ -195,14 +271,24 @@ async function roundQuestionsComplete(): Promise<boolean> {
 }
 
 async function recordBracketResult(championship: string, teamAId: string, teamBId: string, winnerId: string): Promise<void> {
+  // Bye (dupla sem adversário): teamAId === teamBId é chamado de propósito
+  // pelo caller para avançar a equipa sozinha. Nesse caso o match na BD tem
+  // teamBId null (só uma equipa nesse slot), por isso a procura tem de
+  // aceitar esse formato em vez de {teamAId, teamBId} com ambos iguais.
   const match = await prisma.bracketMatch.findFirst({
     where: {
       championship,
       winnerId: null,
-      OR: [
-        { teamAId, teamBId },
-        { teamAId: teamBId, teamBId: teamAId }
-      ]
+      OR:
+        teamAId === teamBId
+          ? [
+              { teamAId, teamBId: null },
+              { teamAId: null, teamBId: teamAId }
+            ]
+          : [
+              { teamAId, teamBId },
+              { teamAId: teamBId, teamBId: teamAId }
+            ]
     }
   })
   if (!match) return
@@ -217,6 +303,9 @@ async function recordBracketResult(championship: string, teamAId: string, teamBI
       where: { id: nextMatch.id },
       data: isFirstChild ? { teamAId: winnerId } : { teamBId: winnerId }
     })
+    // Se a próxima ronda for uma fase de Apresentação, a dupla desse
+    // confronto fica pronta assim que a segunda equipa entrar aqui.
+    await syncPresentationDuplasForRound(championship, nextMatch.round)
   }
 }
 
@@ -317,6 +406,79 @@ export function registerSocketHandlers(io: Server): void {
     console.log('Cliente ligado:', socket.id)
     socket.emit('state:sync', liveState)
 
+    // ATUALIZADO (Bloco 4) — inclui as áreas do moderador (relação
+    // ModeratorAreaPermission) e guarda-as em socket.data.moderatorAreas,
+    // para o middleware socket.use abaixo validar por evento.
+    socket.on('moderator:register', async (payload: { code: string }, callback?: (res: unknown) => void) => {
+      const code = (payload.code || '').trim()
+      const moderator = await prisma.moderator.findUnique({
+        where: { code },
+        include: { areas: true }
+      })
+      if (!moderator) {
+        callback?.({ success: false, error: 'Código de moderador inválido.' })
+        return
+      }
+      socket.data.moderatorId = moderator.id
+      socket.data.moderatorRole = moderator.role
+      socket.data.moderatorAreas = moderator.areas.map((a) => a.area)
+      moderatorRegisteredEver = true
+      if (!liveState.activeModerators.some((m) => m.id === moderator.id)) {
+        liveState.activeModerators.push({
+          id: moderator.id,
+          name: moderator.name,
+          role: moderator.role === 'principal' ? 'principal' : 'secundario'
+        })
+      }
+      broadcast()
+      callback?.({
+        success: true,
+        moderatorId: moderator.id,
+        role: moderator.role,
+        name: moderator.name,
+        areas: moderator.areas.map((a) => a.area)
+      })
+    })
+
+    // ATUALIZADO (Bloco 4) — além da restrição a Principal (RESTRICTED_TO_PRINCIPAL),
+    // agora também valida por área (RESTRICTED_TO_AREA) para Secundários.
+    socket.use(([eventName], next) => {
+      if (RESTRICTED_TO_PRINCIPAL.has(eventName)) {
+        if (!hasRegisteredModerators()) {
+          next()
+          return
+        }
+        if (socket.data.moderatorRole === 'principal') {
+          next()
+          return
+        }
+        console.log(`Ação restrita a Principal bloqueada: ${eventName} (socket ${socket.id} não é Principal)`)
+        return
+      }
+
+      const requiredArea = RESTRICTED_TO_AREA[eventName]
+      if (requiredArea) {
+        if (!hasRegisteredModerators()) {
+          // Modo aberto: ninguém autenticou ainda nesta sessão do backend — não bloqueia.
+          next()
+          return
+        }
+        if (socket.data.moderatorRole === 'principal') {
+          next()
+          return
+        }
+        const areas: string[] = socket.data.moderatorAreas || []
+        if (areas.includes(requiredArea)) {
+          next()
+          return
+        }
+        console.log(`Ação sem área "${requiredArea}" bloqueada: ${eventName} (socket ${socket.id})`)
+        return
+      }
+
+      next()
+    })
+
     socket.on('moderator:enterAdmin', () => {
       moderatorSocketId = socket.id
       const hasActivity = (!!liveState.teamA && !!liveState.teamB) || liveState.presentationFlow.stage !== 'idle'
@@ -335,7 +497,7 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on(
       'moderator:selectChampionship',
-      (payload: { championship: string; editionName?: string }, callback?: (ok: boolean) => void) => {
+      async (payload: { championship: string; editionName?: string }, callback?: (ok: boolean) => void) => {
         liveState.championship = payload.championship
         liveState.editionName = payload.editionName || null
         liveState.phase = 1
@@ -354,6 +516,7 @@ export function registerSocketHandlers(io: Server): void {
         liveState.presentationPhaseScores = []
         resetPresentationFlow()
         liveState.bracketVisible = true
+        await refreshExpectedJurorCount()
         broadcast()
         callback?.(true)
       }
@@ -608,16 +771,34 @@ export function registerSocketHandlers(io: Server): void {
       const questionTime = await getQuestionTimeSeconds()
       let shouldStartSequence = false
       if (liveState.teamA && liveState.teamB && liveState.championship) {
+        const phaseConfig = await getCurrentPhaseConfig()
+
+        // Numa fase Apresentação + Quiz, a decisão de quem avança tem de já
+        // usar a média ponderada (Apresentação + Quiz), não só o Quiz — senão
+        // o chaveamento avança com a equipa errada antes de a ponderação ser
+        // aplicada à tabela de classificação.
+        let compareAScore = liveState.teamAScore
+        let compareBScore = liveState.teamBScore
+        if (phaseConfig?.type === 'apresentacao_quiz') {
+          const presA = liveState.presentationPhaseScores.find((p) => p.teamId === liveState.teamA!.id)?.score ?? 0
+          const presB = liveState.presentationPhaseScores.find((p) => p.teamId === liveState.teamB!.id)?.score ?? 0
+          const quizWeight = phaseConfig.quizWeight ?? 50
+          const presWeight = phaseConfig.presentationWeight ?? 50
+          const totalWeight = quizWeight + presWeight || 1
+          compareAScore = (liveState.teamAScore * quizWeight + presA * presWeight) / totalWeight
+          compareBScore = (liveState.teamBScore * quizWeight + presB * presWeight) / totalWeight
+        }
+
         let winnerId: string | undefined
-        if (liveState.teamAScore === liveState.teamBScore) {
+        if (compareAScore === compareBScore) {
           const resolvedTiebreak = liveState.tiebreak.matchId
             ? await prisma.tiebreakMatch.findUnique({ where: { id: liveState.tiebreak.matchId } })
             : null
           winnerId = resolvedTiebreak?.winnerId ?? undefined
         } else {
-          winnerId = liveState.teamAScore > liveState.teamBScore ? liveState.teamA.id : liveState.teamB.id
+          winnerId = compareAScore > compareBScore ? liveState.teamA.id : liveState.teamB.id
         }
-        const phaseConfig = await getCurrentPhaseConfig()
+
         const winnerName =
           winnerId === liveState.teamA.id ? liveState.teamA.name : winnerId === liveState.teamB.id ? liveState.teamB.name : null
         await prisma.matchHistory.create({
@@ -784,6 +965,27 @@ export function registerSocketHandlers(io: Server): void {
       resetPresentationFlow()
       liveState.bracketVisible = true
       resetMatch(questionTime)
+      await refreshExpectedJurorCount()
+      broadcast()
+    })
+
+    socket.on('moderator:confirmQuizIntro', async () => {
+      if (liveState.phaseFlow.stage !== 'quizIntro') return
+      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+      liveState.bracketVisible = true
+      await refreshExpectedJurorCount()
+      broadcast()
+    })
+
+    // NOVO — só avança para o Ranking/pós-ronda numa fase de Apresentação
+    // pura quando o moderador clicar em "Ir para o Ranking". Antes disso,
+    // liveState.presentationRoundReady fica true (posto no handler de
+    // juror:submitPresentationEvaluation) e este handler fica à escuta.
+    socket.on('moderator:confirmPresentationRanking', async () => {
+      if (!liveState.presentationRoundReady) return
+      liveState.presentationRoundReady = false
+      await startPostRoundSequence()
+      await refreshExpectedJurorCount()
       broadcast()
     })
 
@@ -801,31 +1003,63 @@ export function registerSocketHandlers(io: Server): void {
       resetPresentationFlow()
       liveState.bracketVisible = true
       resetMatch(questionTime)
+      await refreshExpectedJurorCount()
       broadcast()
     })
 
+    // ATUALIZADO (Bloco 2) — "Reiniciar Campeonato" deixou de apagar o
+    // campeonato inteiro: agora mantém os pares da Ronda 1 (o sorteio
+    // original não muda) e só limpa vencedores e as equipas atribuídas às
+    // rondas seguintes (que dependiam de vencedores anteriores), além de
+    // repor todo o progresso de apresentações/pontuações/fluxo de ecrã.
     socket.on('moderator:resetChampionship', async () => {
       const questionTime = await getQuestionTimeSeconds()
-      if (liveState.championship && !liveState.championReveal.active) {
-        await prisma.bracketMatch.deleteMany({ where: { championship: liveState.championship } })
+
+      if (liveState.championship) {
+        // Mantém os pares da Ronda 1 (o sorteio original não muda) — só limpa
+        // vencedores e as equipas atribuídas às rondas seguintes (que dependiam
+        // de vencedores anteriores).
+        await prisma.bracketMatch.updateMany({
+          where: { championship: liveState.championship, round: { gt: 1 } },
+          data: { teamAId: null, teamBId: null, winnerId: null }
+        })
+        await prisma.bracketMatch.updateMany({
+          where: { championship: liveState.championship, round: 1 },
+          data: { winnerId: null }
+        })
+
+        const phases = await prisma.phase.findMany({ where: { championship: liveState.championship } })
+        const phaseIds = phases.map((p) => p.id)
+        if (phaseIds.length) {
+          const criteriaIds = (
+            await prisma.presentationCriteria.findMany({ where: { phaseId: { in: phaseIds } }, select: { id: true } })
+          ).map((c) => c.id)
+          if (criteriaIds.length) {
+            await prisma.presentationScore.deleteMany({ where: { criteriaId: { in: criteriaIds } } })
+          }
+          await prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })
+        }
+        // Regenera as duplas da Ronda 1 (as equipas já lá estão, ficam prontas de novo)
+        await syncPresentationDuplasForRound(liveState.championship, 1)
       }
-      liveState.championship = null
-      liveState.editionName = null
+
       liveState.phase = 1
       liveState.phaseRankings = []
       liveState.championshipRankings = []
-      liveState.championshipStartedAt = null
+      liveState.championshipStartedAt = liveState.championship ? Date.now() : null
       liveState.eliminatedTeamIds = []
       liveState.phaseRankingReveal = { visible: false }
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.championReveal = { active: false, teamName: null, logoUrl: null }
       liveState.presentationPhaseScores = []
       resetPresentationFlow()
-      liveState.bracketVisible = false
+      liveState.bracketVisible = !!liveState.championship
       liveState.podium.active = false
       liveState.podiumReveal = { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false }
       liveState.phaseTransition = { stage: 'idle' }
+      liveState.expectedJurorCount = 0
       resetMatch(questionTime)
+      await refreshExpectedJurorCount()
       broadcast()
     })
 
@@ -932,6 +1166,35 @@ export function registerSocketHandlers(io: Server): void {
         teamName: championEntry?.name ?? null,
         logoUrl: championLogoUrl
       }
+
+      // NOVO — o campeonato fica oficialmente encerrado depois de gravado
+      // no histórico: liveState.championship volta a null. Sem isto, o
+      // botão "Nova Partida" nunca reativava e o ecrã de escolha do tipo de
+      // campeonato (CampeonatoSelectView) nunca mais aparecia, porque o
+      // router interceptava sempre '/moderador/campeonato' com um
+      // campeonato "em curso" que já tinha terminado. O ecrã de
+      // comemoração (fogos + logo) na Projeção não depende do campeonato
+      // continuar definido — só de championReveal.active — por isso
+      // continua visível até o Moderador clicar "Nova Partida".
+      liveState.championship = null
+      liveState.editionName = null
+      liveState.phase = 1
+      liveState.phaseRankings = []
+      liveState.championshipRankings = []
+      liveState.championshipStartedAt = null
+      liveState.eliminatedTeamIds = []
+      liveState.phaseRankingReveal = { visible: false }
+      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+      liveState.presentationPhaseScores = []
+      resetPresentationFlow()
+      liveState.bracketVisible = false
+      liveState.podium.active = false
+      liveState.podiumReveal = { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false }
+      liveState.phaseTransition = { stage: 'idle' }
+      liveState.expectedJurorCount = 0
+      const questionTime = await getQuestionTimeSeconds()
+      resetMatch(questionTime)
+
       broadcast()
     })
 
@@ -999,6 +1262,7 @@ export function registerSocketHandlers(io: Server): void {
         slides,
         currentPage: 1
       }
+      await refreshExpectedJurorCount()
       broadcast()
 
       startCountdown(10, async () => {
@@ -1058,7 +1322,11 @@ export function registerSocketHandlers(io: Server): void {
       flow.jurorsSubmitted.push(payload.jurorId)
       broadcast()
 
-      const allSubmitted = liveState.jurors.length > 0 && flow.jurorsSubmitted.length >= liveState.jurors.length
+      // ATUALIZADO — usa liveState.expectedJurorCount (jurados atribuídos à
+      // fase, ou total cadastrado em modo aberto) em vez de liveState.jurors.length
+      // (só quem já ligou), para não fechar a avaliação antes de todos os
+      // jurados esperados terem entrado.
+      const allSubmitted = liveState.expectedJurorCount > 0 && flow.jurorsSubmitted.length >= liveState.expectedJurorCount
       if (allSubmitted && flow.stage === 'concluded') {
         flow.allJurorsSubmitted = true
 
@@ -1102,6 +1370,35 @@ export function registerSocketHandlers(io: Server): void {
         } else {
           addToPhaseRanking(team, average)
           addToChampionshipRanking(team, average)
+
+          // Fase de Apresentação pura (sem Quiz): cada PresentationDupla é
+          // um confronto — assim que ambas as equipas dessa dupla já tiverem
+          // sido avaliadas, a com nota mais alta avança no chaveamento
+          // (mesmo mecanismo de recordBracketResult usado pelo Quiz normal),
+          // e a outra fica eliminada.
+          const dupla = await prisma.presentationDupla.findFirst({
+            where: {
+              phaseId: phaseConfig?.id,
+              OR: [{ teamAId: flow.teamId }, { teamBId: flow.teamId }]
+            }
+          })
+          if (liveState.championship && phaseConfig && dupla?.teamAId) {
+            if (!dupla.teamBId) {
+              // Dupla sem adversário (bye) — a equipa avança sozinha assim que for avaliada.
+              await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamAId, dupla.teamAId)
+            } else {
+              const rankA = liveState.phaseRankings.find((r) => r.teamId === dupla.teamAId)
+              const rankB = liveState.phaseRankings.find((r) => r.teamId === dupla.teamBId)
+              if (rankA && rankB) {
+                const dWinnerId = rankA.score >= rankB.score ? dupla.teamAId : dupla.teamBId
+                const dLoserId = dWinnerId === dupla.teamAId ? dupla.teamBId : dupla.teamAId
+                await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamBId, dWinnerId)
+                if (!liveState.eliminatedTeamIds.includes(dLoserId)) {
+                  liveState.eliminatedTeamIds.push(dLoserId)
+                }
+              }
+            }
+          }
         }
 
         if (phaseConfig) {
@@ -1115,9 +1412,14 @@ export function registerSocketHandlers(io: Server): void {
 
           if (allPresentedAndEvaluated) {
             if (phaseConfig.type === 'apresentacao') {
-              await startPostRoundSequence()
+              // Não avança sozinho — fica à espera do moderador clicar
+              // "Ir para o Ranking" (moderator:confirmPresentationRanking).
+              liveState.presentationRoundReady = true
             } else if (phaseConfig.type === 'apresentacao_quiz') {
-              liveState.bracketVisible = true
+              // Não revela o chaveamento automaticamente — mostra primeiro o aviso
+              // "Vamos entrar para a Batalha de Quiz" e só abre o chaveamento quando
+              // o moderador clicar em "Ir para Escolha de Equipas" (confirmQuizIntro).
+              liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
             }
           }
         }
@@ -1178,6 +1480,7 @@ export function registerSocketHandlers(io: Server): void {
 
       liveState.jurors.push({ id: juror.id, name: juror.name })
       socket.data.jurorId = juror.id
+      await refreshExpectedJurorCount()
       broadcast()
       callback?.({ success: true, jurorId: juror.id })
     })
@@ -1207,8 +1510,21 @@ export function registerSocketHandlers(io: Server): void {
     // ATUALIZADO — depois de confirmar a avaliação, se o item avaliado era o
     // item ativo do sorteio (ex: pergunta aberta que ficou a aguardar o
     // júri), avança automaticamente para o próximo item/equipa.
+    //
+    // ATUALIZADO — agora exige liveState.expectedJurorCount jurados LIGADOS
+    // (não só os já cadastrados na app) e que todos os ligados tenham posto
+    // nota, antes de deixar confirmar.
     socket.on('moderator:confirmEvaluation', async (payload: { itemId: string }) => {
       if (liveState.jurorSubmittedItemIds.includes(payload.itemId)) return
+
+      if (liveState.expectedJurorCount > 0) {
+        if (liveState.jurors.length < liveState.expectedJurorCount) return // faltam jurados por ligar
+        const missing = liveState.jurors.some(
+          (j) => !liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === payload.itemId)
+        )
+        if (missing) return
+      }
+
       const relevant = liveState.jurorEntries.filter((e) => e.itemId === payload.itemId)
       const totalA = relevant.reduce((sum, e) => sum + e.scoreA, 0)
       const totalB = relevant.reduce((sum, e) => sum + e.scoreB, 0)
@@ -1300,6 +1616,11 @@ export function registerSocketHandlers(io: Server): void {
       if (jurorId) {
         liveState.jurors = liveState.jurors.filter((j) => j.id !== jurorId)
         liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== jurorId)
+        broadcast()
+      }
+      const moderatorId = socket.data?.moderatorId as string | undefined
+      if (moderatorId) {
+        liveState.activeModerators = liveState.activeModerators.filter((m) => m.id !== moderatorId)
         broadcast()
       }
     })

@@ -270,3 +270,33 @@ model PresentationSlide {
 
   @@unique([documentId, order])
 }
+model Moderator {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  role      String   @default("secundario")
+  createdAt DateTime @default(now())
+  areas     ModeratorAreaPermission[]
+}
+
+model ModeratorAreaPermission {
+  id          Int       @id @default(autoincrement())
+  moderatorId String
+  moderator   Moderator @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
+  area        String    // 'quiz' | 'apresentacao' | 'jurados' | 'repescagem'
+
+  @@unique([moderatorId, area])
+}
+model AdminAuth {
+  id           Int      @id @default(1)
+  passwordHash String
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model AdminSession {
+  token     String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}

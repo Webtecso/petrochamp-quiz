@@ -5,20 +5,34 @@ import http from 'http'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-const CLOUDFLARED_PATH = 'C:\\Program Files (x86)\\cloudflared\\cloudflared.exe'
-
 let backendProcess: ChildProcess | null = null
-let tunnelProcess: ChildProcess | null = null
 
 function startLocalBackend(): void {
   if (backendProcess) return
   const backendPath = join(app.getAppPath(), 'petrochamp-backend')
   console.log('A arrancar backend local em:', backendPath)
+
   backendProcess = spawn('npm', ['run', 'dev'], {
     cwd: backendPath,
     shell: true,
-    stdio: 'inherit'
+    stdio: 'pipe' // Mudado de 'inherit' para 'pipe' para tratar os caracteres à mão
   })
+
+  // Transforma o buffer bruto numa string limpa para o Electron não crashar
+  if (backendProcess.stdout) {
+    backendProcess.stdout.on('data', (data: Buffer) => {
+      const text = data.toString('utf8').trim()
+      if (text) console.log(`[Backend] ${text}`)
+    })
+  }
+
+  if (backendProcess.stderr) {
+    backendProcess.stderr.on('data', (data: Buffer) => {
+      const text = data.toString('utf8').trim()
+      if (text) console.error(`[Backend Error] ${text}`)
+    })
+  }
+
   backendProcess.on('exit', (code) => {
     console.log('Backend local terminou, código:', code)
     backendProcess = null
@@ -27,7 +41,13 @@ function startLocalBackend(): void {
 
 function stopLocalBackend(): void {
   if (backendProcess) {
-    backendProcess.kill()
+    // No Windows com shell: true, o kill() normal cria processos zombie.
+    // Usamos o taskkill para matar a árvore inteira de processos (/t)
+    if (process.platform === 'win32' && backendProcess.pid) {
+      spawn('taskkill', ['/pid', backendProcess.pid.toString(), '/f', '/t'], { windowsHide: true })
+    } else {
+      backendProcess.kill()
+    }
     backendProcess = null
   }
 }
@@ -51,59 +71,6 @@ function waitForBackend(url: string, timeoutMs: number): Promise<void> {
     }
     attempt()
   })
-}
-
-function reportPublicUrl(url: string): void {
-  const publicPortalUrl = `${url}/portal/votacao.html`
-  const body = JSON.stringify({ url: publicPortalUrl })
-  const req = http.request(
-    'http://localhost:4000/api/internal/public-url',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-    },
-    (res) => res.resume()
-  )
-  req.on('error', (err) => console.error('Falha ao reportar URL público:', err))
-  req.end(body)
-}
-
-function startPublicTunnel(): void {
-  if (tunnelProcess) return
-  console.log('A arrancar túnel público (cloudflared)...')
-  tunnelProcess = spawn(CLOUDFLARED_PATH, ['tunnel', '--url', 'http://localhost:4000'])
-
-  tunnelProcess.on('error', (err) => {
-    console.error('Falha ao arrancar o túnel público (cloudflared não encontrado?):', err)
-    tunnelProcess = null
-  })
-
-  const urlRegex = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/
-
-  function handleOutput(chunk: Buffer): void {
-    const text = chunk.toString()
-    console.log('[cloudflared]', text)
-    const match = text.match(urlRegex)
-    if (match) {
-      console.log('Túnel público disponível em:', match[0])
-      reportPublicUrl(match[0])
-    }
-  }
-
-  tunnelProcess.stdout?.on('data', handleOutput)
-  tunnelProcess.stderr?.on('data', handleOutput) // cloudflared escreve o URL no stderr
-
-  tunnelProcess.on('exit', (code) => {
-    console.log('Túnel público terminou, código:', code)
-    tunnelProcess = null
-  })
-}
-
-function stopPublicTunnel(): void {
-  if (tunnelProcess) {
-    tunnelProcess.kill()
-    tunnelProcess = null
-  }
 }
 
 function createModeratorWindow(): void {
@@ -189,8 +156,6 @@ app.whenReady().then(async () => {
     console.error('Não foi possível confirmar o arranque do backend local:', error)
   }
 
-  startPublicTunnel()
-
   createModeratorWindow()
   createProjectionWindow()
 
@@ -204,7 +169,6 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   stopLocalBackend()
-  stopPublicTunnel()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -212,5 +176,4 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopLocalBackend()
-  stopPublicTunnel()
 })

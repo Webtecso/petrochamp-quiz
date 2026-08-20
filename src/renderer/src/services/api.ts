@@ -1,10 +1,22 @@
 import { getBackendUrl } from './backendConfig'
+import { adminToken } from './adminAuth'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (adminToken.value) {
+    headers['Authorization'] = `Bearer ${adminToken.value}`
+  }
   const res = await fetch(`${getBackendUrl()}/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options
   })
+  if (res.status === 401 && adminToken.value) {
+    // Sessão de Admin expirou/inválida — limpa localmente para o próximo
+    // pedido não repetir o erro silenciosamente; a UI Admin deve reagir a
+    // isAdminLoggedIn() e mandar de volta para o login.
+    adminToken.value = null
+    localStorage.removeItem('petrochamp_admin_token')
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `Erro ${res.status} em ${path}`)

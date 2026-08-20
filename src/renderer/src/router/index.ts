@@ -1,6 +1,9 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { Capacitor } from '@capacitor/core'
 import { useCampeonatoStore } from '../stores/campeonato'
+import { usePhasesStore } from '../stores/phases'
+import { isAdminLoggedIn } from '../services/adminAuth'
+
 import ModeradorLayout from '../views/ModeradorLayout.vue'
 import AppEntryView from '../views/AppEntryView.vue'
 import ServerConfigView from '../views/ServerConfigView.vue'
@@ -21,6 +24,8 @@ import JogadorEntryView from '../views/JogadorEntryView.vue'
 import JogadorGameView from '../views/JogadorGameView.vue'
 import JogadorResultView from '../views/JogadorResultView.vue'
 import AdminLayout from '../views/AdminLayout.vue'
+import AdminSetupView from '../views/AdminSetupView.vue'
+import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminTeamsView from '../views/AdminTeamsView.vue'
 import AdminPhasesView from '../views/AdminPhasesView.vue'
 import AdminQuestionsView from '../views/AdminQuestionsView.vue'
@@ -34,8 +39,10 @@ import AdminSuspensePhrasesView from '../views/AdminSuspensePhrasesView.vue'
 import AdminPartnersView from '../views/AdminPartnersView.vue'
 import AdminHistoryView from '../views/AdminHistoryView.vue'
 import AdminRepescagemView from '../views/AdminRepescagemView.vue'
+import ModeradorLoginView from '../views/ModeradorLoginView.vue'
+import AdminModeratorsView from '../views/AdminModeratorsView.vue'
 
-const defaultPath = Capacitor.isNativePlatform() ? '/servidor' : '/moderador'
+const defaultPath = Capacitor.isNativePlatform() ? '/servidor' : '/moderador/modo'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -43,10 +50,13 @@ const router = createRouter({
     { path: '/', redirect: defaultPath },
     { path: '/servidor', name: 'servidor', component: ServerConfigView },
     { path: '/inicio', name: 'inicio', component: AppEntryView },
+    { path: '/admin/setup', name: 'admin-setup', component: AdminSetupView },
+    { path: '/admin/login', name: 'admin-login', component: AdminLoginView },
     {
       path: '/moderador',
       component: ModeradorLayout,
       children: [
+        { path: 'login', name: 'moderador-login', component: ModeradorLoginView },
         { path: '', redirect: '/moderador/modo' },
         { path: 'modo', name: 'moderador-modo', component: ModeSelectView },
         { path: 'campeonato', name: 'moderador-campeonato', component: CampeonatoSelectView },
@@ -79,6 +89,7 @@ const router = createRouter({
         { path: 'suspense', name: 'admin-suspense', component: AdminSuspensePhrasesView },
         { path: 'parceiros', name: 'admin-parceiros', component: AdminPartnersView },
         { path: 'historico', name: 'admin-historico', component: AdminHistoryView },
+        { path: 'moderadores', name: 'admin-moderadores', component: AdminModeratorsView },
         { path: 'configuracoes', name: 'admin-configuracoes', component: AdminSettingsView }
       ]
     },
@@ -89,25 +100,88 @@ const router = createRouter({
   ]
 })
 
-const ONBOARDING_PATHS = ['/moderador', '/moderador/modo', '/moderador/campeonato']
+const isLocalAccess =
+  typeof window === 'undefined' ||
+  !window.location.protocol.startsWith('http') ||
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1'
 
-router.beforeEach((to, from) => {
-  const store = useCampeonatoStore()
+async function resumeRoute(store: ReturnType<typeof useCampeonatoStore>): Promise<string | null> {
+  if (!store.championship) return null
 
-  if (to.path.startsWith('/admin') && !from.path.startsWith('/admin')) {
-    store.enterAdmin()
-  } else if (!to.path.startsWith('/admin') && from.path.startsWith('/admin')) {
-    store.exitAdmin()
+  // 1. Pódio ativo
+  if (store.podium.active || store.podiumReveal.stage !== 'idle') {
+    return '/moderador/podio'
   }
 
-  if (!ONBOARDING_PATHS.includes(to.path)) return true
+  // 2. Transições e Animações (Intro de Quiz, Ranking, Suspense, Repescagem)
+  if (
+    ['ranking', 'partnersPending', 'partners', 'webtec', 'organizer', 'suspense', 'quizIntro', 'repescagem'].includes(
+      store.phaseFlow.stage
+    )
+  ) {
+    return '/moderador/ranking'
+  }
 
+  // 3. Apresentação ativamente em curso (countdown, presenting, concluded)
   if (store.presentationFlow.stage !== 'idle') {
     return '/moderador/apresentacao'
   }
+
+  // 4. Jogo com equipas ativas na mesa
   if (store.teamA && store.teamB) {
     return '/moderador/jogo'
   }
+
+  // 5. Deteção do tipo da fase atual
+  //
+  // ATUALIZADO — refaz sempre esta busca (em vez de só quando o array
+  // estava vazio). O array ficava em cache de um campeonato para o
+  // seguinte — se mudasses de tipo de campeonato (ex: Universitário para
+  // Ensino Médio, que têm tipos de fase diferentes), o resumo continuava a
+  // ler as fases do campeonato anterior e detetava o tipo de fase errado.
+  // Era a causa da Apresentação/Apresentação+Quiz parecer "estragada" sem
+  // nenhuma mudança na tela em si.
+  const phasesStore = usePhasesStore()
+  await phasesStore.fetchPhases(store.championship)
+
+  const currentPhase = phasesStore.phases.find((p) => Number(p.order) === Number(store.phase))
+  const phaseType = currentPhase?.type
+
+  if (phaseType === 'apresentacao' || phaseType === 'apresentacao_quiz') {
+    return '/moderador/apresentacao'
+  }
+
+  return '/moderador/equipas'
+}
+
+const RESUME_PATHS = ['/moderador', '/moderador/campeonato']
+
+router.beforeEach(async (to, from) => {
+  if (!isLocalAccess && !to.path.startsWith('/admin')) {
+    return isAdminLoggedIn() ? '/admin' : '/admin/login'
+  }
+
+  const store = useCampeonatoStore()
+
+  const isAdminArea = to.path.startsWith('/admin') && to.path !== '/admin/setup' && to.path !== '/admin/login'
+  if (isAdminArea && !isAdminLoggedIn()) {
+    return '/admin/login'
+  }
+
+  if (to.path.startsWith('/admin') && !from.path.startsWith('/admin')) {
+    store.enterAdmin?.()
+  } else if (!to.path.startsWith('/admin') && from.path.startsWith('/admin')) {
+    store.exitAdmin?.()
+  }
+
+  if (RESUME_PATHS.includes(to.path)) {
+    const target = await resumeRoute(store)
+    if (target) return target
+    if (to.path === '/moderador') return '/moderador/modo'
+    return true
+  }
+
   return true
 })
 

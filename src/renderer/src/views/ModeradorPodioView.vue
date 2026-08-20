@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { useRouter } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
@@ -19,6 +19,15 @@ onMounted(async () => {
     await liveBracketStore.fetchBracket(store.championship)
   }
 })
+
+watch(
+  () => store.phaseFlow.stage,
+  async (stage) => {
+    if (stage === 'organizer' && store.championship) {
+      await liveBracketStore.fetchBracket(store.championship)
+    }
+  }
+)
 
 const isLastPhase = computed(() => store.phase === phasesStore.totalPhases)
 
