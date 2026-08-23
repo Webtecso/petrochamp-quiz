@@ -7,19 +7,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model SyncMeta {
+  id           String    @id @default("singleton")
+  lastSyncedAt DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
 model Team {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
   institution     String
   category        String
   logoUrl         String?
   group           String?
   bracketPosition Int?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 }
 
 model Question {
-  id           Int      @id @default(autoincrement())
+  id           String    @id @default(cuid())
   championship String
   text         String
   imageUrl     String?
@@ -30,11 +38,13 @@ model Question {
   correctIndex Int
   points       Int
   phase        Int
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 }
 
 model TiebreakQuestion {
-  id           Int      @id @default(autoincrement())
+  id           String    @id @default(cuid())
   championship String
   text         String
   imageUrl     String?
@@ -45,70 +55,83 @@ model TiebreakQuestion {
   correctIndex Int
   points       Int
   phase        Int
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 }
 
 model Setting {
-  key   String @id
-  value String
+  key       String    @id
+  value     String
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model Phase {
-  id                    Int      @id @default(autoincrement())
+  id                    String    @id @default(cuid())
   championship          String
   order                 Int
   label                 String
-  type                  String   @default("quiz")
-  useQuestions          Boolean  @default(true)
-  useJudges             Boolean  @default(false)
+  type                  String    @default("quiz")
+  useQuestions          Boolean   @default(true)
+  useJudges             Boolean   @default(false)
   maxQuestions          Int?
   questionsPerTeam      Int?
-  avoidRepeatQuestions  Boolean  @default(true)
-  useInitialScores      Boolean  @default(false)
+  avoidRepeatQuestions  Boolean   @default(true)
+  useInitialScores      Boolean   @default(false)
   initialScoreMaxPoints Int?
   presentationMinutes   Int?
-  presentationWeight    Int?     @default(50)
-  quizWeight            Int?     @default(50)
-  createdAt             DateTime @default(now())
+  presentationWeight    Int?      @default(50)
+  quizWeight            Int?      @default(50)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
 }
 
 model PresentationDupla {
-  id        Int      @id @default(autoincrement())
-  phaseId   Int
+  id        String    @id @default(cuid())
+  phaseId   String
   order     Int
   themeA    String
   themeB    String?
   teamAId   String
   teamBId   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model PresentationCriteria {
-  id        Int      @id @default(autoincrement())
-  phaseId   Int
+  id        String    @id @default(cuid())
+  phaseId   String
   label     String
   maxPoints Int
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model PresentationScore {
-  id         Int      @id @default(autoincrement())
-  criteriaId Int
+  id         String    @id @default(cuid())
+  criteriaId String
   jurorId    String
   teamId     String
   score      Int
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
   @@unique([criteriaId, jurorId, teamId])
 }
 
 model LiveSession {
-  id   Int    @id @default(1)
-  data String
+  id        String   @id @default("singleton")
+  data      String
+  updatedAt DateTime @updatedAt
 }
 
 model BracketMatch {
-  id           Int      @id @default(autoincrement())
+  id           String    @id @default(cuid())
   championship String
   round        Int
   slot         Int
@@ -116,38 +139,46 @@ model BracketMatch {
   teamAId      String?
   teamBId      String?
   winnerId     String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 }
 
 model SuspensePhrase {
-  id        Int      @id @default(autoincrement())
+  id        String    @id @default(cuid())
   text      String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model TiebreakMatch {
-  id           Int      @id @default(autoincrement())
+  id           String    @id @default(cuid())
   championship String
   phase        Int
   teamAId      String
   teamBId      String
-  teamAScore   Int      @default(0)
-  teamBScore   Int      @default(0)
+  teamAScore   Int       @default(0)
+  teamBScore   Int       @default(0)
   winnerId     String?
-  resolved     Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  resolved     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 }
 
 model Partner {
-  id        Int      @id @default(autoincrement())
+  id        String    @id @default(cuid())
   name      String
   logoUrl   String
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model MatchHistory {
-  id              Int      @id @default(autoincrement())
+  id              String    @id @default(cuid())
   championship    String
   editionName     String?
   phase           Int
@@ -160,16 +191,18 @@ model MatchHistory {
   teamBScore      Int
   winnerId        String?
   winnerName      String?
-  wasTiebreak     Boolean  @default(false)
+  wasTiebreak     Boolean   @default(false)
   deviceMode      String?
   startedAt       DateTime
   endedAt         DateTime
   durationSeconds Int
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 }
 
 model RepescagemConfig {
-  id                    Int       @id @default(autoincrement())
+  id                    String    @id @default(cuid())
   championship          String
   phase                 Int
   maxRepescados         Int
@@ -179,21 +212,25 @@ model RepescagemConfig {
   startedAt             DateTime?
   closedAt              DateTime?
   createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
 }
 
 model RepescagemVote {
-  id         Int      @id @default(autoincrement())
-  configId   Int
+  id         String    @id @default(cuid())
+  configId   String
   teamId     String
   voterToken String
   voterIp    String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
   @@unique([configId, voterToken])
 }
 
 model ChampionshipHistory {
-  id               Int      @id @default(autoincrement())
+  id               String    @id @default(cuid())
   championship     String
   editionName      String
   championTeamId   String?
@@ -202,30 +239,36 @@ model ChampionshipHistory {
   matchesJson      String
   totalMatches     Int
   startedAt        DateTime
-  endedAt          DateTime @default(now())
-  createdAt        DateTime @default(now())
+  endedAt          DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt        DateTime?
 }
 
 model Juror {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  code      String   @unique
-  createdAt DateTime @default(now())
+  code      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model PhaseJurorAuthorization {
-  id      Int    @id @default(autoincrement())
-  phaseId Int
-  jurorId String
+  id        String    @id @default(cuid())
+  phaseId   String
+  jurorId   String
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@unique([phaseId, jurorId])
 }
 
 model EvaluationItem {
-  id               String               @id @default(cuid())
+  id               String                @id @default(cuid())
   championship     String
   type             String
-  mode             String               @default("aberta")
+  mode             String                @default("aberta")
   text             String
   imageUrl         String?
   optionA          String?
@@ -236,57 +279,74 @@ model EvaluationItem {
   timeSeconds      Int?
   maxPoints        Int
   phase            Int
-  scope            String               @default("single")
-  createdAt        DateTime             @default(now())
+  scope            String                @default("single")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  deletedAt        DateTime?
   jurorAssignments EvaluationItemJuror[]
 }
 
 model EvaluationItemJuror {
-  id      Int            @id @default(autoincrement())
-  itemId  String
-  jurorId String
-  item    EvaluationItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  id        String         @id @default(cuid())
+  itemId    String
+  jurorId   String
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+  item      EvaluationItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@unique([itemId, jurorId])
 }
 
 model PresentationDocument {
-  id        Int      @id @default(autoincrement())
-  phaseId   Int
-  duplaId   Int
+  id        String    @id @default(cuid())
+  phaseId   String
+  duplaId   String
   teamId    String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
   slides    PresentationSlide[]
 
   @@unique([duplaId, teamId])
 }
 
 model PresentationSlide {
-  id         Int                  @id @default(autoincrement())
-  documentId Int
+  id         String               @id @default(cuid())
+  documentId String
   order      Int
   imageUrl   String
+  updatedAt  DateTime             @updatedAt
+  deletedAt  DateTime?
   document   PresentationDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, order])
 }
+
 model Moderator {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  code      String   @unique
-  role      String   @default("secundario")
-  createdAt DateTime @default(now())
+  code      String    @unique
+  role      String    @default("secundario")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
   areas     ModeratorAreaPermission[]
 }
 
 model ModeratorAreaPermission {
-  id          Int       @id @default(autoincrement())
+  id          String    @id @default(cuid())
   moderatorId String
   moderator   Moderator @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
-  area        String    // 'quiz' | 'apresentacao' | 'jurados' | 'repescagem'
+  area        String
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   @@unique([moderatorId, area])
 }
+
+// AdminAuth e AdminSession NÃO sincronizam — cada backend tem a sua
+// própria conta de Admin, independente uma da outra (decisão tomada
+// explicitamente: evita conflito de password/TOTP entre Local e Cloud).
 model AdminAuth {
   id           Int      @id @default(1)
   passwordHash String
