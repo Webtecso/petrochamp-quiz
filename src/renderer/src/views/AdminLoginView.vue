@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getBackendUrl } from '../services/backendConfig'
-import { setAdminToken, checkAdminConfigured } from '../services/adminAuth'
+import { setAdminToken } from '../services/adminAuth'
+import adminBg from '../assets/projecao-bg.jpg'
 
 const router = useRouter()
 const isLocalAccess =
@@ -16,17 +17,14 @@ const totpCode = ref('')
 const errorMsg = ref('')
 const loading = ref(false)
 
-onMounted(async () => {
-  const configured = await checkAdminConfigured().catch(() => true)
-  if (!configured) {
-    router.replace('/admin/setup')
-  }
-})
-
-async function login(): Promise<void> {
+async function submitLogin(): Promise<void> {
   errorMsg.value = ''
-  if (!password.value || totpCode.value.length !== 6) {
-    errorMsg.value = 'Introduz a password e o código de 6 dígitos.'
+  if (!password.value) {
+    errorMsg.value = 'Introduz a password.'
+    return
+  }
+  if (totpCode.value.length !== 6) {
+    errorMsg.value = 'Introduz o código de 6 dígitos da app autenticadora.'
     return
   }
   loading.value = true
@@ -37,11 +35,11 @@ async function login(): Promise<void> {
       body: JSON.stringify({ password: password.value, token: totpCode.value })
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Falha no login.')
+    if (!res.ok) throw new Error(data.error || 'Password ou código inválidos.')
     setAdminToken(data.token)
     router.replace('/admin')
   } catch (e) {
-    errorMsg.value = e instanceof Error ? e.message : 'Falha no login.'
+    errorMsg.value = e instanceof Error ? e.message : 'Falha ao entrar.'
   } finally {
     loading.value = false
   }
@@ -49,9 +47,17 @@ async function login(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-petro-bg px-6">
-    <div class="bg-white rounded-2xl shadow p-8 w-full max-w-sm">
-      <h1 class="text-xl font-bold text-petro-primary mb-6">Login de Admin</h1>
+  <div class="min-h-screen flex items-center justify-center px-6 relative">
+    <div
+      class="fixed inset-0 -z-10 bg-cover bg-center"
+      :style="{ backgroundImage: `url(${adminBg})` }"
+    ></div>
+
+    <div class="bg-white rounded-2xl shadow p-8 w-full max-w-md relative z-10">
+      <h1 class="text-xl font-bold text-petro-primary mb-1">Entrar no Admin</h1>
+      <p class="text-sm text-gray-500 mb-6">
+        Introduz a password e o código da app autenticadora.
+      </p>
 
       <p v-if="errorMsg" class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4">{{ errorMsg }}</p>
 
@@ -61,7 +67,7 @@ async function login(): Promise<void> {
           type="password"
           placeholder="Password"
           class="border border-gray-200 rounded-lg px-3 py-2 text-sm"
-          @keyup.enter="login"
+          @keyup.enter="submitLogin"
         />
         <input
           v-model="totpCode"
@@ -69,8 +75,8 @@ async function login(): Promise<void> {
           inputmode="numeric"
           maxlength="6"
           placeholder="Código de 6 dígitos"
-          class="border border-gray-200 rounded-lg px-3 py-2 text-sm text-center tracking-widest"
-          @keyup.enter="login"
+          class="border border-gray-200 rounded-lg px-3 py-2 text-sm text-center text-lg tracking-widest"
+          @keyup.enter="submitLogin"
         />
         <button
           v-if="isLocalAccess"
@@ -83,7 +89,7 @@ async function login(): Promise<void> {
         <button
           class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40"
           :disabled="loading"
-          @click="login"
+          @click="submitLogin"
         >
           {{ loading ? 'A entrar...' : 'Entrar' }}
         </button>

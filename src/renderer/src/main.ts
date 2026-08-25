@@ -5,13 +5,7 @@ import { createPinia } from 'pinia'
 import { Capacitor } from '@capacitor/core'
 import App from './App.vue'
 import router from './router'
-import { connectSocket, getSocket } from './services/socket'
-import { useCampeonatoStore } from './stores/campeonato'
-import { useTeamsStore } from './stores/teams'
-import { useQuizContentStore } from './stores/quizContent'
-import { useSettingsStore } from './stores/settings'
-import { usePhasesStore } from './stores/phases'
-import { useJuradosStore } from './stores/jurados'
+import { initApp } from './services/appInit'
 import { loadSavedBackendHost } from './services/serverConfig'
 
 const app = createApp(App)
@@ -19,38 +13,20 @@ app.use(createPinia())
 app.use(router)
 app.mount('#app')
 
-// Função auxiliar para inicializar stores e socket
-const initApp = () => {
-  connectSocket()
+// Build isolada do Admin Cloud (servida estaticamente fora do Electron,
+// ex: Hostinger), identificada pela mesma variável de ambiente que já
+// usamos em backendConfig.ts. Esta build só mostra o Admin — nunca o
+// Moderador/Projeção — por isso não precisa de nenhuma ligação Socket.io
+// (isso é só do campeonato em tempo real, que vive no backend Local/LAN).
+// Sem esta verificação, o main.ts tentava sempre abrir uma ligação
+// Socket.io ao backend Cloud (que nem tem Socket.io), gerando centenas de
+// tentativas falhadas em loop.
+const isAdminCloudBuild = !!(import.meta.env.VITE_CLOUD_API_URL as string | undefined)
 
-  const campeonatoStore = useCampeonatoStore()
-  campeonatoStore.listenToServer()
-  useJuradosStore().listenToServer()
-  useTeamsStore().fetchTeams()
-  useQuizContentStore().fetchQuestions()
-  useQuizContentStore().fetchEvaluationItems()
-  useSettingsStore().fetchSettings()
-  usePhasesStore().fetchPhases()
-
-  getSocket().once(
-    'state:sync',
-    (state: { teamA?: unknown; teamB?: unknown; presentationFlow?: { stage?: string } }) => {
-      const currentPath = router.currentRoute.value.path
-      const isModeratorWindow = !currentPath.startsWith('/projecao') && !currentPath.startsWith('/jogador')
-      if (!isModeratorWindow) return
-
-      if (state.presentationFlow && state.presentationFlow.stage && state.presentationFlow.stage !== 'idle') {
-        router.push('/moderador/apresentacao')
-        return
-      }
-      if (state.teamA && state.teamB) {
-        router.push('/moderador/jogo')
-      }
-    }
-  )
-}
-
-if (!Capacitor.isNativePlatform()) {
+if (isAdminCloudBuild) {
+  // Build só-Admin: nada de socket, nada de stores em tempo real — o
+  // router já força a ir para /admin/login sozinho (isLocalAccess=false).
+} else if (!Capacitor.isNativePlatform()) {
   initApp()
 } else {
   loadSavedBackendHost().then((host) => {

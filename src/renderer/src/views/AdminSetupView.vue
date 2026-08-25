@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getBackendUrl } from '../services/backendConfig'
 import { checkAdminConfigured } from '../services/adminAuth'
+import adminBg from '../assets/projecao-bg.jpg'
 
 const router = useRouter()
 const isLocalAccess =
@@ -81,8 +82,16 @@ async function confirmTotp(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-petro-bg px-6">
-    <div class="bg-white rounded-2xl shadow p-8 w-full max-w-md">
+  <div class="min-h-screen flex items-center justify-center bg-petro-bg px-6 relative">
+    <!-- NOVO — fundo do Admin (a mesma imagem usada na Projeção). Esta view
+    fica fora do AdminLayout (é acedida antes do login), por isso precisa
+    do seu próprio fundo. -->
+    <div
+      class="fixed inset-0 -z-10 bg-cover bg-center"
+      :style="{ backgroundImage: `url(${adminBg})` }"
+    ></div>
+
+    <div class="bg-white rounded-2xl shadow p-8 w-full max-w-md relative z-10">
       <h1 class="text-xl font-bold text-petro-primary mb-1">Configuração inicial do Admin</h1>
       <p class="text-sm text-gray-500 mb-6">
         Esta configuração só corre uma vez. Define uma password forte e associa uma app autenticadora (Google Authenticator, Authy, etc.).

@@ -17,6 +17,7 @@ export type ConfigType =
   | 'partners'
   | 'suspensePhrases'
   | 'presentation'
+  | 'bracket'
 
 export function emitConfigUpdated(type: ConfigType, championship?: string | null): void {
   if (!ioInstance) return

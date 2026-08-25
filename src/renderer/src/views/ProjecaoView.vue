@@ -196,7 +196,7 @@ const isBattleActiveState = computed(() => {
     <!-- 1. TELA DE ESPERA INICIAL -->
     <div v-if="!store.championship" class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white">
       <div class="text-center flex flex-col items-center">
-        <LogoMark class="mb-6 scale-125" />
+        <LogoMark class="mb-6" />
         <h1 class="text-4xl font-extrabold mb-3 text-amber-400">Aguardando Seleção do Campeonato</h1>
         <p class="text-slate-200 text-lg">O moderador irá iniciar a sessão a partir da consola de controlo.</p>
       </div>

@@ -5,15 +5,31 @@ import type { EvaluationItem } from '../data/evaluationItems'
 
 export { EvaluationItem }
 
-// NOVO — mesma forma que QuizQuestion (o modelo TiebreakQuestion no Prisma
+// Mesma forma que QuizQuestion (o modelo TiebreakQuestion no Prisma
 // tem os mesmos campos optionA-D/correctIndex), mas é uma tabela separada.
 export type TiebreakQuestion = QuizQuestion
+
+// NOVO — critério de avaliação de uma Pergunta Analítica "aberta"
+// (Admin → Avaliação). Um item pode ter vários; se tiver pelo menos um,
+// os jurados pontuam por critério (para as duas equipas) em vez de uma
+// nota única.
+export interface EvaluationCriteria {
+  id: string
+  itemId: string
+  label: string
+  maxPoints: number
+  order: number
+}
 
 export const useQuizContentStore = defineStore('quizContent', {
   state: () => ({
     questions: [] as QuizQuestion[],
     evaluationItems: [] as EvaluationItem[],
-    tiebreakQuestions: [] as TiebreakQuestion[] // NOVO
+    tiebreakQuestions: [] as TiebreakQuestion[],
+    // NOVO — critérios carregados, indexados por itemId (mais barato que
+    // filtrar uma lista plana sempre que uma view precisa dos critérios
+    // de um item específico).
+    evaluationCriteriaByItem: {} as Record<string, EvaluationCriteria[]>
   }),
   getters: {
     questionsForPhase: (state) => {
@@ -22,9 +38,12 @@ export const useQuizContentStore = defineStore('quizContent', {
     itemsForPhase: (state) => {
       return (phase: number): EvaluationItem[] => state.evaluationItems.filter((i) => i.phase === phase)
     },
-    // NOVO
     tiebreakQuestionsForPhase: (state) => {
       return (phase: number): TiebreakQuestion[] => state.tiebreakQuestions.filter((q) => q.phase === phase)
+    },
+    // NOVO
+    criteriaForItem: (state) => {
+      return (itemId: string): EvaluationCriteria[] => state.evaluationCriteriaByItem[itemId] ?? []
     }
   },
   actions: {
@@ -42,8 +61,6 @@ export const useQuizContentStore = defineStore('quizContent', {
       }
       this.evaluationItems = await api.get<EvaluationItem[]>(`/evaluation-items?championship=${encodeURIComponent(championship)}`)
     },
-    // NOVO — segue o mesmo padrão de fetchQuestions. Ajusta o path se a tua
-    // rota REST para TiebreakQuestion tiver outro nome.
     async fetchTiebreakQuestions(championship?: string) {
       if (!championship) {
         this.tiebreakQuestions = []
@@ -86,6 +103,27 @@ export const useQuizContentStore = defineStore('quizContent', {
         await api.delete(`/evaluation-items/${item.id}`)
       }
       await this.fetchEvaluationItems(championship)
+    },
+    // NOVO — carrega os critérios de um item específico e guarda-os
+    // indexados por itemId.
+    async fetchEvaluationCriteria(itemId: string) {
+      const criteria = await api.get<EvaluationCriteria[]>(`/evaluation-criteria?itemId=${encodeURIComponent(itemId)}`)
+      this.evaluationCriteriaByItem = { ...this.evaluationCriteriaByItem, [itemId]: criteria }
+    },
+    // NOVO
+    async addEvaluationCriteria(itemId: string, label: string, maxPoints: number) {
+      await api.post('/evaluation-criteria', { itemId, label, maxPoints })
+      await this.fetchEvaluationCriteria(itemId)
+    },
+    // NOVO
+    async updateEvaluationCriteria(id: string, itemId: string, patch: { label?: string; maxPoints?: number }) {
+      await api.put(`/evaluation-criteria/${id}`, patch)
+      await this.fetchEvaluationCriteria(itemId)
+    },
+    // NOVO
+    async deleteEvaluationCriteria(id: string, itemId: string) {
+      await api.delete(`/evaluation-criteria/${id}`)
+      await this.fetchEvaluationCriteria(itemId)
     }
   }
 })

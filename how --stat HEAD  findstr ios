@@ -1,0 +1,5 @@
+[33m94e0b5b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m CI: pular typecheck no build web (só para gerar o bundle)
+[33m7ef701a[m CI: pular typecheck no build web (só para gerar o bundle)
+[33m93d1b3c[m Adiciona configuração de build iOS no Codemagic
+[33m7e2863a[m fix: implement sync push and pull routes
+[33m355e522[m feat: adiciona autenticacao admin, permissoes de moderador e sincronizacao de configs

@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs/promises'
 import { prisma } from '../db'
 import { requireAdmin } from '../middleware/requireAdmin'
+import { emitConfigUpdated } from '../socket/configEvents'
 
 const router = Router()
 
@@ -27,39 +28,57 @@ function extractOrder(filename: string, fallbackIndex: number): number {
   return 100000 + fallbackIndex
 }
 
+// GET /api/presentation-documents
 router.get('/', async (req, res) => {
-  const { phaseId, duplaId, teamId } = req.query as { phaseId?: string; duplaId?: string; teamId?: string }
-  const docs = await prisma.presentationDocument.findMany({
-    where: {
-      phaseId: phaseId ? Number(phaseId) : undefined,
-      duplaId: duplaId ? Number(duplaId) : undefined,
-      teamId: teamId || undefined
-    },
-    include: { slides: { orderBy: { order: 'asc' } } }
-  })
-  res.json(docs)
+  try {
+    const { phaseId, duplaId, teamId } = req.query as {
+      phaseId?: string
+      duplaId?: string
+      teamId?: string
+    }
+
+    const where: any = {}
+    if (phaseId) where.phaseId = phaseId
+    if (duplaId) where.duplaId = duplaId
+    if (teamId) where.teamId = teamId
+
+    const docs = await prisma.presentationDocument.findMany({
+      where,
+      include: {
+        slides: {
+          orderBy: { order: 'asc' }
+        }
+      }
+    })
+
+    return res.json(docs)
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar os documentos.' })
+  }
 })
 
+// POST /api/presentation-documents
 router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
   try {
     const { duplaId, teamId } = req.body as { duplaId?: string; teamId?: string }
     const files = req.files as Express.Multer.File[] | undefined
+
     if (!duplaId || !teamId || !files || !files.length) {
-      res.status(400).json({ error: 'duplaId, teamId e pelo menos uma imagem são obrigatórios' })
-      return
+      return res.status(400).json({ error: 'duplaId, teamId e pelo menos uma imagem são obrigatórios.' })
     }
 
-    const dupla = await prisma.presentationDupla.findUnique({ where: { id: Number(duplaId) } })
+    const dupla = await prisma.presentationDupla.findUnique({ where: { id: duplaId } })
     if (!dupla || (dupla.teamAId !== teamId && dupla.teamBId !== teamId)) {
-      res.status(400).json({ error: 'Esta equipa não pertence a esta dupla.' })
-      return
+      return res.status(400).json({ error: 'Esta equipa não pertence a esta dupla.' })
     }
 
     const ordersRaw = req.body.orders as string | string[] | undefined
     let explicitOrders: number[] | null = null
     if (ordersRaw) {
       const arr = Array.isArray(ordersRaw) ? ordersRaw : [ordersRaw]
-      if (arr.length === files.length) explicitOrders = arr.map(Number)
+      if (arr.length === files.length) {
+        explicitOrders = arr.map(Number)
+      }
     }
 
     const indexed = files.map((file, i) => ({
@@ -68,13 +87,14 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
     }))
     indexed.sort((a, b) => a.order - b.order)
 
-    const folder = path.join(UPLOADS_ROOT, String(dupla.phaseId), teamId)
+    const folder = path.join(UPLOADS_ROOT, dupla.phaseId, teamId)
     await fs.mkdir(folder, { recursive: true })
 
     const existing = await prisma.presentationDocument.findUnique({
-      where: { duplaId_teamId: { duplaId: Number(duplaId), teamId } },
+      where: { duplaId_teamId: { duplaId, teamId } },
       include: { slides: true }
     })
+
     if (existing) {
       for (const slide of existing.slides) {
         await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
@@ -83,9 +103,9 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
     }
 
     const doc = await prisma.presentationDocument.upsert({
-      where: { duplaId_teamId: { duplaId: Number(duplaId), teamId } },
+      where: { duplaId_teamId: { duplaId, teamId } },
       update: {},
-      create: { phaseId: dupla.phaseId, duplaId: Number(duplaId), teamId }
+      create: { phaseId: dupla.phaseId, duplaId, teamId }
     })
 
     let order = 1
@@ -93,7 +113,10 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
       const safeName = `${Date.now()}-${order}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       await fs.writeFile(path.join(folder, safeName), file.buffer)
       const imageUrl = `/uploads/presentations/${dupla.phaseId}/${teamId}/${safeName}`
-      await prisma.presentationSlide.create({ data: { documentId: doc.id, order, imageUrl } })
+
+      await prisma.presentationSlide.create({
+        data: { documentId: doc.id, order, imageUrl }
+      })
       order += 1
     }
 
@@ -101,25 +124,38 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
       where: { id: doc.id },
       include: { slides: { orderBy: { order: 'asc' } } }
     })
-    res.status(201).json(full)
+
+    emitConfigUpdated('presentation')
+    return res.status(201).json(full)
   } catch (error: any) {
-    res.status(400).json({ error: error.message || 'Falha ao enviar as imagens.' })
+    return res.status(400).json({ error: error?.message || 'Falha ao enviar as imagens.' })
   }
 })
 
+// DELETE /api/presentation-documents/:id
 router.delete('/:id', requireAdmin, async (req, res) => {
-  const id = Number(req.params.id)
   try {
-    const doc = await prisma.presentationDocument.findUnique({ where: { id }, include: { slides: true } })
-    if (doc) {
-      for (const slide of doc.slides) {
-        await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
-      }
+    const { id } = req.params
+
+    const doc = await prisma.presentationDocument.findUnique({
+      where: { id },
+      include: { slides: true }
+    })
+
+    if (!doc) {
+      return res.status(404).json({ error: 'Documento não encontrado.' })
     }
+
+    for (const slide of doc.slides) {
+      await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
+    }
+
     await prisma.presentationDocument.delete({ where: { id } })
-    res.status(204).send()
-  } catch {
-    res.status(404).json({ error: 'Documento não encontrado' })
+    emitConfigUpdated('presentation')
+
+    return res.status(204).send()
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao eliminar o documento.' })
   }
 })
 

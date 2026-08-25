@@ -7,6 +7,13 @@ export function setBackendHost(hostAndPort: string): void {
 export function getBackendUrl(): string {
   if (overrideUrl) return overrideUrl
 
+  // NOVO — build dedicada do Admin Cloud (servida estaticamente fora do
+  // Electron, ex: Hostinger). Definida em tempo de build via
+  // VITE_CLOUD_API_URL (ver .env.admin-cloud). Nunca afeta a app Electron
+  // normal, porque essa variável simplesmente não existe nesse build.
+  const cloudApiUrl = import.meta.env.VITE_CLOUD_API_URL as string | undefined
+  if (cloudApiUrl) return cloudApiUrl
+
   if (typeof window !== 'undefined' && window.location.protocol.startsWith('http')) {
     const { hostname, port, origin } = window.location
 

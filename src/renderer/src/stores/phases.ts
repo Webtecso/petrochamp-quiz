@@ -3,7 +3,7 @@ import { api } from '../services/api'
 import { adminFetch } from '../services/adminAuth'
 
 export interface Phase {
-  id: number
+  id: string
   championship: string
   order: number
   label: string
@@ -85,15 +85,15 @@ export const usePhasesStore = defineStore('phases', {
       await api.post('/phases', data)
       await this.fetchPhases(data.championship)
     },
-    async updatePhase(id: number, patch: Partial<Phase>) {
+    async updatePhase(id: string, patch: Partial<Phase>) {
       await api.put(`/phases/${id}`, patch)
       if (patch.championship) await this.fetchPhases(patch.championship)
     },
-    async deletePhase(id: number, championship: string) {
+    async deletePhase(id: string, championship: string) {
       await api.delete(`/phases/${id}`)
       await this.fetchPhases(championship)
     },
-    async swapPhases(firstId: number, secondId: number, championship: string) {
+    async swapPhases(firstId: string, secondId: string, championship: string) {
       const res = await adminFetch('/api/phases/swap', {
         method: 'POST',
         body: JSON.stringify({ firstId, secondId })

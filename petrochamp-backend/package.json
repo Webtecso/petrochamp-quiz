@@ -4,6 +4,7 @@
   "description": "Backend API do Petrochamp Quiz",
   "main": "src/index.ts",
   "scripts": {
+    "predev": "npx kill-port 4000",
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/index.js",
@@ -28,6 +29,7 @@
     "@types/multer": "^1.4.11",
     "@types/node": "^20.12.12",
     "@types/ws": "^8.5.10",
+    "kill-port": "^2.0.1",
     "prisma": "^5.14.0",
     "tsx": "^4.10.5",
     "typescript": "^5.4.5"

@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { usePhasesStore } from '../stores/phases'
 import { useTeamsStore } from '../stores/teams'
 import { getBackendUrl } from '../services/backendConfig'
 import { adminFetch } from '../services/adminAuth'
+import { connectSocket } from '../services/socket'
 import type { ChampionshipType } from '../stores/campeonato'
 
 interface Dupla {
-  id: number
+  id: string
   order: number
   themeA: string
   themeB: string | null
@@ -15,12 +16,12 @@ interface Dupla {
   teamBId: string | null
 }
 interface Criteria {
-  id: number
+  id: string
   label: string
   maxPoints: number
 }
 interface DocumentInfo {
-  id: number
+  id: string
   slides: { order: number; imageUrl: string }[]
 }
 interface PendingSlide {
@@ -33,12 +34,13 @@ const phasesStore = usePhasesStore()
 const teamsStore = useTeamsStore()
 
 const selectedChampionship = ref<ChampionshipType>('universitario')
-const selectedPhaseId = ref<number | null>(null)
+const selectedPhaseId = ref<string | null>(null)
 const duplas = ref<Dupla[]>([])
 const criteria = ref<Criteria[]>([])
 const documentsMap = ref<Record<string, DocumentInfo>>({})
 const errorMsg = ref('')
 const uploadingKey = ref<string | null>(null)
+const refreshing = ref(false)
 const pendingByTeam = ref<Record<string, PendingSlide[]>>({})
 
 const championshipOptions: { value: ChampionshipType; label: string }[] = [
@@ -67,14 +69,14 @@ async function loadAll(): Promise<void> {
     return
   }
   const [duplasRes, criteriaRes, documentsRes] = await Promise.all([
-    fetch(`${getBackendUrl()}/api/presentation/duplas?phaseId=${selectedPhaseId.value}`),
+    fetch(`${getBackendUrl()}/api/presentation/duplas?phaseId=${selectedPhaseId.value}&championship=${selectedChampionship.value}`),
     fetch(`${getBackendUrl()}/api/presentation/criteria?phaseId=${selectedPhaseId.value}`),
     fetch(`${getBackendUrl()}/api/presentation-documents?phaseId=${selectedPhaseId.value}`)
   ])
   duplas.value = await duplasRes.json()
   criteria.value = await criteriaRes.json()
 
-  const docs: (DocumentInfo & { duplaId: number; teamId: string })[] = await documentsRes.json()
+  const docs: (DocumentInfo & { duplaId: string; teamId: string })[] = await documentsRes.json()
   const map: Record<string, DocumentInfo> = {}
   for (const d of docs) {
     if (d.slides.length) map[`${d.duplaId}:${d.teamId}`] = { id: d.id, slides: d.slides }
@@ -82,9 +84,42 @@ async function loadAll(): Promise<void> {
   documentsMap.value = map
 }
 
+// Força uma sincronização com o Cloud (POST /api/sync/run) e só depois
+// recarrega os dados desta view. Se o backend não tiver CLOUD_API_URL
+// configurado, o sync simplesmente não corre (ran: false) e seguimos só
+// com o refresh local — não é tratado como erro.
+async function manualRefresh(): Promise<void> {
+  refreshing.value = true
+  errorMsg.value = ''
+  try {
+    await adminFetch('/api/sync/run', { method: 'POST' }).catch(() => null)
+    await loadAll()
+  } catch {
+    errorMsg.value = 'Falha ao atualizar.'
+  } finally {
+    refreshing.value = false
+  }
+}
+
+// Sempre que o backend emitir 'config:updated' para 'presentation', 'bracket'
+// ou 'phases', recarrega os dados desta view — assim não é preciso reabrir
+// o app para ver o que mudou no outro lado (local ↔ cloud).
+function onConfigUpdated(payload: { type: string; championship?: string | null }): void {
+  if (payload.type === 'presentation' || payload.type === 'bracket' || payload.type === 'phases') {
+    loadAll()
+  }
+}
+
 onMounted(async () => {
   await teamsStore.fetchTeams()
   await loadPhases()
+  const socket = connectSocket()
+  socket.on('config:updated', onConfigUpdated)
+})
+
+onUnmounted(() => {
+  const socket = connectSocket()
+  socket.off('config:updated', onConfigUpdated)
 })
 
 watch(selectedChampionship, loadPhases)
@@ -92,7 +127,7 @@ watch(selectedPhaseId, loadAll)
 
 const editingTheme = ref<Record<string, string>>({})
 
-async function saveTheme(duplaId: number, team: 'A' | 'B'): Promise<void> {
+async function saveTheme(duplaId: string, team: 'A' | 'B'): Promise<void> {
   const key = `${duplaId}:${team}`
   const theme = editingTheme.value[key]?.trim()
   if (!theme) return
@@ -128,7 +163,7 @@ async function addCriteria(): Promise<void> {
   }
 }
 
-async function removeCriteria(id: number): Promise<void> {
+async function removeCriteria(id: string): Promise<void> {
   await adminFetch(`/api/presentation/criteria/${id}`, { method: 'DELETE' })
   await loadAll()
 }
@@ -138,7 +173,7 @@ function teamName(id: string | null): string {
   return teamsStore.teamById(id)?.name ?? '?'
 }
 
-function docFor(duplaId: number, teamId: string): DocumentInfo | undefined {
+function docFor(duplaId: string, teamId: string): DocumentInfo | undefined {
   return documentsMap.value[`${duplaId}:${teamId}`]
 }
 
@@ -148,7 +183,7 @@ function extractOrderClient(filename: string, fallbackIndex: number): number {
   return 100000 + fallbackIndex
 }
 
-function onFilesSelected(duplaId: number, teamId: string, event: Event): void {
+function onFilesSelected(duplaId: string, teamId: string, event: Event): void {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
   if (!files.length) return
@@ -182,7 +217,7 @@ function removePendingSlide(key: string, index: number): void {
   pendingByTeam.value[key]?.splice(index, 1)
 }
 
-async function confirmUpload(duplaId: number, teamId: string): Promise<void> {
+async function confirmUpload(duplaId: string, teamId: string): Promise<void> {
   const key = `${duplaId}:${teamId}`
   const list = pendingByTeam.value[key]
   if (!list?.length) return
@@ -190,7 +225,7 @@ async function confirmUpload(duplaId: number, teamId: string): Promise<void> {
   uploadingKey.value = key
   try {
     const formData = new FormData()
-    formData.append('duplaId', String(duplaId))
+    formData.append('duplaId', duplaId)
     formData.append('teamId', teamId)
     for (const s of list) {
       formData.append('files', s.file)
@@ -210,7 +245,7 @@ async function confirmUpload(duplaId: number, teamId: string): Promise<void> {
   }
 }
 
-async function removeDocument(id: number): Promise<void> {
+async function removeDocument(id: string): Promise<void> {
   await adminFetch(`/api/presentation-documents/${id}`, { method: 'DELETE' })
   await loadAll()
 }
@@ -219,6 +254,16 @@ async function removeDocument(id: number): Promise<void> {
 <template>
   <div class="flex flex-col gap-6 max-w-2xl mx-auto w-full">
     <div class="bg-white rounded-2xl shadow p-4">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h1 class="font-semibold text-petro-primary text-sm">Apresentações</h1>
+        <button
+          class="text-[11px] bg-petro-dark text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50"
+          :disabled="refreshing"
+          @click="manualRefresh"
+        >
+          {{ refreshing ? 'A atualizar...' : '↻ Atualizar' }}
+        </button>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <select v-model="selectedChampionship" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
           <option v-for="opt in championshipOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>

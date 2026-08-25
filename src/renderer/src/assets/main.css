@@ -10,3 +10,20 @@ body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
+
+/* --- Tamanho Padrão (Projeção e restante aplicação) --- */
+.petrochamp-logo,
+img[src*="logo"] {
+  width: 190px !important;
+  height: auto !important;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* --- Tamanho Direto para a Tela do Moderador --- */
+.logo-moderator {
+  width: 40px !important;
+  height: auto !important;
+  max-width: 100%;
+  object-fit: contain;
+}

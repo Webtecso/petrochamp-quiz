@@ -1,25 +1,34 @@
 import { prisma } from '../db'
+import { emitConfigUpdated, type ConfigType } from '../socket/configEvents'
 
 const CLOUD_API_URL = process.env.CLOUD_API_URL
 
+// Reordenado por hierarquia de dependência (Entidades Pai -> Entidades Filhas)
 const SYNC_TABLES = [
+  // 1. Entidades base / independentes
   'team',
   'juror',
   'moderator',
-  'moderatorAreaPermission',
+  'partner',
+  'suspensePhrase',
+  'repescagemConfig',
   'phase',
+
+  // 2. Definições e itens de avaliação (devem preceder a associação aos critérios)
+  'evaluationItem',
+  'moderatorAreaPermission',
+
+  // 3. Critérios e dados dependentes de Phase / EvaluationItem
   'presentationCriteria',
   'presentationDupla',
   'question',
   'tiebreakQuestion',
-  'evaluationItem',
   'evaluationItemJuror',
   'phaseJurorAuthorization',
-  'partner',
-  'suspensePhrase',
+
+  // 4. Jogos, pontuações, documentos e históricos
   'bracketMatch',
   'tiebreakMatch',
-  'repescagemConfig',
   'repescagemVote',
   'presentationScore',
   'presentationDocument',
@@ -30,6 +39,24 @@ const SYNC_TABLES = [
 
 type SyncTable = (typeof SYNC_TABLES)[number]
 
+const TABLE_TO_CONFIG_TYPE: Partial<Record<SyncTable, ConfigType>> = {
+  team: 'teams',
+  phase: 'phases',
+  question: 'questions',
+  tiebreakQuestion: 'tiebreakQuestions',
+  evaluationItem: 'evaluationItems',
+  evaluationItemJuror: 'evaluationItems',
+  juror: 'jurors',
+  partner: 'partners',
+  suspensePhrase: 'suspensePhrases',
+  bracketMatch: 'bracket',
+  presentationCriteria: 'presentation',
+  presentationDupla: 'presentation',
+  presentationScore: 'presentation',
+  presentationDocument: 'presentation',
+  presentationSlide: 'presentation'
+}
+
 type PrismaDelegate = {
   findMany: (args: unknown) => Promise<unknown[]>
   findUnique: (args: unknown) => Promise<{ updatedAt: Date } | null>
@@ -37,7 +64,6 @@ type PrismaDelegate = {
   update: (args: unknown) => Promise<unknown>
 }
 
-// Cast centralizado para evitar parsing errors no esbuild/tsx
 const prismaClient = prisma as unknown as Record<string, PrismaDelegate>
 
 interface SyncResult {
@@ -71,32 +97,76 @@ async function collectLocalChanges(since: Date): Promise<Record<string, unknown[
 
 async function applyRemoteChanges(tables: Record<string, Array<Record<string, unknown>>>): Promise<Record<string, number>> {
   const applied: Record<string, number> = {}
+  const deferred: Array<{ table: SyncTable; record: Record<string, unknown> }> = []
 
+  // Primeira passagem: insere registos pela ordem hierárquica
   for (const table of SYNC_TABLES) {
     const records = tables[table]
     if (!records || records.length === 0) continue
 
     const delegate = prismaClient[table]
-
     let count = 0
+
     for (const record of records) {
       const incomingUpdatedAt = new Date(record.updatedAt as string)
       const existing = await delegate.findUnique({ where: { id: record.id } })
 
-      if (!existing) {
-        await delegate.create({ data: record })
-        count++
-        continue
-      }
-      if (incomingUpdatedAt > existing.updatedAt) {
-        await delegate.update({ where: { id: record.id }, data: record })
-        count++
+      try {
+        if (!existing) {
+          await delegate.create({ data: record })
+          count++
+        } else if (incomingUpdatedAt > existing.updatedAt) {
+          await delegate.update({ where: { id: record.id }, data: record })
+          count++
+        }
+      } catch (err: any) {
+        // Guarda registos com falha de chave estrangeira para reprocessar no fim
+        if (err.code === 'P2003') {
+          deferred.push({ table, record })
+        } else {
+          throw err
+        }
       }
     }
     applied[table] = count
   }
 
+  // Segunda passagem: reprocessa registos diferidos cujos pais foram criados posteriormente
+  for (const { table, record } of deferred) {
+    const delegate = prismaClient[table]
+    const incomingUpdatedAt = new Date(record.updatedAt as string)
+    const existing = await delegate.findUnique({ where: { id: record.id } })
+
+    try {
+      if (!existing) {
+        await delegate.create({ data: record })
+        applied[table] = (applied[table] || 0) + 1
+      } else if (incomingUpdatedAt > existing.updatedAt) {
+        await delegate.update({ where: { id: record.id }, data: record })
+        applied[table] = (applied[table] || 0) + 1
+      }
+    } catch (err: any) {
+      if (err.code === 'P2003') {
+        console.warn(`[Sync] Registo ${record.id} em '${table}' ignorado (chave estrangeira não resolvida).`)
+      } else {
+        throw err
+      }
+    }
+  }
+
   return applied
+}
+
+function notifyChangedTypes(pulled: Record<string, number>): void {
+  const emitted = new Set<ConfigType>()
+  for (const [table, count] of Object.entries(pulled)) {
+    if (count <= 0) continue
+    const type = TABLE_TO_CONFIG_TYPE[table as SyncTable]
+    if (type && !emitted.has(type)) {
+      emitted.add(type)
+      emitConfigUpdated(type)
+    }
+  }
 }
 
 export async function runSync(): Promise<SyncResult> {
@@ -128,6 +198,7 @@ export async function runSync(): Promise<SyncResult> {
     await setLastSyncedAt(syncStartedAt)
 
     console.log('Sincronização com o Cloud concluída.', { pushed: pushData.applied, pulled })
+    notifyChangedTypes(pulled)
     return { ran: true, pushed: pushData.applied, pulled }
   } catch (error) {
     console.error('Sincronização com o Cloud falhou (a continuar offline):', error)

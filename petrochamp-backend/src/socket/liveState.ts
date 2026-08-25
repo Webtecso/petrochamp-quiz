@@ -34,9 +34,9 @@ export interface MatchCodes {
 export interface TiebreakState {
   active: boolean
   pending: boolean
-  matchId: number | null
-  currentQuestionId: number | null
-  usedQuestionIds: number[]
+  matchId: string | null
+  currentQuestionId: string | null
+  usedQuestionIds: string[]
 }
 
 export interface PodiumRevealState {
@@ -49,7 +49,7 @@ export interface PodiumRevealState {
 export interface RepescagemRevealState {
   stage: 'idle' | 'suspense' | 'countdown' | 'voting' | 'results'
   countdownValue: number
-  configId: number | null
+  configId: string | null
   repescadaNames: string[]
 }
 
@@ -97,7 +97,7 @@ export interface InitialScoreEntry {
 
 export interface PresentationCriteriaScoreEntry {
   jurorId: string
-  criteriaId: number
+  criteriaId: string
   score: number
 }
 
@@ -108,7 +108,7 @@ export interface PresentationSlideInfo {
 
 export interface PresentationFlowState {
   stage: 'idle' | 'countdown' | 'presenting' | 'concluded'
-  duplaId: number | null
+  duplaId: string | null
   teamId: string | null
   teamName: string | null
   theme: string | null
@@ -120,6 +120,27 @@ export interface PresentationFlowState {
   presentationMode: 'standard' | 'document'
   slides: PresentationSlideInfo[]
   currentPage: number
+}
+
+// NOVO — pontuação de um jurado, para um critério de uma Pergunta Analítica
+// "aberta", para uma das equipas (a diferença para PresentationCriteriaScoreEntry
+// é o campo `team`, porque aqui há sempre duas equipas a ser avaliadas).
+export interface AnalyticCriteriaScoreEntry {
+  jurorId: string
+  criteriaId: string
+  team: 'A' | 'B'
+  score: number
+}
+
+// NOVO — estado do painel de avaliação por critérios que se abre
+// automaticamente (no Admin/Jurados) quando o item ativo do sorteio é uma
+// Pergunta Analítica "aberta" com critérios definidos. Reposto sempre que
+// um novo item é sorteado ou a partida é reiniciada.
+export interface AnalyticEvaluationState {
+  itemId: string | null
+  criteriaScores: AnalyticCriteriaScoreEntry[]
+  jurorsSubmitted: string[]
+  expectedJurorCount: number
 }
 
 export interface ModeratorInfo {
@@ -138,10 +159,10 @@ export interface LiveState {
   teamAScore: number
   teamBScore: number
   phase: number
-  currentQuestionId: number | null
+  currentQuestionId: string | null
   currentQuestionIndex: number
   activeTeam: 'A' | 'B'
-  usedQuestionIds: number[]
+  usedQuestionIds: string[]
   teamAAnsweredCount: number
   teamBAnsweredCount: number
   timeLeft: number
@@ -174,6 +195,7 @@ export interface LiveState {
   presentationFlow: PresentationFlowState
   presentationPhaseScores: RankingEntry[]
   presentationRoundReady: boolean
+  analyticEvaluation: AnalyticEvaluationState
   publicVotingUrl: string | null
   publicVotingStatus: PublicVotingStatus
   adminAccessedRemotely: boolean
@@ -230,6 +252,16 @@ function defaultPresentationFlow(): PresentationFlowState {
   }
 }
 
+// NOVO — valor inicial/reset do painel de avaliação analítica por critérios.
+function defaultAnalyticEvaluation(): AnalyticEvaluationState {
+  return {
+    itemId: null,
+    criteriaScores: [],
+    jurorsSubmitted: [],
+    expectedJurorCount: 0
+  }
+}
+
 export const liveState: LiveState = {
   championship: null,
   editionName: null,
@@ -281,6 +313,7 @@ export const liveState: LiveState = {
   presentationFlow: defaultPresentationFlow(),
   presentationPhaseScores: [],
   presentationRoundReady: false,
+  analyticEvaluation: defaultAnalyticEvaluation(),
   publicVotingUrl: null,
   publicVotingStatus: 'idle',
   adminAccessedRemotely: false,
@@ -341,7 +374,15 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.currentItemMode = null
   liveState.awaitingJuryEvaluation = false
   liveState.moderatorAdjusting = false
+  liveState.analyticEvaluation = defaultAnalyticEvaluation()
   resetAnswerState()
+}
+
+// NOVO — repõe só o painel de avaliação analítica por critérios, sem afetar
+// mais nada. Chamado sempre que um novo item é sorteado (drawNextItem) e
+// quando o item ativo deixa de ser uma pergunta aberta com critérios.
+export function resetAnalyticEvaluation(): void {
+  liveState.analyticEvaluation = defaultAnalyticEvaluation()
 }
 
 export function resetPresentationFlow(): void {
@@ -371,9 +412,9 @@ export function addToChampionshipRanking(team: LiveTeam | null, score: number): 
 export async function persistLiveState(): Promise<void> {
   try {
     await prisma.liveSession.upsert({
-      where: { id: 1 },
+      where: { id: 'singleton' },
       update: { data: JSON.stringify(liveState) },
-      create: { id: 1, data: JSON.stringify(liveState) }
+      create: { id: 'singleton', data: JSON.stringify(liveState) }
     })
   } catch (error) {
     console.error('Falha ao gravar estado da partida', error)
@@ -382,7 +423,7 @@ export async function persistLiveState(): Promise<void> {
 
 export async function loadPersistedState(): Promise<void> {
   try {
-    const row = await prisma.liveSession.findUnique({ where: { id: 1 } })
+    const row = await prisma.liveSession.findUnique({ where: { id: 'singleton' } })
     if (row) {
       const parsed = JSON.parse(row.data) as Partial<LiveState>
       Object.assign(liveState, parsed)
@@ -390,6 +431,12 @@ export async function loadPersistedState(): Promise<void> {
         ...defaultPresentationFlow(),
         ...liveState.presentationFlow,
         slides: Array.isArray(liveState.presentationFlow?.slides) ? liveState.presentationFlow.slides : []
+      }
+      // NOVO — garante que estados antigos persistidos (gravados antes desta
+      // funcionalidade existir) ganham o campo em falta em vez de undefined.
+      liveState.analyticEvaluation = {
+        ...defaultAnalyticEvaluation(),
+        ...liveState.analyticEvaluation
       }
       liveState.publicVotingUrl = null
       liveState.publicVotingStatus = 'idle'

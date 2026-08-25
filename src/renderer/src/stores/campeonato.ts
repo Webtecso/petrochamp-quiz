@@ -48,7 +48,16 @@ interface PhaseTransitionState {
 }
 
 interface PhaseFlowState {
-  stage: 'idle' | 'repescagem' | 'ranking' | 'partnersPending' | 'partners' | 'webtec' | 'organizer' | 'suspense'
+  stage:
+    | 'idle'
+    | 'repescagem'
+    | 'ranking'
+    | 'partnersPending'
+    | 'partners'
+    | 'webtec'
+    | 'organizer'
+    | 'suspense'
+    | 'quizIntro'
   suspensePhrase: string | null
 }
 
@@ -98,6 +107,22 @@ export interface PresentationFlowState {
   currentPage: number
 }
 
+// NOVO — espelha AnalyticCriteriaScoreEntry do backend (liveState.ts).
+export interface AnalyticCriteriaScoreEntry {
+  jurorId: string
+  criteriaId: string
+  team: 'A' | 'B'
+  score: number
+}
+
+// NOVO — espelha AnalyticEvaluationState do backend.
+export interface AnalyticEvaluationState {
+  itemId: string | null
+  criteriaScores: AnalyticCriteriaScoreEntry[]
+  jurorsSubmitted: string[]
+  expectedJurorCount: number
+}
+
 interface LiveState {
   championship: ChampionshipType | null
   editionName: string | null
@@ -137,6 +162,7 @@ interface LiveState {
   initialScoresConfirmed: boolean
   presentationFlow: PresentationFlowState
   presentationRoundReady: boolean
+  analyticEvaluation: AnalyticEvaluationState
   currentItemSource: 'question' | 'analytic' | null
   currentAnalyticItemId: string | null
   currentItemMode: 'multipla_escolha' | 'aberta' | null
@@ -170,6 +196,16 @@ function defaultPresentationFlow(): PresentationFlowState {
     presentationMode: 'standard',
     slides: [],
     currentPage: 1
+  }
+}
+
+// NOVO — valor inicial local do painel de avaliação analítica.
+function defaultAnalyticEvaluation(): AnalyticEvaluationState {
+  return {
+    itemId: null,
+    criteriaScores: [],
+    jurorsSubmitted: [],
+    expectedJurorCount: 0
   }
 }
 
@@ -220,6 +256,7 @@ export const useCampeonatoStore = defineStore('campeonato', {
     initialScoresConfirmed: false,
     presentationFlow: defaultPresentationFlow(),
     presentationRoundReady: false,
+    analyticEvaluation: defaultAnalyticEvaluation(),
     currentItemSource: null,
     currentAnalyticItemId: null,
     currentItemMode: null,
@@ -312,6 +349,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     resetChampionship() {
       getSocket().emit('moderator:resetChampionship')
     },
+    abandonChampionship() {
+      getSocket().emit('moderator:abandonChampionship')
+    },
     showPhaseRanking() {
       getSocket().emit('moderator:showPhaseRanking')
     },
@@ -371,6 +411,16 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     prevPresentationPage() {
       getSocket().emit('moderator:presentationPrevPage')
+    },
+    // NOVO — jurado atribui/atualiza a nota de um critério, para uma
+    // equipa (A ou B), de uma Pergunta Analítica "aberta" com critérios.
+    setAnalyticCriteriaScore(jurorId: string, criteriaId: string, team: 'A' | 'B', score: number) {
+      getSocket().emit('juror:setAnalyticCriteriaScore', { jurorId, criteriaId, team, score })
+    },
+    // NOVO — jurado confirma que terminou de avaliar TODOS os critérios
+    // (das duas equipas) da Pergunta Analítica ativa (itemId).
+    submitAnalyticEvaluation(jurorId: string, itemId: string) {
+      getSocket().emit('juror:submitAnalyticEvaluation', { jurorId, itemId })
     }
   }
 })

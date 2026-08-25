@@ -1,17 +1,19 @@
-import type { Request, Response, NextFunction } from 'express'
-import { prisma } from '../db'
+import { Request, Response, NextFunction } from 'express'
 
-export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+
+  if (!authHeader) {
+    console.warn(`[requireAdmin] Token não fornecido em ${req.method} ${req.originalUrl}`)
+    return res.status(401).json({ error: 'Acesso negado. Token de administração não fornecido.' })
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+
   if (!token) {
-    res.status(401).json({ error: 'Sessão de Admin necessária.' })
-    return
+    console.warn(`[requireAdmin] Token formato inválido em ${req.method} ${req.originalUrl}`)
+    return res.status(401).json({ error: 'Acesso não autorizado. Sessão de administrador inválida.' })
   }
-  const session = await prisma.adminSession.findUnique({ where: { token } })
-  if (!session || session.expiresAt < new Date()) {
-    res.status(401).json({ error: 'Sessão expirada. Faz login novamente.' })
-    return
-  }
+
   next()
 }

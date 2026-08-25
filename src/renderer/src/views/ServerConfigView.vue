@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import LogoMark from '../components/LogoMark.vue'
 import { saveBackendHost } from '../services/serverConfig'
 import { getBackendUrl } from '../services/backendConfig'
-import { connectSocket } from '../services/socket'
+import { initApp } from '../services/appInit'
 
 const router = useRouter()
 const hostInput = ref('')
@@ -23,7 +23,11 @@ async function testAndSave(): Promise<void> {
     await saveBackendHost(trimmed)
     const res = await fetch(`${getBackendUrl()}/health`, { signal: AbortSignal.timeout(6000) })
     if (!res.ok) throw new Error('Resposta inválida do servidor.')
-    connectSocket(true)
+    // Liga o socket E inicializa as stores/listeners — sem isto, a
+    // primeira ligação a um PC ficava com o socket aberto mas nenhuma
+    // store reativa a ouvir 'state:sync', deixando o Moderador "preso"
+    // até reiniciar a app manualmente.
+    initApp(true)
     router.replace('/inicio')
   } catch {
     errorMsg.value = 'Não consegui ligar a esse endereço. Confirma que estás na mesma rede Wi-Fi que o computador do Moderador, e que o IP está correto.'

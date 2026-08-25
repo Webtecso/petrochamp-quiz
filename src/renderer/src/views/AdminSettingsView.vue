@@ -1,15 +1,57 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useSettingsStore } from '../stores/settings'
+import { getBackendUrl } from '../services/backendConfig'
+
 const settings = useSettingsStore()
+
+const isSyncing = ref(false)
+const syncMessage = ref<string | null>(null)
+const syncError = ref(false)
+
+async function triggerSync() {
+  if (isSyncing.value) return
+  isSyncing.value = true
+  syncMessage.value = null
+  syncError.value = false
+
+  try {
+    // CORRIGIDO — o caminho relativo '/api/sync/run' ia sempre para a
+    // origem da própria app (localhost:5173 no Vite dev), que não tem essa
+    // rota. Precisa de apontar explicitamente para o backend Local
+    // (localhost:4000 em dev, ou a mesma origem em produção/túnel).
+    const res = await fetch(`${getBackendUrl()}/api/sync/run`, { method: 'POST' })
+    const data = await res.json()
+
+    if (res.ok && data.ran) {
+      const pushedCount = Object.values(data.pushed ?? {}).reduce((a: number, b: unknown) => a + Number(b), 0)
+      const pulledCount = Object.values(data.pulled ?? {}).reduce((a: number, b: unknown) => a + Number(b), 0)
+      syncMessage.value = `Sincronização concluída — ${pushedCount} enviado(s), ${pulledCount} recebido(s).`
+    } else if (res.ok && !data.ran) {
+      syncError.value = true
+      syncMessage.value = data.reason || 'Sincronização não correu (provavelmente sem Internet).'
+    } else {
+      syncError.value = true
+      syncMessage.value = data.error || 'Falha ao sincronizar com a Cloud.'
+    }
+  } catch (err) {
+    syncError.value = true
+    syncMessage.value = 'Erro ao comunicar com o servidor.'
+  } finally {
+    isSyncing.value = false
+  }
+}
+
 onMounted(() => {
   settings.fetchSettings()
 })
 </script>
+
 <template>
   <div class="flex flex-col gap-6 max-w-md mx-auto w-full">
     <div class="bg-white rounded-2xl shadow p-6 flex flex-col gap-5">
       <h2 class="font-semibold text-petro-primary">Configurações Gerais</h2>
+
       <div>
         <label class="text-sm font-semibold text-gray-600 block mb-2">Tempo por pergunta (segundos)</label>
         <input
@@ -21,6 +63,7 @@ onMounted(() => {
           @change="settings.setQuestionTime(Number(($event.target as HTMLInputElement).value))"
         />
       </div>
+
       <div>
         <label class="text-sm font-semibold text-gray-600 block mb-2">Número máximo de jurados</label>
         <input
@@ -32,6 +75,7 @@ onMounted(() => {
           @change="settings.setMaxJurors(Number(($event.target as HTMLInputElement).value))"
         />
       </div>
+
       <div>
         <label class="text-sm font-semibold text-gray-600 block mb-2">Duração dos parceiros no ecrã (segundos)</label>
         <input
@@ -46,6 +90,7 @@ onMounted(() => {
           Tempo que os parceiros ficam visíveis na Projeção antes de avançar para a tela de suspense da próxima fase.
         </p>
       </div>
+
       <div class="flex items-center justify-between">
         <div>
           <label class="text-sm font-semibold text-gray-600 block">Mostrar pontuação na Projeção</label>
@@ -62,6 +107,45 @@ onMounted(() => {
           ></span>
         </button>
       </div>
+
+      <!-- Sincronização com a Cloud -->
+      <div class="border-t border-gray-100 pt-5 flex flex-col gap-3">
+        <div>
+          <label class="text-sm font-semibold text-gray-600 block">Sincronização com a Cloud</label>
+          <p class="text-xs text-gray-400">
+            Dispare manualmente a sincronização de dados (perguntas, equipas e estado) com a plataforma Cloud.
+          </p>
+        </div>
+        <button
+          @click="triggerSync"
+          :disabled="isSyncing"
+          class="w-full py-2.5 px-4 bg-petro-primary text-white text-sm font-semibold rounded-lg hover:opacity-90 active:scale-[0.99] disabled:opacity-50 transition flex items-center justify-center gap-2"
+        >
+          <svg
+            v-if="isSyncing"
+            class="animate-spin h-4 w-4 text-white"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          <span>{{ isSyncing ? 'A sincronizar...' : 'Sincronizar Agora' }}</span>
+        </button>
+        <p
+          v-if="syncMessage"
+          class="text-xs font-medium text-center"
+          :class="syncError ? 'text-red-500' : 'text-green-600'"
+        >
+          {{ syncMessage }}
+        </p>
+      </div>
+
       <p class="text-xs text-gray-400">
         Alterações aqui aplicam-se à próxima partida/pergunta iniciada — não afetam uma pergunta já em curso.
       </p>

@@ -8,6 +8,7 @@ import {
   resetMatch,
   resetAnswerState,
   resetPresentationFlow,
+  resetAnalyticEvaluation,
   generateJoinCode,
   addToPhaseRanking,
   addToChampionshipRanking,
@@ -21,11 +22,6 @@ let partnersTimerHandle: ReturnType<typeof setTimeout> | null = null
 let moderatorSocketId: string | null = null
 let moderatorRegisteredEver = false
 
-// NOTA: 'moderator:resetChampionship' foi retirado desta lista de propósito
-// — é a saída de emergência para desencravar a app, e não deve depender de
-// estar autenticado como Principal (senão, assim que qualquer Moderador fizer
-// login algures, um socket sem login fica bloqueado e o botão deixa de
-// funcionar silenciosamente).
 const RESTRICTED_TO_PRINCIPAL = new Set([
   'moderator:selectChampionship',
   'moderator:finalizeChampionship',
@@ -35,12 +31,7 @@ const RESTRICTED_TO_PRINCIPAL = new Set([
   'moderator:startFinalPodiumSequence'
 ])
 
-// NOVO (Bloco 4) — eventos que exigem uma área específica quando o socket é
-// Secundário. Eventos não listados aqui (e não em RESTRICTED_TO_PRINCIPAL)
-// ficam livres para qualquer moderador autenticado (ex: enterAdmin,
-// exitAdmin, resetChampionship — a saída de emergência continua sem área).
 const RESTRICTED_TO_AREA: Record<string, string> = {
-  // Quiz
   'moderator:selectTeams': 'quiz',
   'moderator:startTimer': 'quiz',
   'moderator:pauseTimer': 'quiz',
@@ -59,18 +50,15 @@ const RESTRICTED_TO_AREA: Record<string, string> = {
   'moderator:hidePhaseRanking': 'quiz',
   'moderator:showPhaseTransition': 'quiz',
   'moderator:hidePhaseTransition': 'quiz',
-  // Apresentação
   'moderator:startPresentation': 'apresentacao',
   'moderator:finishPresentation': 'apresentacao',
   'moderator:presentationNextPage': 'apresentacao',
   'moderator:presentationPrevPage': 'apresentacao',
   'moderator:advanceToNextPresentation': 'apresentacao',
   'moderator:confirmPresentationRanking': 'apresentacao',
-  // Jurados
   'moderator:removeJuror': 'jurados',
   'moderator:confirmEvaluation': 'jurados',
   'moderator:confirmInitialScores': 'jurados',
-  // Repescagem
   'moderator:closeRepescagemVoting': 'repescagem'
 }
 
@@ -114,7 +102,7 @@ async function isRoundComplete(championship: string, round: number): Promise<boo
   return pending === 0
 }
 
-async function getPresentationTeamIds(phaseId: number): Promise<string[]> {
+async function getPresentationTeamIds(phaseId: string): Promise<string[]> {
   const duplas = await prisma.presentationDupla.findMany({ where: { phaseId } })
   const ids = new Set<string>()
   for (const d of duplas) {
@@ -124,21 +112,26 @@ async function getPresentationTeamIds(phaseId: number): Promise<string[]> {
   return Array.from(ids)
 }
 
-// NOVO — número de jurados esperados para a fase corrente. Se houver
-// atribuições explícitas (PhaseJurorAuthorization) para esta fase, é esse
-// número; senão, é o total de jurados cadastrados (modo aberto).
-async function getExpectedJurorCount(phaseId: number): Promise<number> {
+async function getExpectedJurorCount(phaseId: string): Promise<number> {
   const authCount = await prisma.phaseJurorAuthorization.count({ where: { phaseId } })
-  if (authCount > 0) return authCount // fase com jurados específicos atribuídos
-  return prisma.juror.count() // sem restrição: conta todos os jurados criados
+  if (authCount > 0) return authCount
+  return prisma.juror.count()
 }
 
-// NOVO — recalcula liveState.expectedJurorCount a partir da fase corrente.
-// Não faz broadcast; quem chamar deve fazê-lo se estiver fora de um handler
-// que já broadcast no fim.
 async function refreshExpectedJurorCount(): Promise<void> {
   const phaseConfig = await getCurrentPhaseConfig()
   liveState.expectedJurorCount = phaseConfig ? await getExpectedJurorCount(phaseConfig.id) : 0
+}
+
+// NOVO — número de jurados esperados para AVALIAR UM ITEM concreto (uma
+// Pergunta Analítica "aberta"). Dá prioridade aos jurados atribuídos a essa
+// pergunta especificamente (EvaluationItemJuror); se não houver nenhum
+// atribuído, conta todos os jurados cadastrados (modo aberto), tal como
+// getExpectedJurorCount faz para fases.
+async function getExpectedJurorCountForItem(itemId: string): Promise<number> {
+  const assigned = await prisma.evaluationItemJuror.count({ where: { itemId } })
+  if (assigned > 0) return assigned
+  return prisma.juror.count()
 }
 
 async function startPostRoundSequence(): Promise<void> {
@@ -172,7 +165,7 @@ function applyPresentationWeighting(phaseConfig: { presentationWeight: number | 
 }
 
 type PoolItem =
-  | { source: 'question'; id: number; timeSeconds: number; scope: 'single' }
+  | { source: 'question'; id: string; timeSeconds: number; scope: 'single' }
   | { source: 'analytic'; id: string; timeSeconds: number; scope: 'single' | 'all'; mode: 'multipla_escolha' | 'aberta' }
 
 async function buildPool(): Promise<PoolItem[]> {
@@ -209,7 +202,6 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     liveState.usedAnalyticItemIds = []
     pool = await buildPool()
   } else if (!avoidRepeat) {
-    // sem "evitar repetição": monta o pool ignorando os já usados
     const [questions, analyticItems, defaultTime] = await Promise.all([
       prisma.question.findMany({ where: { phase: liveState.phase, championship: liveState.championship ?? undefined } }),
       prisma.evaluationItem.findMany({
@@ -234,6 +226,7 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     liveState.currentItemSource = null
     liveState.currentAnalyticItemId = null
     liveState.currentItemMode = null
+    resetAnalyticEvaluation()
     return
   }
 
@@ -250,13 +243,30 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     liveState.currentAnalyticItemId = null
     liveState.usedQuestionIds.push(chosen.id)
     liveState.activeTeam = team
+    resetAnalyticEvaluation()
   } else {
     liveState.currentItemSource = 'analytic'
     liveState.currentItemMode = chosen.mode
     liveState.currentAnalyticItemId = chosen.id
     liveState.currentQuestionId = null
     liveState.usedAnalyticItemIds.push(chosen.id)
-    liveState.activeTeam = team // relevante só para scope 'single'; em 'all' as duas respondem de qualquer forma
+    liveState.activeTeam = team
+
+    // NOVO — sempre que o item sorteado é uma Pergunta Analítica "aberta",
+    // abre automaticamente o painel de avaliação por critérios (o
+    // Admin/Jurados repara nisto via liveState.analyticEvaluation.itemId
+    // vindo no state:sync, sem qualquer ação manual do moderador).
+    if (chosen.mode === 'aberta') {
+      const expected = await getExpectedJurorCountForItem(chosen.id)
+      liveState.analyticEvaluation = {
+        itemId: chosen.id,
+        criteriaScores: [],
+        jurorsSubmitted: [],
+        expectedJurorCount: expected
+      }
+    } else {
+      resetAnalyticEvaluation()
+    }
   }
   liveState.timeLeft = chosen.timeSeconds
 }
@@ -271,10 +281,6 @@ async function roundQuestionsComplete(): Promise<boolean> {
 }
 
 async function recordBracketResult(championship: string, teamAId: string, teamBId: string, winnerId: string): Promise<void> {
-  // Bye (dupla sem adversário): teamAId === teamBId é chamado de propósito
-  // pelo caller para avançar a equipa sozinha. Nesse caso o match na BD tem
-  // teamBId null (só uma equipa nesse slot), por isso a procura tem de
-  // aceitar esse formato em vez de {teamAId, teamBId} com ambos iguais.
   const match = await prisma.bracketMatch.findFirst({
     where: {
       championship,
@@ -303,8 +309,6 @@ async function recordBracketResult(championship: string, teamAId: string, teamBI
       where: { id: nextMatch.id },
       data: isFirstChild ? { teamAId: winnerId } : { teamBId: winnerId }
     })
-    // Se a próxima ronda for uma fase de Apresentação, a dupla desse
-    // confronto fica pronta assim que a segunda equipa entrar aqui.
     await syncPresentationDuplasForRound(championship, nextMatch.round)
   }
 }
@@ -406,9 +410,6 @@ export function registerSocketHandlers(io: Server): void {
     console.log('Cliente ligado:', socket.id)
     socket.emit('state:sync', liveState)
 
-    // ATUALIZADO (Bloco 4) — inclui as áreas do moderador (relação
-    // ModeratorAreaPermission) e guarda-as em socket.data.moderatorAreas,
-    // para o middleware socket.use abaixo validar por evento.
     socket.on('moderator:register', async (payload: { code: string }, callback?: (res: unknown) => void) => {
       const code = (payload.code || '').trim()
       const moderator = await prisma.moderator.findUnique({
@@ -440,8 +441,6 @@ export function registerSocketHandlers(io: Server): void {
       })
     })
 
-    // ATUALIZADO (Bloco 4) — além da restrição a Principal (RESTRICTED_TO_PRINCIPAL),
-    // agora também valida por área (RESTRICTED_TO_AREA) para Secundários.
     socket.use(([eventName], next) => {
       if (RESTRICTED_TO_PRINCIPAL.has(eventName)) {
         if (!hasRegisteredModerators()) {
@@ -459,7 +458,6 @@ export function registerSocketHandlers(io: Server): void {
       const requiredArea = RESTRICTED_TO_AREA[eventName]
       if (requiredArea) {
         if (!hasRegisteredModerators()) {
-          // Modo aberto: ninguém autenticou ainda nesta sessão do backend — não bloqueia.
           next()
           return
         }
@@ -574,7 +572,7 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('moderator:forceQuestion', async (payload: { questionId: number }) => {
+    socket.on('moderator:forceQuestion', async (payload: { questionId: string }) => {
       const question = await prisma.question.findUnique({ where: { id: payload.questionId } })
       if (!question || question.phase !== liveState.phase) return
       liveState.currentItemSource = 'question'
@@ -586,6 +584,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.timeLeft = await getQuestionTimeSeconds()
       liveState.isRunning = false
       resetAnswerState()
+      resetAnalyticEvaluation()
       broadcast()
     })
 
@@ -646,7 +645,6 @@ export function registerSocketHandlers(io: Server): void {
         return
       }
 
-      // Pergunta normal (Question)
       if (payload.team !== liveState.activeTeam) return
       if (liveState.currentQuestionId === null) return
       if (payload.team === 'A' && liveState.teamAAnswer) return
@@ -685,8 +683,6 @@ export function registerSocketHandlers(io: Server): void {
       }, 2500)
     })
 
-    // NOVO — o moderador pode terminar manualmente uma pergunta aberta antes
-    // do tempo acabar, passando o item para avaliação do júri.
     socket.on('moderator:endOpenQuestion', () => {
       if (liveState.currentItemSource !== 'analytic' || liveState.currentItemMode !== 'aberta') return
       liveState.isRunning = false
@@ -773,10 +769,6 @@ export function registerSocketHandlers(io: Server): void {
       if (liveState.teamA && liveState.teamB && liveState.championship) {
         const phaseConfig = await getCurrentPhaseConfig()
 
-        // Numa fase Apresentação + Quiz, a decisão de quem avança tem de já
-        // usar a média ponderada (Apresentação + Quiz), não só o Quiz — senão
-        // o chaveamento avança com a equipa errada antes de a ponderação ser
-        // aplicada à tabela de classificação.
         let compareAScore = liveState.teamAScore
         let compareBScore = liveState.teamBScore
         if (phaseConfig?.type === 'apresentacao_quiz') {
@@ -861,7 +853,7 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('moderator:openRepescagemVoting', async (payload: { configId: number }) => {
+    socket.on('moderator:openRepescagemVoting', async (payload: { configId: string }) => {
       const config = await prisma.repescagemConfig.findUnique({ where: { id: payload.configId } })
       if (!config || config.started) return
 
@@ -894,7 +886,7 @@ export function registerSocketHandlers(io: Server): void {
       }, 3000)
     })
 
-    socket.on('moderator:closeRepescagemVoting', async (payload: { configId: number }) => {
+    socket.on('moderator:closeRepescagemVoting', async (payload: { configId: string }) => {
       const config = await prisma.repescagemConfig.findUnique({ where: { id: payload.configId } })
       if (!config || !config.votingOpen) return
 
@@ -977,10 +969,6 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    // NOVO — só avança para o Ranking/pós-ronda numa fase de Apresentação
-    // pura quando o moderador clicar em "Ir para o Ranking". Antes disso,
-    // liveState.presentationRoundReady fica true (posto no handler de
-    // juror:submitPresentationEvaluation) e este handler fica à escuta.
     socket.on('moderator:confirmPresentationRanking', async () => {
       if (!liveState.presentationRoundReady) return
       liveState.presentationRoundReady = false
@@ -1007,18 +995,10 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    // ATUALIZADO (Bloco 2) — "Reiniciar Campeonato" deixou de apagar o
-    // campeonato inteiro: agora mantém os pares da Ronda 1 (o sorteio
-    // original não muda) e só limpa vencedores e as equipas atribuídas às
-    // rondas seguintes (que dependiam de vencedores anteriores), além de
-    // repor todo o progresso de apresentações/pontuações/fluxo de ecrã.
     socket.on('moderator:resetChampionship', async () => {
       const questionTime = await getQuestionTimeSeconds()
 
       if (liveState.championship) {
-        // Mantém os pares da Ronda 1 (o sorteio original não muda) — só limpa
-        // vencedores e as equipas atribuídas às rondas seguintes (que dependiam
-        // de vencedores anteriores).
         await prisma.bracketMatch.updateMany({
           where: { championship: liveState.championship, round: { gt: 1 } },
           data: { teamAId: null, teamBId: null, winnerId: null }
@@ -1039,7 +1019,6 @@ export function registerSocketHandlers(io: Server): void {
           }
           await prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })
         }
-        // Regenera as duplas da Ronda 1 (as equipas já lá estão, ficam prontas de novo)
         await syncPresentationDuplasForRound(liveState.championship, 1)
       }
 
@@ -1060,6 +1039,30 @@ export function registerSocketHandlers(io: Server): void {
       liveState.expectedJurorCount = 0
       resetMatch(questionTime)
       await refreshExpectedJurorCount()
+      broadcast()
+    })
+
+    socket.on('moderator:abandonChampionship', async () => {
+      liveState.championship = null
+      liveState.editionName = null
+      liveState.phase = 1
+      liveState.teamA = null
+      liveState.teamB = null
+      liveState.phaseRankings = []
+      liveState.championshipRankings = []
+      liveState.championshipStartedAt = null
+      liveState.eliminatedTeamIds = []
+      liveState.phaseRankingReveal = { visible: false }
+      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+      liveState.presentationPhaseScores = []
+      resetPresentationFlow()
+      liveState.bracketVisible = false
+      liveState.podium.active = false
+      liveState.podiumReveal = { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false }
+      liveState.phaseTransition = { stage: 'idle' }
+      liveState.expectedJurorCount = 0
+      const questionTime = await getQuestionTimeSeconds()
+      resetMatch(questionTime)
       broadcast()
     })
 
@@ -1167,15 +1170,6 @@ export function registerSocketHandlers(io: Server): void {
         logoUrl: championLogoUrl
       }
 
-      // NOVO — o campeonato fica oficialmente encerrado depois de gravado
-      // no histórico: liveState.championship volta a null. Sem isto, o
-      // botão "Nova Partida" nunca reativava e o ecrã de escolha do tipo de
-      // campeonato (CampeonatoSelectView) nunca mais aparecia, porque o
-      // router interceptava sempre '/moderador/campeonato' com um
-      // campeonato "em curso" que já tinha terminado. O ecrã de
-      // comemoração (fogos + logo) na Projeção não depende do campeonato
-      // continuar definido — só de championReveal.active — por isso
-      // continua visível até o Moderador clicar "Nova Partida".
       liveState.championship = null
       liveState.editionName = null
       liveState.phase = 1
@@ -1212,12 +1206,7 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    // ==================== APRESENTAÇÃO DE PROJETOS ====================
-
-    // CORRIGIDO: aceita useDocument — se true e existir PresentationDocument
-    // (com slides já convertidos) para esta dupla+equipa, entra em modo
-    // 'document' usando o array de slides (imagens), em vez de um PDF único.
-    socket.on('moderator:startPresentation', async (payload: { duplaId: number; teamId: string; useDocument?: boolean }) => {
+    socket.on('moderator:startPresentation', async (payload: { duplaId: string; teamId: string; useDocument?: boolean }) => {
       const phaseConfig = await getCurrentPhaseConfig()
       if (!phaseConfig || (phaseConfig.type !== 'apresentacao' && phaseConfig.type !== 'apresentacao_quiz')) return
       if (liveState.presentationFlow.stage !== 'idle') return
@@ -1282,9 +1271,6 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    // NOVO — navegação de página do documento, só válida em modo 'document'
-    // durante 'presenting'. Sincroniza Moderador e Projeção via socket, em
-    // vez de qualquer mecanismo à parte (Secção 37.11).
     socket.on('moderator:presentationNextPage', () => {
       const flow = liveState.presentationFlow
       if (flow.stage !== 'presenting' || flow.presentationMode !== 'document') return
@@ -1299,7 +1285,7 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('juror:setPresentationScore', (payload: { jurorId: string; criteriaId: number; score: number }) => {
+    socket.on('juror:setPresentationScore', (payload: { jurorId: string; criteriaId: string; score: number }) => {
       if (liveState.presentationFlow.stage === 'idle') return
       if (liveState.presentationFlow.jurorsSubmitted.includes(payload.jurorId)) return
       const existing = liveState.presentationFlow.criteriaScores.find(
@@ -1322,10 +1308,6 @@ export function registerSocketHandlers(io: Server): void {
       flow.jurorsSubmitted.push(payload.jurorId)
       broadcast()
 
-      // ATUALIZADO — usa liveState.expectedJurorCount (jurados atribuídos à
-      // fase, ou total cadastrado em modo aberto) em vez de liveState.jurors.length
-      // (só quem já ligou), para não fechar a avaliação antes de todos os
-      // jurados esperados terem entrado.
       const allSubmitted = liveState.expectedJurorCount > 0 && flow.jurorsSubmitted.length >= liveState.expectedJurorCount
       if (allSubmitted && flow.stage === 'concluded') {
         flow.allJurorsSubmitted = true
@@ -1371,11 +1353,6 @@ export function registerSocketHandlers(io: Server): void {
           addToPhaseRanking(team, average)
           addToChampionshipRanking(team, average)
 
-          // Fase de Apresentação pura (sem Quiz): cada PresentationDupla é
-          // um confronto — assim que ambas as equipas dessa dupla já tiverem
-          // sido avaliadas, a com nota mais alta avança no chaveamento
-          // (mesmo mecanismo de recordBracketResult usado pelo Quiz normal),
-          // e a outra fica eliminada.
           const dupla = await prisma.presentationDupla.findFirst({
             where: {
               phaseId: phaseConfig?.id,
@@ -1384,7 +1361,6 @@ export function registerSocketHandlers(io: Server): void {
           })
           if (liveState.championship && phaseConfig && dupla?.teamAId) {
             if (!dupla.teamBId) {
-              // Dupla sem adversário (bye) — a equipa avança sozinha assim que for avaliada.
               await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamAId, dupla.teamAId)
             } else {
               const rankA = liveState.phaseRankings.find((r) => r.teamId === dupla.teamAId)
@@ -1412,13 +1388,8 @@ export function registerSocketHandlers(io: Server): void {
 
           if (allPresentedAndEvaluated) {
             if (phaseConfig.type === 'apresentacao') {
-              // Não avança sozinho — fica à espera do moderador clicar
-              // "Ir para o Ranking" (moderator:confirmPresentationRanking).
               liveState.presentationRoundReady = true
             } else if (phaseConfig.type === 'apresentacao_quiz') {
-              // Não revela o chaveamento automaticamente — mostra primeiro o aviso
-              // "Vamos entrar para a Batalha de Quiz" e só abre o chaveamento quando
-              // o moderador clicar em "Ir para Escolha de Equipas" (confirmQuizIntro).
               liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
             }
           }
@@ -1447,8 +1418,6 @@ export function registerSocketHandlers(io: Server): void {
       }
       broadcast()
     })
-
-    // ==================== FIM APRESENTAÇÃO ====================
 
     socket.on('juror:register', async (payload: { code: string }, callback?: (res: unknown) => void) => {
       const code = (payload.code || '').trim().toUpperCase()
@@ -1507,18 +1476,84 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    // ATUALIZADO — depois de confirmar a avaliação, se o item avaliado era o
-    // item ativo do sorteio (ex: pergunta aberta que ficou a aguardar o
-    // júri), avança automaticamente para o próximo item/equipa.
-    //
-    // ATUALIZADO — agora exige liveState.expectedJurorCount jurados LIGADOS
-    // (não só os já cadastrados na app) e que todos os ligados tenham posto
-    // nota, antes de deixar confirmar.
+    // NOVO — jurado atribui/atualiza a nota de um critério, para uma
+    // equipa (A ou B), da Pergunta Analítica "aberta" atualmente ativa
+    // (liveState.analyticEvaluation.itemId). Ignorado se o jurado já
+    // tiver submetido a sua avaliação para este item.
+    socket.on(
+      'juror:setAnalyticCriteriaScore',
+      (payload: { jurorId: string; criteriaId: string; team: 'A' | 'B'; score: number }) => {
+        const ae = liveState.analyticEvaluation
+        if (!ae.itemId) return
+        if (ae.jurorsSubmitted.includes(payload.jurorId)) return
+        const existing = ae.criteriaScores.find(
+          (e) => e.jurorId === payload.jurorId && e.criteriaId === payload.criteriaId && e.team === payload.team
+        )
+        if (existing) {
+          existing.score = payload.score
+        } else {
+          ae.criteriaScores.push({ ...payload })
+        }
+        broadcast()
+      }
+    )
+
+    // NOVO — um jurado confirma que terminou de pontuar TODOS os critérios,
+    // para as DUAS equipas, da Pergunta Analítica ativa. Traduz a soma dos
+    // critérios deste jurado para o formato scoreA/scoreB que
+    // moderator:confirmEvaluation já sabe somar entre jurados, para não
+    // duplicar essa lógica de soma.
+    socket.on('juror:submitAnalyticEvaluation', async (payload: { jurorId: string; itemId: string }) => {
+      const ae = liveState.analyticEvaluation
+      if (ae.itemId !== payload.itemId) return
+      if (ae.jurorsSubmitted.includes(payload.jurorId)) return
+
+      const criteria = await prisma.evaluationCriteria.findMany({ where: { itemId: payload.itemId } })
+      if (criteria.length > 0) {
+        const hasAllA = criteria.every((c) =>
+          ae.criteriaScores.some((e) => e.jurorId === payload.jurorId && e.criteriaId === c.id && e.team === 'A')
+        )
+        const hasAllB = criteria.every((c) =>
+          ae.criteriaScores.some((e) => e.jurorId === payload.jurorId && e.criteriaId === c.id && e.team === 'B')
+        )
+        if (!hasAllA || !hasAllB) return // faltam critérios por pontuar, nalguma das equipas
+      }
+
+      ae.jurorsSubmitted.push(payload.jurorId)
+
+      const totalA = ae.criteriaScores
+        .filter((e) => e.jurorId === payload.jurorId && e.team === 'A')
+        .reduce((sum, e) => sum + e.score, 0)
+      const totalB = ae.criteriaScores
+        .filter((e) => e.jurorId === payload.jurorId && e.team === 'B')
+        .reduce((sum, e) => sum + e.score, 0)
+
+      const existingEntry = liveState.jurorEntries.find((e) => e.jurorId === payload.jurorId && e.itemId === payload.itemId)
+      if (existingEntry) {
+        existingEntry.scoreA = totalA
+        existingEntry.scoreB = totalB
+      } else {
+        liveState.jurorEntries.push({ jurorId: payload.jurorId, itemId: payload.itemId, scoreA: totalA, scoreB: totalB })
+      }
+
+      broadcast()
+    })
+
+    // ATUALIZADO — quando o item tem critérios definidos, a condição para
+    // o moderador poder finalizar deixa de ser "todos os jurados ligados
+    // puseram nota" (juror:setScore) e passa a ser "todos os jurados
+    // esperados PARA ESTE ITEM confirmaram a avaliação por critérios"
+    // (juror:submitAnalyticEvaluation), via liveState.analyticEvaluation.
     socket.on('moderator:confirmEvaluation', async (payload: { itemId: string }) => {
       if (liveState.jurorSubmittedItemIds.includes(payload.itemId)) return
 
-      if (liveState.expectedJurorCount > 0) {
-        if (liveState.jurors.length < liveState.expectedJurorCount) return // faltam jurados por ligar
+      const criteriaCount = await prisma.evaluationCriteria.count({ where: { itemId: payload.itemId } })
+      if (criteriaCount > 0) {
+        const ae = liveState.analyticEvaluation
+        if (ae.itemId !== payload.itemId) return
+        if (ae.expectedJurorCount === 0 || ae.jurorsSubmitted.length < ae.expectedJurorCount) return
+      } else if (liveState.expectedJurorCount > 0) {
+        if (liveState.jurors.length < liveState.expectedJurorCount) return
         const missing = liveState.jurors.some(
           (j) => !liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === payload.itemId)
         )
@@ -1544,6 +1579,7 @@ export function registerSocketHandlers(io: Server): void {
         liveState.currentItemSource = null
         liveState.currentAnalyticItemId = null
         liveState.currentItemMode = null
+        resetAnalyticEvaluation()
 
         if (await roundQuestionsComplete()) {
           liveState.currentQuestionId = null

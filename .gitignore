@@ -4,3 +4,5 @@ out
 .DS_Store
 .eslintcache
 *.log*
+petrochamp-backend/prisma/dev.db
+petrochamp-backend/uploads/

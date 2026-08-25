@@ -1,11 +1,46 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
-import { generateSecret, generateURI, verify } from 'otplib'
+import * as otplibModule from 'otplib'
 import { randomUUID } from 'crypto'
 import QRCode from 'qrcode'
 import { prisma } from '../db'
-import { liveState } from '../socket/liveState'
-import { broadcastLiveState } from '../socket/configEvents'
+
+// Resolução robusta de compatibilidade ESM/CJS para otplib + tsx
+function getAuthenticator(): any {
+  const m = otplibModule as any
+  if (m.authenticator && typeof m.authenticator.generateSecret === 'function') {
+    return m.authenticator
+  }
+  if (m.default?.authenticator && typeof m.default.authenticator.generateSecret === 'function') {
+    return m.default.authenticator
+  }
+  if (m.default && typeof m.default.generateSecret === 'function') {
+    return m.default
+  }
+  if (typeof m.generateSecret === 'function') {
+    return m
+  }
+  if (m.Authenticator) {
+    return new m.Authenticator()
+  }
+  if (m.default?.Authenticator) {
+    return new m.default.Authenticator()
+  }
+  return m
+}
+
+function verifyTOTP(token: string, secret: string): boolean {
+  const auth = getAuthenticator()
+  try {
+    if (typeof auth.verify === 'function') {
+      return auth.verify({ token, secret })
+    }
+  } catch (_) {}
+  if (typeof auth.check === 'function') {
+    return auth.check(token, secret)
+  }
+  return false
+}
 
 const router = Router()
 const SESSION_DAYS = 7
@@ -14,12 +49,7 @@ async function getAuth() {
   return prisma.adminAuth.findUnique({ where: { id: 1 } })
 }
 
-function isRemoteRequest(req: import('express').Request): boolean {
-  const host = req.get('host') ?? ''
-  return !host.startsWith('localhost') && !host.startsWith('127.0.0.1')
-}
-
-// Primeira configuração — só corre se ainda não existir password nenhuma.
+// Primeira configuração — só corre se ainda não existir password configurada.
 router.post('/setup', async (req, res) => {
   const existing = await getAuth()
   if (existing) {
@@ -32,11 +62,15 @@ router.post('/setup', async (req, res) => {
     return
   }
   const passwordHash = await bcrypt.hash(password, 12)
-  const totpSecret = generateSecret()
+  const auth = getAuthenticator()
+  const totpSecret = auth.generateSecret()
   await prisma.adminAuth.create({ data: { id: 1, passwordHash, totpSecret, totpEnabled: false } })
 
-  const otpauth = generateURI({ strategy: 'totp', issuer: 'Petrochamp', label: 'Admin', secret: totpSecret })
-  const qrDataUrl = await QRCode.toDataURL(otpauth)
+  const keyuri = typeof auth.keyuri === 'function'
+    ? auth.keyuri('Admin', 'Petrochamp', totpSecret)
+    : `otpauth://totp/Petrochamp:Admin?secret=${totpSecret}&issuer=Petrochamp`
+
+  const qrDataUrl = await QRCode.toDataURL(keyuri)
   res.status(201).json({ qrDataUrl, secret: totpSecret })
 })
 
@@ -48,7 +82,7 @@ router.post('/confirm-totp', async (req, res) => {
     res.status(400).json({ error: 'Configuração não iniciada.' })
     return
   }
-  const valid = await verify({ secret: auth.totpSecret, token: token ?? '' })
+  const valid = verifyTOTP(token ?? '', auth.totpSecret)
   if (!valid) {
     res.status(400).json({ error: 'Código inválido.' })
     return
@@ -69,7 +103,7 @@ router.post('/login', async (req, res) => {
     res.status(401).json({ error: 'Password incorreta.' })
     return
   }
-  const totpOk = await verify({ secret: auth.totpSecret!, token: token ?? '' })
+  const totpOk = verifyTOTP(token ?? '', auth.totpSecret!)
   if (!totpOk) {
     res.status(401).json({ error: 'Código de autenticação inválido.' })
     return
@@ -77,13 +111,6 @@ router.post('/login', async (req, res) => {
   const sessionToken = randomUUID()
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000)
   await prisma.adminSession.create({ data: { token: sessionToken, expiresAt } })
-
-  // Assim que alguém entra no Admin vindo de fora (pelo túnel), o banner
-  // no Moderador deve desaparecer — mas só entra logins locais nunca contam.
-  if (isRemoteRequest(req) && !liveState.adminAccessedRemotely) {
-    liveState.adminAccessedRemotely = true
-    broadcastLiveState()
-  }
 
   res.json({ token: sessionToken })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useQuizContentStore } from '../stores/quizContent'
+import { useQuizContentStore, type EvaluationCriteria } from '../stores/quizContent'
 import { usePhasesStore } from '../stores/phases'
 import { getBackendUrl } from '../services/backendConfig'
 import { uploadImage } from '../services/upload'
@@ -49,7 +49,7 @@ const form = ref({
   jurorIds: [] as string[]
 })
 
-// CORRIGIDO: só fases que usam Quiz — Apresentação de Projetos já não usa
+// Só fases que usam Quiz — Apresentação de Projetos já não usa
 // EvaluationItem, tem a sua própria grelha (Admin → Apresentação).
 const registeredPhases = computed(() =>
   phasesStore.phases.filter((p) => p.type === 'quiz' || p.type === 'apresentacao_quiz')
@@ -90,6 +90,8 @@ function resetForm(): void {
     imageUrl: '',
     jurorIds: []
   }
+  newCriteriaLabel.value = ''
+  newCriteriaPoints.value = 10
   errorMsg.value = ''
 }
 
@@ -110,6 +112,8 @@ function editItem(item: EvaluationItem): void {
     imageUrl: item.imageUrl ?? '',
     jurorIds: item.jurorIds ?? []
   }
+  // NOVO — carrega os critérios já cadastrados desta pergunta, para edição.
+  loadCriteria(item.id)
 }
 
 function toggleJuror(jurorId: string): void {
@@ -167,7 +171,17 @@ async function saveItem(): Promise<void> {
     if (editingId.value !== null) {
       await quizContent.updateEvaluationItem(editingId.value, payload)
     } else {
-      await quizContent.addEvaluationItem(payload)
+      const created = await quizContent.addEvaluationItem(payload)
+      // NOVO — depois de criar, entra logo em modo de edição para permitir
+      // adicionar critérios ao item recém-criado, sem ter de o procurar
+      // na lista e clicar em "Editar".
+      const savedItem = quizContent.evaluationItems.find(
+        (i) => i.text === payload.text && i.phase === payload.phase && i.mode === payload.mode
+      )
+      if (savedItem) {
+        editItem(savedItem)
+        return
+      }
     }
     resetForm()
   } catch {
@@ -205,6 +219,46 @@ function getPhaseLabel(phaseOrder: number): string {
 function jurorName(id: string): string {
   return jurors.value.find((j) => j.id === id)?.name ?? '?'
 }
+
+// ==================== Critérios de Avaliação (NOVO) ====================
+// Só faz sentido para perguntas "abertas" (jurados avaliam). Se um item
+// tiver pelo menos um critério, os jurados pontuam por critério (para as
+// duas equipas) em vez de uma nota única no painel de Jurados.
+
+const newCriteriaLabel = ref('')
+const newCriteriaPoints = ref(10)
+
+function criteriaFor(itemId: string): EvaluationCriteria[] {
+  return quizContent.criteriaForItem(itemId)
+}
+
+async function loadCriteria(itemId: string): Promise<void> {
+  try {
+    await quizContent.fetchEvaluationCriteria(itemId)
+  } catch {
+    errorMsg.value = 'Não foi possível carregar os critérios desta pergunta.'
+  }
+}
+
+async function addCriteria(): Promise<void> {
+  if (!editingId.value || !newCriteriaLabel.value.trim()) return
+  try {
+    await quizContent.addEvaluationCriteria(editingId.value, newCriteriaLabel.value.trim(), newCriteriaPoints.value)
+    newCriteriaLabel.value = ''
+    newCriteriaPoints.value = 10
+  } catch {
+    errorMsg.value = 'Não foi possível adicionar o critério.'
+  }
+}
+
+async function removeCriteria(criteriaId: string): Promise<void> {
+  if (!editingId.value) return
+  try {
+    await quizContent.deleteEvaluationCriteria(criteriaId, editingId.value)
+  } catch {
+    errorMsg.value = 'Não foi possível remover o critério.'
+  }
+}
 </script>
 
 <template>
@@ -226,8 +280,8 @@ function jurorName(id: string): string {
 
       <p class="text-[11px] text-gray-400 mb-3">
         Perguntas analíticas podem ser de <b>múltipla escolha</b> (correção automática, tempo próprio) ou
-        <b>abertas</b> (as equipas argumentam e os jurados atribuem a nota). Para Apresentação de Projetos,
-        usa Admin → Apresentação — tem a sua própria grelha de critérios.
+        <b>abertas</b> (as equipas argumentam e os jurados atribuem a nota — por critérios, se definires
+        algum abaixo). Para Apresentação de Projetos, usa Admin → Apresentação — tem a sua própria grelha.
       </p>
 
       <div class="flex flex-col gap-3">
@@ -348,12 +402,62 @@ function jurorName(id: string): string {
               Se não escolheres nenhum, todos os jurados registados na partida poderão avaliar esta pergunta.
             </p>
           </div>
+
+          <!-- NOVO — Critérios de Avaliação, só disponível depois de o item existir -->
+          <div v-if="editingId !== null" class="border-t border-gray-100 pt-3">
+            <label class="text-xs text-gray-500 block mb-1">Critérios de Avaliação</label>
+
+            <div v-if="!criteriaFor(editingId).length" class="text-[11px] text-gray-400 mb-2">
+              Sem critérios definidos — os jurados vão pontuar com uma nota única (0 a {{ form.maxPoints }}).
+            </div>
+
+            <div
+              v-for="c in criteriaFor(editingId)"
+              :key="c.id"
+              class="flex items-center gap-2 mb-1 bg-gray-50 rounded-lg px-2 py-1.5"
+            >
+              <span class="text-sm flex-1">{{ c.label }}</span>
+              <span class="text-xs text-gray-400">{{ c.maxPoints }} pts</span>
+              <button class="text-xs text-red-400 underline" @click="removeCriteria(c.id)">Remover</button>
+            </div>
+
+            <div class="flex gap-2 mt-2">
+              <input
+                v-model="newCriteriaLabel"
+                type="text"
+                placeholder="Nome do critério (ex: Clareza)"
+                class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                @keyup.enter="addCriteria"
+              />
+              <input
+                v-model.number="newCriteriaPoints"
+                type="number"
+                min="1"
+                class="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+              />
+              <button
+                type="button"
+                class="bg-petro-primary/10 text-petro-primary text-xs font-semibold px-3 rounded-lg shrink-0"
+                @click="addCriteria"
+              >
+                Adicionar
+              </button>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-1">
+              Se definires pelo menos um critério, os jurados pontuam cada um (para as duas equipas) em vez
+              de uma nota única — e o painel de avaliação abre automaticamente quando esta pergunta surgir
+              em qualquer fase.
+            </p>
+          </div>
+          <p v-else class="text-[11px] text-amber-600">
+            Guarda a pergunta primeiro para poderes adicionar critérios de avaliação.
+          </p>
         </template>
 
         <p v-if="errorMsg" class="text-xs text-red-500">{{ errorMsg }}</p>
 
         <div class="flex gap-2 justify-end">
-          <button v-if="editingId !== null" class="text-sm text-gray-400 underline" @click="resetForm">Cancelar</button>
+          <button v-if="editingId !== null" class="text-sm text-gray-400 underline" @click="resetForm">Concluído</button>
           <button
             :disabled="registeredPhases.length === 0"
             class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db'
 import { requireAdmin } from '../middleware/requireAdmin'
+import { emitConfigUpdated } from '../socket/configEvents'
 
 const router = Router()
 
@@ -69,6 +70,14 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
 // seguinte (ver recordBracketResult em socket/index.ts) — assim as duplas
 // nunca dessincronizam do chaveamento, seja qual for a ronda escolhida
 // para ser de Apresentação.
+//
+// IMPORTANTE: como os dois jogos que alimentam uma mesma dupla de
+// Apresentação normalmente NÃO terminam ao mesmo tempo, esta função pode
+// ser chamada primeiro só com teamAId preenchido (e teamBId ainda null),
+// e mais tarde outra vez já com teamBId preenchido. Por isso a
+// identidade de uma dupla é sempre o teamAId (que nunca muda depois de
+// definido) — nunca comparamos teamAId+teamBId juntos, para não criar
+// duplicados quando a segunda equipa só chega mais tarde.
 export async function syncPresentationDuplasForRound(championship: string, round: number): Promise<void> {
   const phase = await prisma.phase.findFirst({ where: { championship, order: round } })
   if (!phase || (phase.type !== 'apresentacao' && phase.type !== 'apresentacao_quiz')) return
@@ -80,21 +89,39 @@ export async function syncPresentationDuplasForRound(championship: string, round
   const existingDuplas = await prisma.presentationDupla.findMany({ where: { phaseId: phase.id } })
 
   let order = existingDuplas.length + 1
+  let changedAny = false
   for (const m of matches) {
     if (!m.teamAId) continue
-    const already = existingDuplas.some((d) => d.teamAId === m.teamAId && d.teamBId === (m.teamBId ?? null))
-    if (already) continue
-    await prisma.presentationDupla.create({
-      data: {
-        phaseId: phase.id,
-        order: order++,
-        themeA: '',
-        themeB: m.teamBId ? '' : null,
-        teamAId: m.teamAId,
-        teamBId: m.teamBId ?? null
-      }
-    })
+
+    const existing = existingDuplas.find((d) => d.teamAId === m.teamAId)
+
+    if (!existing) {
+      await prisma.presentationDupla.create({
+        data: {
+          phaseId: phase.id,
+          order: order++,
+          themeA: '',
+          themeB: m.teamBId ? '' : null,
+          teamAId: m.teamAId,
+          teamBId: m.teamBId ?? null
+        }
+      })
+      changedAny = true
+      continue
+    }
+
+    // A dupla já existe (foi criada quando só a equipa A tinha avançado).
+    // Se agora a equipa B já está definida no confronto e a dupla ainda
+    // não a tem, atualiza-a em vez de criar uma duplicada.
+    if (m.teamBId && !existing.teamBId) {
+      await prisma.presentationDupla.update({
+        where: { id: existing.id },
+        data: { teamBId: m.teamBId, themeB: existing.themeB ?? '' }
+      })
+      changedAny = true
+    }
   }
+  if (changedAny) emitConfigUpdated('presentation', championship)
 }
 
 router.get('/:championship', async (req, res) => {
@@ -183,12 +210,30 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
     await syncPresentationDuplasForRound(championship, round)
   }
 
+  emitConfigUpdated('bracket', championship)
   res.status(201).json({ success: true, totalRounds })
+})
+
+// NOVO — re-sincroniza as duplas de Apresentação de todas as fases já
+// existentes, sem apagar/regerar o chaveamento. Útil sempre que se edita
+// o "type" de uma fase (ex: mudar de "quiz" para "apresentacao_quiz")
+// depois de o chaveamento já ter sido gerado — nesse caso as duplas dessa
+// ronda nunca tinham sido criadas, porque syncPresentationDuplasForRound
+// só corre automaticamente ao gerar o chaveamento e quando uma equipa
+// avança de ronda.
+router.post('/:championship/resync-presentation', requireAdmin, async (req, res) => {
+  const { championship } = req.params
+  const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+  for (const phase of phases) {
+    await syncPresentationDuplasForRound(championship, phase.order)
+  }
+  res.json({ success: true })
 })
 
 router.delete('/:championship', requireAdmin, async (req, res) => {
   const { championship } = req.params
   await prisma.bracketMatch.deleteMany({ where: { championship } })
+  emitConfigUpdated('bracket', championship)
   res.status(204).send()
 })
 

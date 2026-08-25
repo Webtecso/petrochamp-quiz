@@ -2,10 +2,12 @@
 import { ref, onMounted, watch } from 'vue'
 import { usePhasesStore, type Phase } from '../stores/phases'
 import type { ChampionshipType } from '../stores/campeonato'
+import { adminFetch } from '../services/adminAuth'
 
 const phasesStore = usePhasesStore()
 const errorMsg = ref('')
 const repairing = ref(false)
+const resyncing = ref(false)
 const selectedChampionship = ref<ChampionshipType>('universitario')
 
 const championshipOptions: { value: ChampionshipType; label: string }[] = [
@@ -72,6 +74,22 @@ function editPhase(p: Phase): void {
   }
 }
 
+// NOVO — chama a rota que gera/atualiza as PresentationDuplas a partir do
+// chaveamento já existente, sem apagar nada. Falha em silêncio (só regista
+// no console) para não bloquear o fluxo normal de gravar a fase — o botão
+// "Sincronizar Duplas de Apresentação" mais abaixo serve de rede de
+// segurança caso isto não seja suficiente nalgum caso.
+// CORRIGIDO — a rota vive no router de bracketLive.ts, montado em
+// /api/bracket-live (não /api/bracket, que é o router de bracket.ts e
+// não tem esta rota — daí o 404 anterior).
+async function resyncPresentationDuplas(): Promise<void> {
+  try {
+    await adminFetch(`/api/bracket-live/${selectedChampionship.value}/resync-presentation`, { method: 'POST' })
+  } catch (e) {
+    console.error('Falha ao sincronizar duplas de apresentação automaticamente:', e)
+  }
+}
+
 async function savePhase(): Promise<void> {
   if (!form.value.label.trim()) return
   errorMsg.value = ''
@@ -80,6 +98,9 @@ async function savePhase(): Promise<void> {
       await phasesStore.updatePhase(editingId.value, { ...form.value, championship: selectedChampionship.value })
     } else {
       await phasesStore.addPhase({ ...form.value, championship: selectedChampionship.value })
+    }
+    if (form.value.type === 'apresentacao' || form.value.type === 'apresentacao_quiz') {
+      await resyncPresentationDuplas()
     }
     resetForm()
   } catch {
@@ -123,6 +144,21 @@ async function repairNumbering(): Promise<void> {
   }
 }
 
+// NOVO — botão manual, para quando a sincronização automática (ao gravar
+// a fase) não for suficiente, ex: mudaste o tipo de uma fase há algum
+// tempo e as duplas nunca chegaram a ser criadas.
+async function manualResyncPresentation(): Promise<void> {
+  resyncing.value = true
+  errorMsg.value = ''
+  try {
+    await resyncPresentationDuplas()
+  } catch {
+    errorMsg.value = 'Não foi possível sincronizar as duplas de apresentação.'
+  } finally {
+    resyncing.value = false
+  }
+}
+
 function typeLabel(type: string): string {
   if (type === 'apresentacao') return 'Apresentação de Projetos'
   if (type === 'apresentacao_quiz') return 'Apresentação + Quiz'
@@ -156,6 +192,20 @@ function typeLabel(type: string): string {
       </button>
     </div>
 
+    <div class="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-center justify-between gap-3">
+      <p class="text-xs text-sky-700">
+        Se uma fase de Apresentação não estiver a mostrar as duplas geradas pelo Chaveamento, clica aqui para
+        forçar a sincronização (não apaga nada do chaveamento já feito).
+      </p>
+      <button
+        class="bg-sky-500 text-white rounded-lg px-4 py-2 text-xs font-semibold whitespace-nowrap disabled:opacity-50"
+        :disabled="resyncing"
+        @click="manualResyncPresentation"
+      >
+        {{ resyncing ? 'A sincronizar...' : 'Sincronizar Duplas de Apresentação' }}
+      </button>
+    </div>
+
     <p v-if="errorMsg" class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{{ errorMsg }}</p>
 
     <div class="bg-white rounded-2xl shadow p-6">
@@ -177,7 +227,6 @@ function typeLabel(type: string): string {
           </select>
         </div>
 
-        <!-- Campos do Quiz — só aparecem se o tipo usa Quiz -->
         <template v-if="form.type === 'quiz' || form.type === 'apresentacao_quiz'">
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -202,7 +251,6 @@ function typeLabel(type: string): string {
           </div>
         </template>
 
-        <!-- Campos da Apresentação — só aparecem se o tipo usa Apresentação -->
         <template v-if="form.type === 'apresentacao' || form.type === 'apresentacao_quiz'">
           <div>
             <label class="text-xs text-gray-500 block mb-1">Tempo de apresentação (minutos)</label>
@@ -210,7 +258,6 @@ function typeLabel(type: string): string {
           </div>
         </template>
 
-        <!-- Pesos — só na fase composta -->
         <template v-if="form.type === 'apresentacao_quiz'">
           <div class="grid grid-cols-2 gap-3">
             <div>

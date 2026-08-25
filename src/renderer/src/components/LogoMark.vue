@@ -16,6 +16,7 @@ const props = withDefaults(
 )
 
 const sizeClass = { sm: 'h-8', md: 'h-12', lg: 'h-20' }[props.size]
+const sizePx = { sm: 88, md: 156, lg: 200 }[props.size]
 </script>
 
 <template>
@@ -23,6 +24,11 @@ const sizeClass = { sm: 'h-8', md: 'h-12', lg: 'h-20' }[props.size]
     class="inline-flex items-center justify-center"
     :class="theme === 'dark' ? 'bg-white rounded-2xl shadow-lg px-4 py-2' : ''"
   >
-    <img :src="iconOnly ? iconLogo : fullLogo" alt="Petrochamp" :class="sizeClass" />
+    <img
+      :src="iconOnly ? iconLogo : fullLogo"
+      alt="Petrochamp"
+      :class="sizeClass"
+      :style="`height: ${sizePx}px !important; width: auto !important;`"
+    />
   </div>
 </template>

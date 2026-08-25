@@ -26,64 +26,38 @@ function go(path: string): void {
 function confirmReset(): void {
   const message = battleInProgress.value
     ? 'Há uma batalha em curso. Reiniciar agora apaga essa batalha e todos os dados desta edição do campeonato — usa isto só se ficaste preso sem conseguir terminar a rodada. Continuar?'
-    : 'Tem certeza que deseja reiniciar este campeonato? Todos os dados desta edição serão apagados.'
+    : 'Tem certeza que deseja reiniciar este campeonato? Vais poder escolher o campeonato novamente e todos os dados desta edição serão apagados.'
   const ok = confirm(message)
   if (ok) {
-    store.resetChampionship()
-    // ATUALIZADO — em vez de assumir sempre '/moderador/equipas' (errado
-    // quando a Fase 1 é de Apresentação, ou Apresentação+Quiz), navega
-    // para '/moderador' e deixa o guard do router (resumeRoute) decidir o
-    // ecrã certo com base no tipo real da fase corrente, tal como já faz
-    // ao reabrir a app ou voltar do Admin.
-    router.push('/moderador')
+    store.abandonChampionship()
+    router.push('/moderador/modo')
   }
 }
-
-// Banner do link do Admin — aparece sempre que o app abre, e só desaparece
-// depois de alguém aceder ao Admin remotamente (pelo túnel) pela primeira
-// vez nesta sessão do backend. Acesso local nunca o esconde.
-const showAdminBanner = computed(() => !store.adminAccessedRemotely)
-
-const adminSetupUrl = computed(() => {
-  if (!store.publicVotingUrl) return null
-  const base = store.publicVotingUrl.split('/portal/')[0]
-  return `${base}/#/admin/login`
-})
 </script>
 
 <template>
   <div class="min-h-screen bg-petro-bg flex flex-col">
-    <div
-      v-if="showAdminBanner"
-      class="bg-amber-400 text-petro-dark px-6 py-2 flex items-center justify-center gap-2 text-sm font-semibold flex-wrap text-center"
-    >
-      🔗 Painel Admin remoto disponível.
-      <span v-if="adminSetupUrl">
-        Aceda a <a :href="adminSetupUrl" target="_blank" class="underline">{{ adminSetupUrl }}</a> para entrar.
-      </span>
-      <span v-else>Aguardando o link público ficar disponível...</span>
-    </div>
-
-    <nav class="flex items-center justify-between gap-3 bg-petro-dark px-6 py-3 flex-wrap">
+    <nav class="flex items-center justify-between gap-3 bg-petro-dark px-6 py-1.5 flex-wrap">
       <LogoMark size="sm" />
       <div class="flex items-center gap-2 flex-wrap">
         <button
           v-if="isTabletOrPhone"
-          class="px-3 py-2 rounded-lg text-xs bg-white/10 text-white/80 hover:bg-white/20 transition disabled:opacity-30 disabled:cursor-not-allowed"
+          class="px-3 py-1 rounded-lg text-xs bg-white/10 text-white/80 hover:bg-white/20 transition disabled:opacity-30 disabled:cursor-not-allowed"
           :disabled="battleInProgress"
           @click="go('/inicio')"
         >
           🏠 Início
         </button>
         <button
-          class="px-4 py-2 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
+          class="px-4 py-1 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
           :class="isActive('/moderador/modo') || isActive('/moderador/campeonato') || isActive('/moderador/equipas') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
           :disabled="!!store.championship"
-          @click="go('/moderador/modo')">
+          @click="go('/moderador/modo')"
+        >
           Nova Partida
         </button>
         <button
-          class="px-4 py-2 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
+          class="px-4 py-1 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
           :class="isActive('/moderador/ranking') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
           :disabled="battleInProgress"
           @click="go('/moderador/ranking')"
@@ -91,7 +65,7 @@ const adminSetupUrl = computed(() => {
           Ranking
         </button>
         <button
-          class="px-4 py-2 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
+          class="px-4 py-1 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
           :class="isActive('/moderador/podio') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
           :disabled="battleInProgress"
           @click="go('/moderador/podio')"
@@ -99,14 +73,14 @@ const adminSetupUrl = computed(() => {
           Pódio
         </button>
         <button
-          class="px-4 py-2 rounded-lg text-sm transition"
+          class="px-4 py-1 rounded-lg text-sm transition"
           :class="isActive('/moderador/jurados') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
           @click="go('/moderador/jurados')"
         >
           Jurados
         </button>
         <button
-          class="px-4 py-2 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
+          class="px-4 py-1 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
           :class="isActive('/moderador/configuracoes') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
           :disabled="battleInProgress"
           @click="go('/moderador/configuracoes')"
@@ -114,7 +88,7 @@ const adminSetupUrl = computed(() => {
           Configurações
         </button>
         <button
-          class="px-4 py-2 rounded-lg text-sm bg-white/10 text-white hover:bg-white/20 transition disabled:opacity-30 disabled:cursor-not-allowed"
+          class="px-4 py-1 rounded-lg text-sm bg-white/10 text-white hover:bg-white/20 transition disabled:opacity-30 disabled:cursor-not-allowed"
           :disabled="battleInProgress"
           @click="go('/admin')"
         >
@@ -131,7 +105,7 @@ const adminSetupUrl = computed(() => {
         </span>
         <button
           v-if="!moderatorStore.isLoggedIn || moderatorStore.isPrincipal"
-          class="px-3 py-2 rounded-lg text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 transition"
+          class="px-3 py-1 rounded-lg text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 transition"
           @click="confirmReset"
         >
           ⟲ Reiniciar Campeonato
