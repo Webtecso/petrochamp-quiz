@@ -6,3 +6,5 @@ out
 *.log*
 petrochamp-backend/prisma/dev.db
 petrochamp-backend/uploads/
+petrochamp-admin-cloud/
+.env.admin-cloud
