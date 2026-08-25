@@ -59,7 +59,7 @@ const TABLE_TO_CONFIG_TYPE: Partial<Record<SyncTable, ConfigType>> = {
 
 type PrismaDelegate = {
   findMany: (args: unknown) => Promise<unknown[]>
-  findUnique: (args: unknown) => Promise<{ updatedAt: Date } | null>
+  findUnique: (args: unknown) => Promise<{ id: string; updatedAt: Date } | null>
   create: (args: unknown) => Promise<unknown>
   update: (args: unknown) => Promise<unknown>
 }
@@ -99,6 +99,59 @@ async function applyRemoteChanges(tables: Record<string, Array<Record<string, un
   const applied: Record<string, number> = {}
   const deferred: Array<{ table: SyncTable; record: Record<string, unknown> }> = []
 
+  // Função auxiliar para processar cada registo com suporte a Unique Constraints compostas
+  const processRecord = async (table: SyncTable, record: Record<string, unknown>, delegate: PrismaDelegate) => {
+    const incomingUpdatedAt = new Date(record.updatedAt as string)
+    const rec = record as any
+    let existing: any = null
+
+    // 1. Verificar se o registo já existe, suportando chaves compostas para evitar erros P2002
+    if (table === 'bracketMatch') {
+      existing = await prisma.bracketMatch.findFirst({
+        where: {
+          OR: [
+            { id: rec.id },
+            {
+              championship: rec.championship,
+              round: rec.round,
+              slot: rec.slot
+            }
+          ]
+        }
+      })
+    } else if (table === 'presentationDupla') {
+      existing = await prisma.presentationDupla.findFirst({
+        where: {
+          OR: [
+            { id: rec.id },
+            {
+              phaseId: rec.phaseId,
+              teamAId: rec.teamAId
+            }
+          ]
+        }
+      })
+    } else {
+      existing = await delegate.findUnique({ where: { id: rec.id } })
+    }
+
+    // 2. Criar ou Atualizar com base na verificação
+    if (!existing) {
+      await delegate.create({ data: record })
+      return true
+    } else if (incomingUpdatedAt > existing.updatedAt) {
+      // Forçamos o id existente caso o registo tenha sido encontrado pelas chaves compostas,
+      // evitando assim alterar a primary key local e quebrar dependências.
+      await delegate.update({
+        where: { id: existing.id },
+        data: { ...record, id: existing.id }
+      })
+      return true
+    }
+
+    return false
+  }
+
   // Primeira passagem: insere registos pela ordem hierárquica
   for (const table of SYNC_TABLES) {
     const records = tables[table]
@@ -108,19 +161,11 @@ async function applyRemoteChanges(tables: Record<string, Array<Record<string, un
     let count = 0
 
     for (const record of records) {
-      const incomingUpdatedAt = new Date(record.updatedAt as string)
-      const existing = await delegate.findUnique({ where: { id: record.id } })
-
       try {
-        if (!existing) {
-          await delegate.create({ data: record })
-          count++
-        } else if (incomingUpdatedAt > existing.updatedAt) {
-          await delegate.update({ where: { id: record.id }, data: record })
-          count++
-        }
+        const wasApplied = await processRecord(table, record, delegate)
+        if (wasApplied) count++
       } catch (err: any) {
-        // Guarda registos com falha de chave estrangeira para reprocessar no fim
+        // Guarda registos com falha de chave estrangeira (P2003) para reprocessar no fim
         if (err.code === 'P2003') {
           deferred.push({ table, record })
         } else {
@@ -134,15 +179,9 @@ async function applyRemoteChanges(tables: Record<string, Array<Record<string, un
   // Segunda passagem: reprocessa registos diferidos cujos pais foram criados posteriormente
   for (const { table, record } of deferred) {
     const delegate = prismaClient[table]
-    const incomingUpdatedAt = new Date(record.updatedAt as string)
-    const existing = await delegate.findUnique({ where: { id: record.id } })
-
     try {
-      if (!existing) {
-        await delegate.create({ data: record })
-        applied[table] = (applied[table] || 0) + 1
-      } else if (incomingUpdatedAt > existing.updatedAt) {
-        await delegate.update({ where: { id: record.id }, data: record })
+      const wasApplied = await processRecord(table, record, delegate)
+      if (wasApplied) {
         applied[table] = (applied[table] || 0) + 1
       }
     } catch (err: any) {

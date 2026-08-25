@@ -122,31 +122,26 @@ export interface PresentationFlowState {
   currentPage: number
 }
 
-// NOVO — pontuação de um jurado, para um critério de uma Pergunta Analítica
-// "aberta", para uma das equipas (a diferença para PresentationCriteriaScoreEntry
-// é o campo `team`, porque aqui há sempre duas equipas a ser avaliadas).
-export interface AnalyticCriteriaScoreEntry {
-  jurorId: string
-  criteriaId: string
-  team: 'A' | 'B'
-  score: number
-}
-
-// NOVO — estado do painel de avaliação por critérios que se abre
-// automaticamente (no Admin/Jurados) quando o item ativo do sorteio é uma
-// Pergunta Analítica "aberta" com critérios definidos. Reposto sempre que
-// um novo item é sorteado ou a partida é reiniciada.
-export interface AnalyticEvaluationState {
-  itemId: string | null
-  criteriaScores: AnalyticCriteriaScoreEntry[]
-  jurorsSubmitted: string[]
-  expectedJurorCount: number
-}
-
 export interface ModeratorInfo {
   id: string
   name: string
   role: 'principal' | 'secundario'
+}
+
+// NOVO — nota de uma fase de Apresentação SEM ELIMINAÇÃO, guardada para
+// ser combinada com o Quiz da fase seguinte. Ao contrário de
+// presentationPhaseScores (que só existe dentro da mesma fase, para o tipo
+// 'apresentacao_quiz'), esta lista TEM de sobreviver à transição de fase
+// — por isso não é limpa em startNextPhase/advancePhase, só quando
+// consumida (um confronto do Quiz seguinte usa a nota da equipa) ou
+// quando o campeonato é reiniciado/abandonado/selecionado de novo.
+export interface CarriedPresentationEntry {
+  teamId: string
+  name: string
+  institution: string
+  score: number
+  presentationWeight: number
+  quizWeight: number
 }
 
 export type PublicVotingStatus = 'idle' | 'starting' | 'online' | 'failed'
@@ -195,7 +190,7 @@ export interface LiveState {
   presentationFlow: PresentationFlowState
   presentationPhaseScores: RankingEntry[]
   presentationRoundReady: boolean
-  analyticEvaluation: AnalyticEvaluationState
+  carriedPresentationScores: CarriedPresentationEntry[]
   publicVotingUrl: string | null
   publicVotingStatus: PublicVotingStatus
   adminAccessedRemotely: boolean
@@ -252,16 +247,6 @@ function defaultPresentationFlow(): PresentationFlowState {
   }
 }
 
-// NOVO — valor inicial/reset do painel de avaliação analítica por critérios.
-function defaultAnalyticEvaluation(): AnalyticEvaluationState {
-  return {
-    itemId: null,
-    criteriaScores: [],
-    jurorsSubmitted: [],
-    expectedJurorCount: 0
-  }
-}
-
 export const liveState: LiveState = {
   championship: null,
   editionName: null,
@@ -313,7 +298,7 @@ export const liveState: LiveState = {
   presentationFlow: defaultPresentationFlow(),
   presentationPhaseScores: [],
   presentationRoundReady: false,
-  analyticEvaluation: defaultAnalyticEvaluation(),
+  carriedPresentationScores: [],
   publicVotingUrl: null,
   publicVotingStatus: 'idle',
   adminAccessedRemotely: false,
@@ -374,15 +359,7 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.currentItemMode = null
   liveState.awaitingJuryEvaluation = false
   liveState.moderatorAdjusting = false
-  liveState.analyticEvaluation = defaultAnalyticEvaluation()
   resetAnswerState()
-}
-
-// NOVO — repõe só o painel de avaliação analítica por critérios, sem afetar
-// mais nada. Chamado sempre que um novo item é sorteado (drawNextItem) e
-// quando o item ativo deixa de ser uma pergunta aberta com critérios.
-export function resetAnalyticEvaluation(): void {
-  liveState.analyticEvaluation = defaultAnalyticEvaluation()
 }
 
 export function resetPresentationFlow(): void {
@@ -432,11 +409,8 @@ export async function loadPersistedState(): Promise<void> {
         ...liveState.presentationFlow,
         slides: Array.isArray(liveState.presentationFlow?.slides) ? liveState.presentationFlow.slides : []
       }
-      // NOVO — garante que estados antigos persistidos (gravados antes desta
-      // funcionalidade existir) ganham o campo em falta em vez de undefined.
-      liveState.analyticEvaluation = {
-        ...defaultAnalyticEvaluation(),
-        ...liveState.analyticEvaluation
+      if (!Array.isArray(liveState.carriedPresentationScores)) {
+        liveState.carriedPresentationScores = []
       }
       liveState.publicVotingUrl = null
       liveState.publicVotingStatus = 'idle'

@@ -18,6 +18,10 @@ export interface Phase {
   presentationMinutes?: number | null
   presentationWeight?: number | null
   quizWeight?: number | null
+  // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam,
+  // e a nota fica guardada para ser somada (com presentationWeight/
+  // quizWeight) à nota do Quiz da fase seguinte.
+  noElimination?: boolean
 }
 
 const DEFAULT_LABELS: Record<number, string> = {
@@ -54,7 +58,8 @@ export const usePhasesStore = defineStore('phases', {
             initialScoreMaxPoints: found.initialScoreMaxPoints ?? null,
             presentationMinutes: found.presentationMinutes ?? null,
             presentationWeight: found.presentationWeight ?? null,
-            quizWeight: found.quizWeight ?? null
+            quizWeight: found.quizWeight ?? null,
+            noElimination: Boolean(found.noElimination)
           }
         }
         return {
@@ -68,7 +73,8 @@ export const usePhasesStore = defineStore('phases', {
           initialScoreMaxPoints: null,
           presentationMinutes: null,
           presentationWeight: null,
-          quizWeight: null
+          quizWeight: null,
+          noElimination: false
         }
       }
     }

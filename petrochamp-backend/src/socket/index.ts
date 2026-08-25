@@ -8,7 +8,6 @@ import {
   resetMatch,
   resetAnswerState,
   resetPresentationFlow,
-  resetAnalyticEvaluation,
   generateJoinCode,
   addToPhaseRanking,
   addToChampionshipRanking,
@@ -123,17 +122,6 @@ async function refreshExpectedJurorCount(): Promise<void> {
   liveState.expectedJurorCount = phaseConfig ? await getExpectedJurorCount(phaseConfig.id) : 0
 }
 
-// NOVO — número de jurados esperados para AVALIAR UM ITEM concreto (uma
-// Pergunta Analítica "aberta"). Dá prioridade aos jurados atribuídos a essa
-// pergunta especificamente (EvaluationItemJuror); se não houver nenhum
-// atribuído, conta todos os jurados cadastrados (modo aberto), tal como
-// getExpectedJurorCount faz para fases.
-async function getExpectedJurorCountForItem(itemId: string): Promise<number> {
-  const assigned = await prisma.evaluationItemJuror.count({ where: { itemId } })
-  if (assigned > 0) return assigned
-  return prisma.juror.count()
-}
-
 async function startPostRoundSequence(): Promise<void> {
   if (!liveState.championship) return
   const totalPhases = await getTotalPhases()
@@ -226,7 +214,6 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     liveState.currentItemSource = null
     liveState.currentAnalyticItemId = null
     liveState.currentItemMode = null
-    resetAnalyticEvaluation()
     return
   }
 
@@ -243,7 +230,6 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     liveState.currentAnalyticItemId = null
     liveState.usedQuestionIds.push(chosen.id)
     liveState.activeTeam = team
-    resetAnalyticEvaluation()
   } else {
     liveState.currentItemSource = 'analytic'
     liveState.currentItemMode = chosen.mode
@@ -251,22 +237,6 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     liveState.currentQuestionId = null
     liveState.usedAnalyticItemIds.push(chosen.id)
     liveState.activeTeam = team
-
-    // NOVO — sempre que o item sorteado é uma Pergunta Analítica "aberta",
-    // abre automaticamente o painel de avaliação por critérios (o
-    // Admin/Jurados repara nisto via liveState.analyticEvaluation.itemId
-    // vindo no state:sync, sem qualquer ação manual do moderador).
-    if (chosen.mode === 'aberta') {
-      const expected = await getExpectedJurorCountForItem(chosen.id)
-      liveState.analyticEvaluation = {
-        itemId: chosen.id,
-        criteriaScores: [],
-        jurorsSubmitted: [],
-        expectedJurorCount: expected
-      }
-    } else {
-      resetAnalyticEvaluation()
-    }
   }
   liveState.timeLeft = chosen.timeSeconds
 }
@@ -512,6 +482,7 @@ export function registerSocketHandlers(io: Server): void {
         liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
         liveState.championReveal = { active: false, teamName: null, logoUrl: null }
         liveState.presentationPhaseScores = []
+        liveState.carriedPresentationScores = []
         resetPresentationFlow()
         liveState.bracketVisible = true
         await refreshExpectedJurorCount()
@@ -584,7 +555,6 @@ export function registerSocketHandlers(io: Server): void {
       liveState.timeLeft = await getQuestionTimeSeconds()
       liveState.isRunning = false
       resetAnswerState()
-      resetAnalyticEvaluation()
       broadcast()
     })
 
@@ -779,6 +749,21 @@ export function registerSocketHandlers(io: Server): void {
           const totalWeight = quizWeight + presWeight || 1
           compareAScore = (liveState.teamAScore * quizWeight + presA * presWeight) / totalWeight
           compareBScore = (liveState.teamBScore * quizWeight + presB * presWeight) / totalWeight
+        } else {
+          // Nota transportada de uma fase de Apresentação anterior SEM
+          // eliminação (carriedPresentationScores). Combina com o Quiz
+          // desta fase usando os pesos guardados na própria entrada
+          // (definidos na fase de Apresentação de origem).
+          const carriedA = liveState.carriedPresentationScores.find((p) => p.teamId === liveState.teamA!.id)
+          const carriedB = liveState.carriedPresentationScores.find((p) => p.teamId === liveState.teamB!.id)
+          if (carriedA) {
+            const totalWeight = carriedA.presentationWeight + carriedA.quizWeight || 1
+            compareAScore = (liveState.teamAScore * carriedA.quizWeight + carriedA.score * carriedA.presentationWeight) / totalWeight
+          }
+          if (carriedB) {
+            const totalWeight = carriedB.presentationWeight + carriedB.quizWeight || 1
+            compareBScore = (liveState.teamBScore * carriedB.quizWeight + carriedB.score * carriedB.presentationWeight) / totalWeight
+          }
         }
 
         let winnerId: string | undefined
@@ -829,6 +814,26 @@ export function registerSocketHandlers(io: Server): void {
       addToPhaseRanking(liveState.teamB, liveState.teamBScore)
       addToChampionshipRanking(liveState.teamA, liveState.teamAScore)
       addToChampionshipRanking(liveState.teamB, liveState.teamBScore)
+
+      // Aplica o delta da nota de apresentação transportada (se alguma das
+      // duas equipas tiver uma), somando a diferença entre o valor já
+      // ponderado e o valor cru do quiz que acabou de ser adicionado acima.
+      // A entrada é removida (consumida) depois de usada.
+      for (const team of [liveState.teamA, liveState.teamB]) {
+        if (!team) continue
+        const idx = liveState.carriedPresentationScores.findIndex((p) => p.teamId === team.id)
+        if (idx === -1) continue
+        const carried = liveState.carriedPresentationScores[idx]
+        const rawScore = team.id === liveState.teamA?.id ? liveState.teamAScore : liveState.teamBScore
+        const totalWeight = carried.presentationWeight + carried.quizWeight || 1
+        const weighted = (rawScore * carried.quizWeight + carried.score * carried.presentationWeight) / totalWeight
+        const delta = weighted - rawScore
+        const phaseEntry = liveState.phaseRankings.find((r) => r.teamId === team.id)
+        const champEntry = liveState.championshipRankings.find((r) => r.teamId === team.id)
+        if (phaseEntry) phaseEntry.score += delta
+        if (champEntry) champEntry.score += delta
+        liveState.carriedPresentationScores.splice(idx, 1)
+      }
 
       if (shouldStartSequence) {
         const phaseConfigForWeighting = await getCurrentPhaseConfig()
@@ -1031,6 +1036,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.championReveal = { active: false, teamName: null, logoUrl: null }
       liveState.presentationPhaseScores = []
+      liveState.carriedPresentationScores = []
       resetPresentationFlow()
       liveState.bracketVisible = !!liveState.championship
       liveState.podium.active = false
@@ -1055,6 +1061,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.phaseRankingReveal = { visible: false }
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.presentationPhaseScores = []
+      liveState.carriedPresentationScores = []
       resetPresentationFlow()
       liveState.bracketVisible = false
       liveState.podium.active = false
@@ -1180,6 +1187,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.phaseRankingReveal = { visible: false }
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.presentationPhaseScores = []
+      liveState.carriedPresentationScores = []
       resetPresentationFlow()
       liveState.bracketVisible = false
       liveState.podium.active = false
@@ -1349,6 +1357,30 @@ export function registerSocketHandlers(io: Server): void {
               score: average
             })
           }
+        } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
+          // Apresentação SEM eliminação: a nota entra no ranking desta fase
+          // (visível a todas as equipas, ninguém é eliminada) e fica
+          // guardada para ser combinada com o Quiz da fase seguinte.
+          addToPhaseRanking(team, average)
+          if (team) {
+            const existingCarried = liveState.carriedPresentationScores.find((r) => r.teamId === team.id)
+            const presentationWeight = phaseConfig.presentationWeight ?? 50
+            const quizWeight = phaseConfig.quizWeight ?? 50
+            if (existingCarried) {
+              existingCarried.score = average
+              existingCarried.presentationWeight = presentationWeight
+              existingCarried.quizWeight = quizWeight
+            } else {
+              liveState.carriedPresentationScores.push({
+                teamId: team.id,
+                name: team.name,
+                institution: team.institution,
+                score: average,
+                presentationWeight,
+                quizWeight
+              })
+            }
+          }
         } else {
           addToPhaseRanking(team, average)
           addToChampionshipRanking(team, average)
@@ -1476,83 +1508,10 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    // NOVO — jurado atribui/atualiza a nota de um critério, para uma
-    // equipa (A ou B), da Pergunta Analítica "aberta" atualmente ativa
-    // (liveState.analyticEvaluation.itemId). Ignorado se o jurado já
-    // tiver submetido a sua avaliação para este item.
-    socket.on(
-      'juror:setAnalyticCriteriaScore',
-      (payload: { jurorId: string; criteriaId: string; team: 'A' | 'B'; score: number }) => {
-        const ae = liveState.analyticEvaluation
-        if (!ae.itemId) return
-        if (ae.jurorsSubmitted.includes(payload.jurorId)) return
-        const existing = ae.criteriaScores.find(
-          (e) => e.jurorId === payload.jurorId && e.criteriaId === payload.criteriaId && e.team === payload.team
-        )
-        if (existing) {
-          existing.score = payload.score
-        } else {
-          ae.criteriaScores.push({ ...payload })
-        }
-        broadcast()
-      }
-    )
-
-    // NOVO — um jurado confirma que terminou de pontuar TODOS os critérios,
-    // para as DUAS equipas, da Pergunta Analítica ativa. Traduz a soma dos
-    // critérios deste jurado para o formato scoreA/scoreB que
-    // moderator:confirmEvaluation já sabe somar entre jurados, para não
-    // duplicar essa lógica de soma.
-    socket.on('juror:submitAnalyticEvaluation', async (payload: { jurorId: string; itemId: string }) => {
-      const ae = liveState.analyticEvaluation
-      if (ae.itemId !== payload.itemId) return
-      if (ae.jurorsSubmitted.includes(payload.jurorId)) return
-
-      const criteria = await prisma.evaluationCriteria.findMany({ where: { itemId: payload.itemId } })
-      if (criteria.length > 0) {
-        const hasAllA = criteria.every((c) =>
-          ae.criteriaScores.some((e) => e.jurorId === payload.jurorId && e.criteriaId === c.id && e.team === 'A')
-        )
-        const hasAllB = criteria.every((c) =>
-          ae.criteriaScores.some((e) => e.jurorId === payload.jurorId && e.criteriaId === c.id && e.team === 'B')
-        )
-        if (!hasAllA || !hasAllB) return // faltam critérios por pontuar, nalguma das equipas
-      }
-
-      ae.jurorsSubmitted.push(payload.jurorId)
-
-      const totalA = ae.criteriaScores
-        .filter((e) => e.jurorId === payload.jurorId && e.team === 'A')
-        .reduce((sum, e) => sum + e.score, 0)
-      const totalB = ae.criteriaScores
-        .filter((e) => e.jurorId === payload.jurorId && e.team === 'B')
-        .reduce((sum, e) => sum + e.score, 0)
-
-      const existingEntry = liveState.jurorEntries.find((e) => e.jurorId === payload.jurorId && e.itemId === payload.itemId)
-      if (existingEntry) {
-        existingEntry.scoreA = totalA
-        existingEntry.scoreB = totalB
-      } else {
-        liveState.jurorEntries.push({ jurorId: payload.jurorId, itemId: payload.itemId, scoreA: totalA, scoreB: totalB })
-      }
-
-      broadcast()
-    })
-
-    // ATUALIZADO — quando o item tem critérios definidos, a condição para
-    // o moderador poder finalizar deixa de ser "todos os jurados ligados
-    // puseram nota" (juror:setScore) e passa a ser "todos os jurados
-    // esperados PARA ESTE ITEM confirmaram a avaliação por critérios"
-    // (juror:submitAnalyticEvaluation), via liveState.analyticEvaluation.
     socket.on('moderator:confirmEvaluation', async (payload: { itemId: string }) => {
       if (liveState.jurorSubmittedItemIds.includes(payload.itemId)) return
 
-      const criteriaCount = await prisma.evaluationCriteria.count({ where: { itemId: payload.itemId } })
-      if (criteriaCount > 0) {
-        const ae = liveState.analyticEvaluation
-        if (ae.itemId !== payload.itemId) return
-        if (ae.expectedJurorCount === 0 || ae.jurorsSubmitted.length < ae.expectedJurorCount) return
-      } else if (liveState.expectedJurorCount > 0) {
+      if (liveState.expectedJurorCount > 0) {
         if (liveState.jurors.length < liveState.expectedJurorCount) return
         const missing = liveState.jurors.some(
           (j) => !liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === payload.itemId)
@@ -1579,7 +1538,6 @@ export function registerSocketHandlers(io: Server): void {
         liveState.currentItemSource = null
         liveState.currentAnalyticItemId = null
         liveState.currentItemMode = null
-        resetAnalyticEvaluation()
 
         if (await roundQuestionsComplete()) {
           liveState.currentQuestionId = null

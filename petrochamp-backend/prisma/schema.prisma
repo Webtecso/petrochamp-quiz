@@ -87,6 +87,7 @@ model Phase {
   presentationMinutes   Int?
   presentationWeight    Int?                      @default(50)
   quizWeight            Int?                      @default(50)
+  noElimination         Boolean                   @default(false)
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
   deletedAt             DateTime?
@@ -110,6 +111,13 @@ model PresentationDupla {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  // NOVO — rede de segurança contra duplicação: a identidade de uma dupla
+  // dentro de uma fase é sempre o teamAId (ver comentário em
+  // syncPresentationDuplasForRound). Mesmo que a lógica de aplicação
+  // falhe e tente criar duas duplas para a mesma equipa A na mesma fase,
+  // a base de dados agora rejeita.
+  @@unique([phaseId, teamAId])
 }
 
 model PresentationCriteria {
@@ -159,6 +167,12 @@ model BracketMatch {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
+
+  // NOVO — rede de segurança contra duplicação (ver rota /generate em
+  // routes/bracketLive.ts, que já corre deleteMany+createMany numa
+  // transação, mas isto garante que a BD rejeita duplicados mesmo que
+  // outra via de código insira sem passar por essa rota).
+  @@unique([championship, round, slot])
 }
 
 model SuspensePhrase {

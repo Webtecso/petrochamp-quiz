@@ -27,10 +27,6 @@ router.get('/', async (req, res) => {
 })
 
 // POST /api/phases/swap — troca a posição (order) de duas fases.
-// IMPORTANTE: tem de vir ANTES de router.get('/:id', ...) e
-// router.put('/:id', ...) só por organização — mas como o método (POST)
-// e o path ('/swap' literal) já distinguem, não há conflito de rota real
-// com '/:id'. Fica aqui por clareza, junto ao resto do CRUD de escrita.
 router.post('/swap', requireAdmin, async (req, res) => {
   try {
     const { firstId, secondId } = req.body as { firstId?: string; secondId?: string }
@@ -59,6 +55,28 @@ router.post('/swap', requireAdmin, async (req, res) => {
   } catch (error: any) {
     console.error('[Phases POST /swap Error]:', error)
     return res.status(500).json({ error: error?.message || 'Erro ao trocar a ordem das fases.' })
+  }
+})
+
+// POST /api/phases/repair-numbering — corrige buracos na numeração de ordem.
+router.post('/repair-numbering', requireAdmin, async (req, res) => {
+  try {
+    const { championship } = req.body as { championship?: string }
+    if (!championship) {
+      return res.status(400).json({ error: 'championship é obrigatório.' })
+    }
+    const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+    for (let i = 0; i < phases.length; i++) {
+      const desiredOrder = i + 1
+      if (phases[i].order !== desiredOrder) {
+        await prisma.phase.update({ where: { id: phases[i].id }, data: { order: desiredOrder } })
+      }
+    }
+    const updated = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+    return res.json({ success: true, phases: updated })
+  } catch (error: any) {
+    console.error('[Phases POST /repair-numbering Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao reparar numeração.' })
   }
 })
 
@@ -103,7 +121,8 @@ router.post('/', requireAdmin, async (req, res) => {
       initialScoreMaxPoints,
       presentationMinutes,
       presentationWeight,
-      quizWeight
+      quizWeight,
+      noElimination
     } = req.body || {}
 
     const phaseLabel = (typeof label === 'string' && label.trim())
@@ -122,13 +141,6 @@ router.post('/', requireAdmin, async (req, res) => {
 
     const championshipValue = championship && championship !== 'undefined' && championship !== 'null' ? championship : null
 
-    // CORRIGIDO — antes caía sempre em order: 0 quando o frontend não
-    // enviava order explicitamente (o formulário de "Nova Fase" nunca
-    // envia). Isso fazia a fase nascer fora da numeração das rondas do
-    // chaveamento (que começa em 1), e por isso nunca era encontrada por
-    // syncPresentationDuplasForRound. Agora, se order não vier explícito,
-    // calcula automaticamente a próxima posição livre deste campeonato —
-    // igual ao que já era feito no backend Cloud.
     let resolvedOrder: number
     if (order !== undefined && order !== null) {
       resolvedOrder = Number(order)
@@ -156,6 +168,9 @@ router.post('/', requireAdmin, async (req, res) => {
     if (presentationMinutes !== undefined) dataToCreate.presentationMinutes = Number(presentationMinutes)
     if (presentationWeight !== undefined) dataToCreate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToCreate.quizWeight = Number(quizWeight)
+    // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam
+    // e a nota é transportada (ponderada) para o Quiz da fase seguinte.
+    if (noElimination !== undefined) dataToCreate.noElimination = Boolean(noElimination)
 
     const phase = await prisma.phase.create({ data: dataToCreate })
 
@@ -185,7 +200,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
       initialScoreMaxPoints,
       presentationMinutes,
       presentationWeight,
-      quizWeight
+      quizWeight,
+      noElimination
     } = req.body || {}
 
     if (!id || id === 'undefined' || id === 'null') {
@@ -214,6 +230,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
     if (presentationMinutes !== undefined) dataToUpdate.presentationMinutes = Number(presentationMinutes)
     if (presentationWeight !== undefined) dataToUpdate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToUpdate.quizWeight = Number(quizWeight)
+    // NOVO
+    if (noElimination !== undefined) dataToUpdate.noElimination = Boolean(noElimination)
 
     const phase = await prisma.phase.update({ where: { id }, data: dataToUpdate })
 

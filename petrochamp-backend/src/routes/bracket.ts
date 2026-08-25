@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
 
 const router = Router()
 
+// GET /api/bracket/:championship - Obter a estrutura do chaveamento
 router.get('/:championship', async (req, res) => {
   const { championship } = req.params
   const teams = await prisma.team.findMany({
@@ -37,5 +39,68 @@ router.get('/:championship', async (req, res) => {
 
   res.json({ championship, teamCount: teams.length, round1Matches, totalRounds })
 })
+
+// Função auxiliar para eliminar o chaveamento e as duplas de apresentação
+async function deleteBracketData(championship?: string) {
+  return await prisma.$transaction(async (tx) => {
+    // 1. Apagar as duplas de apresentação (e as respetivas pontuações se existirem)
+    await tx.presentationScore.deleteMany({})
+
+    if (championship) {
+      // Apaga as duplas vinculadas às fases daquela categoria/championship
+      await tx.presentationDupla.deleteMany({
+        where: {
+          phase: {
+            championship
+          }
+        }
+      })
+
+      // 2. Apagar os jogos do chaveamento da categoria especificada
+      await tx.bracketMatch.deleteMany({
+        where: { championship }
+      })
+    } else {
+      // Apaga todas as duplas e jogos de chaveamento
+      await tx.presentationDupla.deleteMany({})
+      await tx.bracketMatch.deleteMany({})
+    }
+  })
+}
+
+// DELETE /api/bracket/:championship - Eliminar chaveamento de uma categoria específica
+router.delete('/:championship', async (req, res) => {
+  try {
+    const { championship } = req.params
+    await deleteBracketData(championship)
+
+    // Emitir eventos em tempo real para atualizar o Admin e os Jurados
+    emitConfigUpdated('bracket')
+    emitConfigUpdated('presentation')
+
+    res.json({ success: true, message: `Chaveamento e duplas da categoria ${championship} eliminados com sucesso.` })
+  } catch (error) {
+    console.error('Erro ao eliminar chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })
+  }
+})
+
+// POST /api/bracket/clear ou DELETE /api/bracket - Eliminar todo o chaveamento
+const handleClearAll = async (_req: any, res: any) => {
+  try {
+    await deleteBracketData()
+
+    emitConfigUpdated('bracket')
+    emitConfigUpdated('presentation')
+
+    res.json({ success: true, message: 'Todo o chaveamento e duplas de apresentação foram eliminados com sucesso.' })
+  } catch (error) {
+    console.error('Erro ao eliminar chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })
+  }
+}
+
+router.post('/clear', handleClearAll)
+router.delete('/', handleClearAll)
 
 export default router

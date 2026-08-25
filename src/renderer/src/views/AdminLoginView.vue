@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getBackendUrl } from '../services/backendConfig'
-import { setAdminToken } from '../services/adminAuth'
+import { setAdminToken, checkAdminConfigured } from '../services/adminAuth'
 import adminBg from '../assets/projecao-bg.jpg'
 
 const router = useRouter()
@@ -16,6 +16,20 @@ const password = ref('')
 const totpCode = ref('')
 const errorMsg = ref('')
 const loading = ref(false)
+
+// RESTAURADO — sem isto, se a password/TOTP for apagada por engano (ex:
+// numa migração de schema que limpa a tabela AdminAuth), este ecrã ficava
+// preso a pedir login para uma configuração que já não existe, sem
+// nenhuma forma óbvia de voltar ao ecrã de setup. Ao entrar aqui,
+// confirma sempre se já existe configuração — se não existir, manda
+// automaticamente para /admin/setup, tal como já acontecia no Admin
+// remoto.
+onMounted(async () => {
+  const configured = await checkAdminConfigured().catch(() => true)
+  if (!configured) {
+    router.replace('/admin/setup')
+  }
+})
 
 async function submitLogin(): Promise<void> {
   errorMsg.value = ''

@@ -25,7 +25,7 @@ watch(selectedChampionship, (val) => {
   phasesStore.fetchPhases(val)
 })
 
-const editingId = ref<number | null>(null)
+const editingId = ref<string | null>(null)
 const form = ref({
   label: '',
   type: 'quiz' as 'quiz' | 'apresentacao' | 'apresentacao_quiz',
@@ -37,7 +37,8 @@ const form = ref({
   initialScoreMaxPoints: null as number | null,
   presentationMinutes: null as number | null,
   presentationWeight: 50 as number | null,
-  quizWeight: 50 as number | null
+  quizWeight: 50 as number | null,
+  noElimination: false
 })
 
 function resetForm(): void {
@@ -53,7 +54,8 @@ function resetForm(): void {
     initialScoreMaxPoints: null,
     presentationMinutes: null,
     presentationWeight: 50,
-    quizWeight: 50
+    quizWeight: 50,
+    noElimination: false
   }
 }
 
@@ -70,18 +72,13 @@ function editPhase(p: Phase): void {
     initialScoreMaxPoints: p.initialScoreMaxPoints ?? null,
     presentationMinutes: p.presentationMinutes ?? null,
     presentationWeight: p.presentationWeight ?? 50,
-    quizWeight: p.quizWeight ?? 50
+    quizWeight: p.quizWeight ?? 50,
+    noElimination: p.noElimination ?? false
   }
 }
 
-// NOVO — chama a rota que gera/atualiza as PresentationDuplas a partir do
-// chaveamento já existente, sem apagar nada. Falha em silêncio (só regista
-// no console) para não bloquear o fluxo normal de gravar a fase — o botão
-// "Sincronizar Duplas de Apresentação" mais abaixo serve de rede de
-// segurança caso isto não seja suficiente nalgum caso.
-// CORRIGIDO — a rota vive no router de bracketLive.ts, montado em
-// /api/bracket-live (não /api/bracket, que é o router de bracket.ts e
-// não tem esta rota — daí o 404 anterior).
+// Sincroniza as PresentationDuplas a partir do chaveamento já existente,
+// sem apagar nada.
 async function resyncPresentationDuplas(): Promise<void> {
   try {
     await adminFetch(`/api/bracket-live/${selectedChampionship.value}/resync-presentation`, { method: 'POST' })
@@ -108,7 +105,7 @@ async function savePhase(): Promise<void> {
   }
 }
 
-async function removePhase(id: number): Promise<void> {
+async function removePhase(id: string): Promise<void> {
   errorMsg.value = ''
   try {
     await phasesStore.deletePhase(id, selectedChampionship.value)
@@ -144,9 +141,6 @@ async function repairNumbering(): Promise<void> {
   }
 }
 
-// NOVO — botão manual, para quando a sincronização automática (ao gravar
-// a fase) não for suficiente, ex: mudaste o tipo de uma fase há algum
-// tempo e as duplas nunca chegaram a ser criadas.
 async function manualResyncPresentation(): Promise<void> {
   resyncing.value = true
   errorMsg.value = ''
@@ -258,6 +252,36 @@ function typeLabel(type: string): string {
           </div>
         </template>
 
+        <!-- NOVO — só para fase 'apresentacao' pura: opção de não eliminar
+        ninguém e transportar a nota (ponderada) para o Quiz seguinte. -->
+        <template v-if="form.type === 'apresentacao'">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-sm text-gray-600 block">Sem eliminação nesta fase</span>
+              <p class="text-[11px] text-gray-400">
+                Todas as equipas avançam. A nota da apresentação é somada (com peso) à nota do Quiz da fase seguinte.
+              </p>
+            </div>
+            <button
+              class="w-12 h-6 rounded-full transition relative shrink-0"
+              :class="form.noElimination ? 'bg-petro-primary' : 'bg-gray-200'"
+              @click="form.noElimination = !form.noElimination"
+            >
+              <span class="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all" :class="form.noElimination ? 'left-6' : 'left-0.5'"></span>
+            </button>
+          </div>
+          <div v-if="form.noElimination" class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-500 block mb-1">Peso da Apresentação (%)</label>
+              <input v-model.number="form.presentationWeight" type="number" min="0" max="100" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 block mb-1">Peso do Quiz seguinte (%)</label>
+              <input v-model.number="form.quizWeight" type="number" min="0" max="100" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          </div>
+        </template>
+
         <template v-if="form.type === 'apresentacao_quiz'">
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -335,6 +359,7 @@ function typeLabel(type: string): string {
               <span v-if="p.questionsPerTeam"> · {{ p.questionsPerTeam }}/equipa</span>
               <span v-if="p.presentationMinutes"> · {{ p.presentationMinutes }} min de apresentação</span>
               <span v-if="p.type === 'apresentacao_quiz'"> · {{ p.presentationWeight }}%/{{ p.quizWeight }}%</span>
+              <span v-if="p.type === 'apresentacao' && p.noElimination"> · sem eliminação ({{ p.presentationWeight }}%/{{ p.quizWeight }}%)</span>
             </div>
           </div>
         </div>
