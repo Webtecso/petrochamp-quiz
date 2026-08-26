@@ -1,5 +1,5 @@
 export interface QuizQuestion {
-  id: number
+  id: string
   text: string
   options: { label: string; text: string }[]
   correctIndex: number

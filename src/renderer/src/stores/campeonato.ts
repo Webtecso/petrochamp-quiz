@@ -31,9 +31,9 @@ interface MatchCodes {
 interface TiebreakState {
   active: boolean
   pending: boolean
-  matchId: number | null
-  currentQuestionId: number | null
-  usedQuestionIds: number[]
+  matchId: string | null
+  currentQuestionId: string | null
+  usedQuestionIds: string[]
 }
 
 interface PodiumRevealState {
@@ -70,7 +70,7 @@ interface ChampionRevealState {
 interface RepescagemRevealState {
   stage: 'idle' | 'suspense' | 'countdown' | 'voting' | 'results'
   countdownValue: number
-  configId: number | null
+  configId: string | null
   repescadaNames: string[]
 }
 
@@ -82,7 +82,7 @@ interface InitialScoreEntry {
 
 export interface PresentationCriteriaScoreEntry {
   jurorId: string
-  criteriaId: number
+  criteriaId: string
   score: number
 }
 
@@ -93,7 +93,7 @@ export interface PresentationSlideInfo {
 
 export interface PresentationFlowState {
   stage: 'idle' | 'countdown' | 'presenting' | 'concluded'
-  duplaId: number | null
+  duplaId: string | null
   teamId: string | null
   teamName: string | null
   theme: string | null
@@ -131,10 +131,10 @@ interface LiveState {
   teamAScore: number
   teamBScore: number
   phase: number
-  currentQuestionId: number | null
+  currentQuestionId: string | null
   currentQuestionIndex: number
   activeTeam: 'A' | 'B'
-  usedQuestionIds: number[]
+  usedQuestionIds: string[]
   teamAAnsweredCount: number
   teamBAnsweredCount: number
   timeLeft: number
@@ -313,7 +313,7 @@ export const useCampeonatoStore = defineStore('campeonato', {
     nextQuestion() {
       getSocket().emit('moderator:nextQuestion')
     },
-    forceQuestion(questionId: number) {
+    forceQuestion(questionId: string) {
       getSocket().emit('moderator:forceQuestion', { questionId })
     },
     endOpenQuestion() {
@@ -376,10 +376,10 @@ export const useCampeonatoStore = defineStore('campeonato', {
     hidePhaseTransition() {
       getSocket().emit('moderator:hidePhaseTransition')
     },
-    openRepescagemVoting(configId: number) {
+    openRepescagemVoting(configId: string) {
       getSocket().emit('moderator:openRepescagemVoting', { configId })
     },
-    closeRepescagemVoting(configId: number) {
+    closeRepescagemVoting(configId: string) {
       getSocket().emit('moderator:closeRepescagemVoting', { configId })
     },
     setInitialScore(jurorId: string, scoreA: number, scoreB: number) {
@@ -388,13 +388,13 @@ export const useCampeonatoStore = defineStore('campeonato', {
     confirmInitialScores() {
       getSocket().emit('moderator:confirmInitialScores')
     },
-    startPresentation(duplaId: number, teamId: string, useDocument = false) {
+    startPresentation(duplaId: string, teamId: string, useDocument = false) {
       getSocket().emit('moderator:startPresentation', { duplaId, teamId, useDocument })
     },
     finishPresentation() {
       getSocket().emit('moderator:finishPresentation')
     },
-    setPresentationScore(jurorId: string, criteriaId: number, score: number) {
+    setPresentationScore(jurorId: string, criteriaId: string, score: number) {
       getSocket().emit('juror:setPresentationScore', { jurorId, criteriaId, score })
     },
     submitPresentationEvaluation(jurorId: string) {
@@ -412,13 +412,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     prevPresentationPage() {
       getSocket().emit('moderator:presentationPrevPage')
     },
-    // NOVO — jurado atribui/atualiza a nota de um critério, para uma
-    // equipa (A ou B), de uma Pergunta Analítica "aberta" com critérios.
     setAnalyticCriteriaScore(jurorId: string, criteriaId: string, team: 'A' | 'B', score: number) {
       getSocket().emit('juror:setAnalyticCriteriaScore', { jurorId, criteriaId, team, score })
     },
-    // NOVO — jurado confirma que terminou de avaliar TODOS os critérios
-    // (das duas equipas) da Pergunta Analítica ativa (itemId).
     submitAnalyticEvaluation(jurorId: string, itemId: string) {
       getSocket().emit('juror:submitAnalyticEvaluation', { jurorId, itemId })
     }

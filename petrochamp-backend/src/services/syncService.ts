@@ -25,6 +25,7 @@ const SYNC_TABLES = [
   'tiebreakQuestion',
   'evaluationItemJuror',
   'phaseJurorAuthorization',
+  'evaluationCriteria', // NOVO — critérios das Perguntas Analíticas, depende de evaluationItem
 
   // 4. Jogos, pontuações, documentos e históricos
   'bracketMatch',
@@ -34,7 +35,8 @@ const SYNC_TABLES = [
   'presentationDocument',
   'presentationSlide',
   'matchHistory',
-  'championshipHistory'
+  'championshipHistory',
+  'evaluationCriteriaScore' // NOVO — depende de evaluationCriteria e juror, por isso vai no fim
 ] as const
 
 type SyncTable = (typeof SYNC_TABLES)[number]
@@ -46,6 +48,7 @@ const TABLE_TO_CONFIG_TYPE: Partial<Record<SyncTable, ConfigType>> = {
   tiebreakQuestion: 'tiebreakQuestions',
   evaluationItem: 'evaluationItems',
   evaluationItemJuror: 'evaluationItems',
+  evaluationCriteria: 'evaluationItems', // NOVO — critérios pertencem à mesma "área" de config que os itens
   juror: 'jurors',
   partner: 'partners',
   suspensePhrase: 'suspensePhrases',

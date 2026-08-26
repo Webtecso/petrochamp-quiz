@@ -74,13 +74,13 @@ export const useQuizContentStore = defineStore('quizContent', {
       await api.post('/questions', question)
       await this.fetchQuestions(question.championship)
     },
-    async updateQuestion(id: number, patch: Partial<QuizQuestion> & { championship: string }) {
+    async updateQuestion(id: string, patch: Partial<QuizQuestion> & { championship: string }) {
       const current = this.questions.find((q) => q.id === id)
       if (!current) return
       await api.put(`/questions/${id}`, { ...current, ...patch })
       await this.fetchQuestions(patch.championship)
     },
-    async deleteQuestion(id: number, championship: string) {
+    async deleteQuestion(id: string, championship: string) {
       await api.delete(`/questions/${id}`)
       await this.fetchQuestions(championship)
     },

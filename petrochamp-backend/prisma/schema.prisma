@@ -31,37 +31,37 @@ model Team {
 }
 
 model Question {
-  id           String    @id @default(cuid())
-  championship String
-  text         String
-  imageUrl     String?
-  optionA      String
-  optionB      String
-  optionC      String
-  optionD      String
-  correctIndex Int
-  points       Int
-  phase        Int
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id             String    @id @default(cuid())
+  championship   String
+  text           String
+  imageUrl       String?
+  optionA        String
+  optionB        String
+  optionC        String
+  optionD        String
+  correctIndexes String?   // <--- Alterado para String (suporta JSON de múltiplos índices)
+  points         Int
+  phase          Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 }
 
 model TiebreakQuestion {
-  id           String    @id @default(cuid())
-  championship String
-  text         String
-  imageUrl     String?
-  optionA      String
-  optionB      String
-  optionC      String
-  optionD      String
-  correctIndex Int
-  points       Int
-  phase        Int
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id             String    @id @default(cuid())
+  championship   String
+  text           String
+  imageUrl       String?
+  optionA        String
+  optionB        String
+  optionC        String
+  optionD        String
+  correctIndexes String?   // <--- Alterado para String (suporta JSON de múltiplos índices)
+  points         Int
+  phase          Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 }
 
 model Setting {
@@ -112,11 +112,6 @@ model PresentationDupla {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  // NOVO — rede de segurança contra duplicação: a identidade de uma dupla
-  // dentro de uma fase é sempre o teamAId (ver comentário em
-  // syncPresentationDuplasForRound). Mesmo que a lógica de aplicação
-  // falhe e tente criar duas duplas para a mesma equipa A na mesma fase,
-  // a base de dados agora rejeita.
   @@unique([phaseId, teamAId])
 }
 
@@ -168,10 +163,6 @@ model BracketMatch {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
-  // NOVO — rede de segurança contra duplicação (ver rota /generate em
-  // routes/bracketLive.ts, que já corre deleteMany+createMany numa
-  // transação, mas isto garante que a BD rejeita duplicados mesmo que
-  // outra via de código insira sem passar por essa rota).
   @@unique([championship, round, slot])
 }
 
@@ -286,7 +277,6 @@ model Juror {
 
   phaseAuthorizations PhaseJurorAuthorization[]
   scores              PresentationScore[]
-  // NOVO — pontuações por critério nas Perguntas Analíticas "abertas".
   analyticScores      EvaluationCriteriaScore[]
 }
 
@@ -303,29 +293,26 @@ model PhaseJurorAuthorization {
 }
 
 model EvaluationItem {
-  id               String                @id @default(cuid())
-  championship     String
-  type             String
-  mode             String                @default("aberta")
-  text             String
-  imageUrl         String?
-  optionA          String?
-  optionB          String?
-  optionC          String?
-  optionD          String?
-  correctIndex     Int?
-  timeSeconds      Int?
-  maxPoints        Int
-  phase            Int
-  scope            String                @default("single")
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  deletedAt        DateTime?
+  id             String                @id @default(cuid())
+  championship   String
+  type           String
+  mode           String                @default("aberta")
+  text           String
+  imageUrl       String?
+  optionA        String?
+  optionB        String?
+  optionC        String?
+  optionD        String?
+  correctIndexes String?               // <--- Alterado para String (suporta JSON de múltiplos índices)
+  timeSeconds    Int?
+  maxPoints      Int
+  phase          Int
+  scope          String                @default("single")
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  deletedAt      DateTime?
 
   jurorAssignments EvaluationItemJuror[]
-  // NOVO — critérios de avaliação desta pergunta analítica "aberta". Se
-  // tiver pelo menos um, os jurados pontuam por critério (para as duas
-  // equipas) em vez de uma nota única em juror:setScore.
   criteria         EvaluationCriteria[]
 }
 
@@ -340,9 +327,6 @@ model EvaluationItemJuror {
   @@unique([itemId, jurorId])
 }
 
-// NOVO — critério de avaliação de uma Pergunta Analítica "aberta" (Admin →
-// Avaliação). Espelha PresentationCriteria, mas por EvaluationItem em vez
-// de por Phase, já que uma pergunta analítica pode surgir em qualquer fase.
 model EvaluationCriteria {
   id        String                    @id @default(cuid())
   itemId    String
@@ -357,9 +341,6 @@ model EvaluationCriteria {
   scores    EvaluationCriteriaScore[]
 }
 
-// NOVO — pontuação de um jurado, para um critério, para uma das equipas
-// (A ou B). Ao contrário de PresentationScore (uma equipa por avaliação),
-// aqui há sempre as duas equipas a responder à mesma pergunta.
 model EvaluationCriteriaScore {
   id         String             @id @default(cuid())
   criteriaId String

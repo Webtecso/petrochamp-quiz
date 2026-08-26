@@ -326,7 +326,7 @@ async function removeDocument(id: string): Promise<void> {
                 Remover
               </button>
               <label class="text-[10px] bg-petro-dark text-white px-2 py-1 rounded-lg cursor-pointer">
-                Carregar imagens
+                Upload slides
                 <input type="file" accept="image/png,image/jpeg" multiple class="hidden" @change="onFilesSelected(d.id, d.teamAId, $event)" />
               </label>
             </div>
@@ -387,7 +387,7 @@ async function removeDocument(id: string): Promise<void> {
                 Remover
               </button>
               <label class="text-[10px] bg-petro-dark text-white px-2 py-1 rounded-lg cursor-pointer">
-                Carregar imagens
+                Upload slides
                 <input type="file" accept="image/png,image/jpeg" multiple class="hidden" @change="onFilesSelected(d.id, d.teamBId!, $event)" />
               </label>
             </div>

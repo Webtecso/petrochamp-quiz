@@ -22,7 +22,8 @@ const quizPhases = computed(() =>
   phasesStore.phases.filter((p) => p.type === 'quiz' || p.type === 'apresentacao_quiz')
 )
 
-const editingId = ref<number | null>(null)
+// CORRIGIDO — editingId é string (cuid) desde a migração, não number.
+const editingId = ref<string | null>(null)
 const form = ref({
   text: '',
   imageUrl: '',
@@ -137,7 +138,7 @@ async function saveQuestion(): Promise<void> {
   }
 }
 
-async function removeQuestion(id: number): Promise<void> {
+async function removeQuestion(id: string): Promise<void> {
   errorMsg.value = ''
   try {
     await quizContent.deleteQuestion(id, selectedChampionship.value)

@@ -4,13 +4,32 @@ import { useQuizContentStore, type EvaluationCriteria } from '../stores/quizCont
 import { usePhasesStore } from '../stores/phases'
 import { getBackendUrl } from '../services/backendConfig'
 import { uploadImage } from '../services/upload'
-import type { EvaluationItem } from '../data/evaluationItems'
 import type { ChampionshipType } from '../stores/campeonato'
 
 interface Juror {
   id: string
   name: string
   code: string
+}
+
+interface EvaluationItemExtended {
+  id: string
+  championship: string
+  type: string
+  mode: string
+  text: string
+  imageUrl?: string | null
+  optionA?: string | null
+  optionB?: string | null
+  optionC?: string | null
+  optionD?: string | null
+  correctIndexes?: number[] | string | null
+  correctIndex?: number | null
+  timeSeconds?: number | null
+  maxPoints: number
+  phase: number
+  scope: string
+  jurorIds?: string[]
 }
 
 const quizContent = useQuizContentStore()
@@ -43,14 +62,12 @@ const form = ref({
   optionB: '',
   optionC: '',
   optionD: '',
-  correctIndex: 0,
+  correctIndexes: [] as number[],
   timeSeconds: 30,
   imageUrl: '',
   jurorIds: [] as string[]
 })
 
-// Só fases que usam Quiz — Apresentação de Projetos já não usa
-// EvaluationItem, tem a sua própria grelha (Admin → Apresentação).
 const registeredPhases = computed(() =>
   phasesStore.phases.filter((p) => p.type === 'quiz' || p.type === 'apresentacao_quiz')
 )
@@ -85,7 +102,7 @@ function resetForm(): void {
     optionB: '',
     optionC: '',
     optionD: '',
-    correctIndex: 0,
+    correctIndexes: [],
     timeSeconds: 30,
     imageUrl: '',
     jurorIds: []
@@ -95,8 +112,25 @@ function resetForm(): void {
   errorMsg.value = ''
 }
 
-function editItem(item: EvaluationItem): void {
+function editItem(item: EvaluationItemExtended): void {
   editingId.value = item.id
+
+  let indexes: number[] = []
+  if (item.correctIndexes !== undefined && item.correctIndexes !== null) {
+    try {
+      if (typeof item.correctIndexes === 'string') {
+        const parsed = JSON.parse(item.correctIndexes)
+        indexes = Array.isArray(parsed) ? parsed : []
+      } else if (Array.isArray(item.correctIndexes)) {
+        indexes = [...item.correctIndexes]
+      }
+    } catch {
+      indexes = []
+    }
+  } else if (item.correctIndex !== undefined && item.correctIndex !== null) {
+    indexes = [item.correctIndex]
+  }
+
   form.value = {
     mode: item.mode ?? 'aberta',
     text: item.text,
@@ -107,12 +141,11 @@ function editItem(item: EvaluationItem): void {
     optionB: item.optionB ?? '',
     optionC: item.optionC ?? '',
     optionD: item.optionD ?? '',
-    correctIndex: item.correctIndex ?? 0,
+    correctIndexes: indexes,
     timeSeconds: item.timeSeconds ?? 30,
     imageUrl: item.imageUrl ?? '',
     jurorIds: item.jurorIds ?? []
   }
-  // NOVO — carrega os critérios já cadastrados desta pergunta, para edição.
   loadCriteria(item.id)
 }
 
@@ -120,6 +153,15 @@ function toggleJuror(jurorId: string): void {
   const idx = form.value.jurorIds.indexOf(jurorId)
   if (idx === -1) form.value.jurorIds.push(jurorId)
   else form.value.jurorIds.splice(idx, 1)
+}
+
+function toggleCorrectIndex(index: number): void {
+  const idx = form.value.correctIndexes.indexOf(index)
+  if (idx === -1) {
+    form.value.correctIndexes.push(index)
+  } else {
+    form.value.correctIndexes.splice(idx, 1)
+  }
 }
 
 async function onFileSelected(e: Event): Promise<void> {
@@ -145,10 +187,17 @@ async function saveItem(): Promise<void> {
     errorMsg.value = 'Cadastra primeiro pelo menos uma fase de Quiz para este campeonato.'
     return
   }
-  if (form.value.mode === 'multipla_escolha' && (!form.value.optionA.trim() || !form.value.optionB.trim())) {
-    errorMsg.value = 'Perguntas de múltipla escolha precisam de pelo menos as opções A e B preenchidas.'
-    return
+  if (form.value.mode === 'multipla_escolha') {
+    if (!form.value.optionA.trim() || !form.value.optionB.trim()) {
+      errorMsg.value = 'Perguntas de múltipla escolha precisam de pelo menos as opções A e B preenchidas.'
+      return
+    }
+    if (form.value.correctIndexes.length === 0) {
+      errorMsg.value = 'Seleciona pelo menos uma resposta correta.'
+      return
+    }
   }
+
   errorMsg.value = ''
   const payload = {
     championship: selectedChampionship.value,
@@ -162,7 +211,7 @@ async function saveItem(): Promise<void> {
     optionB: form.value.mode === 'multipla_escolha' ? form.value.optionB : undefined,
     optionC: form.value.mode === 'multipla_escolha' ? form.value.optionC : undefined,
     optionD: form.value.mode === 'multipla_escolha' ? form.value.optionD : undefined,
-    correctIndex: form.value.mode === 'multipla_escolha' ? form.value.correctIndex : undefined,
+    correctIndexes: form.value.mode === 'multipla_escolha' ? JSON.stringify(form.value.correctIndexes) : undefined,
     timeSeconds: form.value.timeSeconds,
     imageUrl: form.value.imageUrl || undefined,
     jurorIds: form.value.mode === 'aberta' ? form.value.jurorIds : []
@@ -171,10 +220,7 @@ async function saveItem(): Promise<void> {
     if (editingId.value !== null) {
       await quizContent.updateEvaluationItem(editingId.value, payload)
     } else {
-      const created = await quizContent.addEvaluationItem(payload)
-      // NOVO — depois de criar, entra logo em modo de edição para permitir
-      // adicionar critérios ao item recém-criado, sem ter de o procurar
-      // na lista e clicar em "Editar".
+      await quizContent.addEvaluationItem(payload)
       const savedItem = quizContent.evaluationItems.find(
         (i) => i.text === payload.text && i.phase === payload.phase && i.mode === payload.mode
       )
@@ -219,11 +265,6 @@ function getPhaseLabel(phaseOrder: number): string {
 function jurorName(id: string): string {
   return jurors.value.find((j) => j.id === id)?.name ?? '?'
 }
-
-// ==================== Critérios de Avaliação (NOVO) ====================
-// Só faz sentido para perguntas "abertas" (jurados avaliam). Se um item
-// tiver pelo menos um critério, os jurados pontuam por critério (para as
-// duas equipas) em vez de uma nota única no painel de Jurados.
 
 const newCriteriaLabel = ref('')
 const newCriteriaPoints = ref(10)
@@ -280,8 +321,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
 
       <p class="text-[11px] text-gray-400 mb-3">
         Perguntas analíticas podem ser de <b>múltipla escolha</b> (correção automática, tempo próprio) ou
-        <b>abertas</b> (as equipas argumentam e os jurados atribuem a nota — por critérios, se definires
-        algum abaixo). Para Apresentação de Projetos, usa Admin → Apresentação — tem a sua própria grelha.
+        <b>abertas</b> (as equipas argumentam e os jurados atribuem a nota). Podes escolher múltiplas opções corretas nos checkboxes abaixo.
       </p>
 
       <div class="flex flex-col gap-3">
@@ -359,7 +399,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           </label>
         </div>
 
-        <!-- Campos específicos de MÚLTIPLA ESCOLHA -->
+        <!-- MÚLTIPLA ESCOLHA (Todas as 4 opções e checkboxes visíveis de imediato) -->
         <template v-if="form.mode === 'multipla_escolha'">
           <div class="grid grid-cols-2 gap-3">
             <input v-model="form.optionA" type="text" placeholder="Opção A" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
@@ -369,13 +409,45 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           </div>
 
           <div>
-            <label class="text-xs text-gray-500 block mb-1">Resposta Correta</label>
-            <select v-model.number="form.correctIndex" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-              <option :value="0">A</option>
-              <option :value="1">B</option>
-              <option :value="2" :disabled="!form.optionC.trim()">C</option>
-              <option :value="3" :disabled="!form.optionD.trim()">D</option>
-            </select>
+            <label class="text-xs text-gray-500 block mb-1">Respostas Corretas (Podes selecionar várias)</label>
+            <div class="flex flex-wrap gap-4 mt-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  :checked="form.correctIndexes.includes(0)"
+                  @change="toggleCorrectIndex(0)"
+                  class="rounded text-petro-primary focus:ring-petro-primary"
+                />
+                Opção A
+              </label>
+              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  :checked="form.correctIndexes.includes(1)"
+                  @change="toggleCorrectIndex(1)"
+                  class="rounded text-petro-primary focus:ring-petro-primary"
+                />
+                Opção B
+              </label>
+              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  :checked="form.correctIndexes.includes(2)"
+                  @change="toggleCorrectIndex(2)"
+                  class="rounded text-petro-primary focus:ring-petro-primary"
+                />
+                Opção C
+              </label>
+              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  :checked="form.correctIndexes.includes(3)"
+                  @change="toggleCorrectIndex(3)"
+                  class="rounded text-petro-primary focus:ring-petro-primary"
+                />
+                Opção D
+              </label>
+            </div>
           </div>
         </template>
 
@@ -403,7 +475,6 @@ async function removeCriteria(criteriaId: string): Promise<void> {
             </p>
           </div>
 
-          <!-- NOVO — Critérios de Avaliação, só disponível depois de o item existir -->
           <div v-if="editingId !== null" class="border-t border-gray-100 pt-3">
             <label class="text-xs text-gray-500 block mb-1">Critérios de Avaliação</label>
 
@@ -443,11 +514,6 @@ async function removeCriteria(criteriaId: string): Promise<void> {
                 Adicionar
               </button>
             </div>
-            <p class="text-[11px] text-gray-400 mt-1">
-              Se definires pelo menos um critério, os jurados pontuam cada um (para as duas equipas) em vez
-              de uma nota única — e o painel de avaliação abre automaticamente quando esta pergunta surgir
-              em qualquer fase.
-            </p>
           </div>
           <p v-else class="text-[11px] text-amber-600">
             Guarda a pergunta primeiro para poderes adicionar critérios de avaliação.
