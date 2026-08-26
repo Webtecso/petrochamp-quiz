@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import LogoMark from '../components/LogoMark.vue'
+import JurorsPortalBanner from '../components/JurorsPortalBanner.vue'
 
 const router = useRouter()
 </script>
@@ -47,6 +48,14 @@ const router = useRouter()
         <div class="text-xl">⚙️</div>
         <div class="text-xs font-semibold">Admin</div>
       </button>
+    </div>
+
+    <!-- NOVO — portal remoto dos jurados sempre em destaque neste ecrã
+         de entrada, com link + QR code gerados a partir do IP da rede
+         local detetado dinamicamente pelo backend (services/networkInfo.ts).
+         Não depende de internet nem de configuração manual por máquina. -->
+    <div class="w-full max-w-sm">
+      <JurorsPortalBanner />
     </div>
   </div>
 </template>

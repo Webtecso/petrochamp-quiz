@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { useRouter, useRoute } from 'vue-router'
 import LogoMark from '../components/LogoMark.vue'
+import JurorsPortalBanner from '../components/JurorsPortalBanner.vue'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useModeratorStore } from '../stores/moderator'
 
@@ -13,6 +14,13 @@ const route = useRoute()
 const isTabletOrPhone = Capacitor.isNativePlatform()
 
 const battleInProgress = computed(() => !!store.teamA && !!store.teamB)
+
+// NOVO — modal com o link/QR do portal de jurados, acessível a partir de
+// um botão sempre visível no nav, independentemente de onde o moderador
+// esteja no fluxo (Nova Partida, Jogo, Ranking, etc.) — cumpre o pedido
+// de estar "sempre em destaque assim que a app abrir", já que este layout
+// envolve praticamente todo o percurso do Moderador.
+const showPortalModal = ref(false)
 
 function isActive(path: string): boolean {
   return route.path.startsWith(path)
@@ -79,6 +87,16 @@ function confirmReset(): void {
         >
           Jurados
         </button>
+        <!-- NOVO — botão sempre disponível (mesmo com batalha em curso,
+             já que não navega para lado nenhum, só abre um modal por
+             cima) para o moderador partilhar rapidamente o link/QR do
+             portal remoto dos jurados com quem precisar de entrar. -->
+        <button
+          class="px-3 py-1 rounded-lg text-xs bg-petro-gold/20 text-petro-gold hover:bg-petro-gold/30 transition font-semibold"
+          @click="showPortalModal = true"
+        >
+          📡 Portal Jurados
+        </button>
         <button
           class="px-4 py-1 rounded-lg text-sm transition disabled:opacity-30 disabled:cursor-not-allowed"
           :class="isActive('/moderador/configuracoes') ? 'bg-petro-primary text-white' : 'text-white/70 hover:text-white'"
@@ -117,5 +135,23 @@ function confirmReset(): void {
     </nav>
 
     <router-view />
+
+    <!-- NOVO — modal do portal de jurados, acessível a qualquer momento
+         a partir do botão "📡 Portal Jurados" no nav acima. -->
+    <div
+      v-if="showPortalModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4"
+      @click.self="showPortalModal = false"
+    >
+      <div class="w-full max-w-sm relative">
+        <button
+          class="absolute -top-3 -right-3 bg-white rounded-full w-8 h-8 shadow flex items-center justify-center text-gray-500 hover:text-gray-800"
+          @click="showPortalModal = false"
+        >
+          ✕
+        </button>
+        <JurorsPortalBanner />
+      </div>
+    </div>
   </div>
 </template>
