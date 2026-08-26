@@ -3,8 +3,26 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useQuizContentStore } from '../stores/quizContent'
 import { usePhasesStore, type Phase } from '../stores/phases'
 import { uploadImage } from '../services/upload'
-import type { QuizQuestion } from '../data/questions'
 import type { ChampionshipType } from '../stores/campeonato'
+
+interface QuestionOption {
+  label: string
+  text: string
+}
+
+interface QuizQuestionExtended {
+  id: string
+  text: string
+  imageUrl?: string | null
+  options: QuestionOption[]
+  correctIndexes: number[]
+  points: number
+  phase: number
+}
+
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const MAX_OPTIONS = 8
+const MIN_OPTIONS = 2
 
 const quizContent = useQuizContentStore()
 const phasesStore = usePhasesStore()
@@ -16,22 +34,16 @@ const championshipOptions: { value: ChampionshipType; label: string }[] = [
   { value: 'exibicao', label: 'Exibição' }
 ]
 
-// NOVO: só fases que realmente usam Quiz — uma fase 'apresentacao' pura não
-// tem perguntas, é só a grelha de critérios (Admin → Apresentação).
 const quizPhases = computed(() =>
   phasesStore.phases.filter((p) => p.type === 'quiz' || p.type === 'apresentacao_quiz')
 )
 
-// CORRIGIDO — editingId é string (cuid) desde a migração, não number.
 const editingId = ref<string | null>(null)
 const form = ref({
   text: '',
   imageUrl: '',
-  optionA: '',
-  optionB: '',
-  optionC: '',
-  optionD: '',
-  correctIndex: 0,
+  options: ['', ''] as string[],
+  correctIndexes: [] as number[],
   points: 10,
   phase: 1
 })
@@ -59,11 +71,8 @@ function resetForm(): void {
   form.value = {
     text: '',
     imageUrl: '',
-    optionA: '',
-    optionB: '',
-    optionC: '',
-    optionD: '',
-    correctIndex: 0,
+    options: ['', ''],
+    correctIndexes: [],
     points: 10,
     phase: defaultPhase
   }
@@ -71,16 +80,32 @@ function resetForm(): void {
   errorMsg.value = ''
 }
 
-function editQuestion(q: QuizQuestion): void {
+function addOption(): void {
+  if (form.value.options.length >= MAX_OPTIONS) return
+  form.value.options.push('')
+}
+
+function removeOption(index: number): void {
+  if (form.value.options.length <= MIN_OPTIONS) return
+  form.value.options.splice(index, 1)
+  form.value.correctIndexes = form.value.correctIndexes
+    .filter((i) => i !== index)
+    .map((i) => (i > index ? i - 1 : i))
+}
+
+function toggleCorrectIndex(index: number): void {
+  const idx = form.value.correctIndexes.indexOf(index)
+  if (idx === -1) form.value.correctIndexes.push(index)
+  else form.value.correctIndexes.splice(idx, 1)
+}
+
+function editQuestion(q: QuizQuestionExtended): void {
   editingId.value = q.id
   form.value = {
     text: q.text,
     imageUrl: q.imageUrl ?? '',
-    optionA: q.options[0]?.text ?? '',
-    optionB: q.options[1]?.text ?? '',
-    optionC: q.options[2]?.text ?? '',
-    optionD: q.options[3]?.text ?? '',
-    correctIndex: q.correctIndex,
+    options: q.options.map((o) => o.text),
+    correctIndexes: [...q.correctIndexes],
     points: q.points,
     phase: q.phase
   }
@@ -107,20 +132,23 @@ function removeImage(): void {
 
 async function saveQuestion(): Promise<void> {
   if (!form.value.text.trim()) return
+  if (form.value.options.some((o) => !o.trim())) {
+    errorMsg.value = 'Preenche o texto de todas as alíneas.'
+    return
+  }
+  if (form.value.correctIndexes.length === 0) {
+    errorMsg.value = 'Seleciona pelo menos uma resposta correta.'
+    return
+  }
   errorMsg.value = ''
 
-  const options = [
-    { label: 'A', text: form.value.optionA },
-    { label: 'B', text: form.value.optionB },
-    { label: 'C', text: form.value.optionC },
-    { label: 'D', text: form.value.optionD }
-  ]
+  const options: QuestionOption[] = form.value.options.map((text, i) => ({ label: LABELS[i], text }))
 
   const payload = {
     championship: selectedChampionship.value,
     text: form.value.text,
     options,
-    correctIndex: form.value.correctIndex,
+    correctIndexes: form.value.correctIndexes,
     points: form.value.points,
     phase: form.value.phase,
     imageUrl: form.value.imageUrl || undefined
@@ -153,11 +181,11 @@ function getPhaseKey(phase: Phase): number {
 }
 
 const groupedByPhase = computed(() => {
-  const groups: Record<number, QuizQuestion[]> = {}
+  const groups: Record<number, QuizQuestionExtended[]> = {}
   for (const phase of quizPhases.value) {
     groups[getPhaseKey(phase)] = []
   }
-  for (const q of quizContent.questions) {
+  for (const q of quizContent.questions as unknown as QuizQuestionExtended[]) {
     if (!groups[q.phase]) groups[q.phase] = []
     groups[q.phase].push(q)
   }
@@ -206,23 +234,48 @@ const groupedByPhase = computed(() => {
         <p v-if="uploadError" class="text-xs text-red-500">{{ uploadError }}</p>
         <p v-if="errorMsg" class="text-xs text-red-500">{{ errorMsg }}</p>
 
-        <div class="grid grid-cols-2 gap-3">
-          <input v-model="form.optionA" type="text" placeholder="Opção A" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-          <input v-model="form.optionB" type="text" placeholder="Opção B" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-          <input v-model="form.optionC" type="text" placeholder="Opção C" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-          <input v-model="form.optionD" type="text" placeholder="Opção D" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+        <div>
+          <label class="text-xs text-gray-500 block mb-2">
+            Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) — marca as respostas corretas
+          </label>
+          <div class="flex flex-col gap-2">
+            <div v-for="(opt, i) in form.options" :key="i" class="flex items-center gap-2">
+              <label class="flex items-center gap-1.5 shrink-0 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  :checked="form.correctIndexes.includes(i)"
+                  @change="toggleCorrectIndex(i)"
+                  class="rounded text-petro-primary focus:ring-petro-primary"
+                />
+                <span class="w-6 text-xs font-bold text-gray-500">{{ LABELS[i] }}</span>
+              </label>
+              <input
+                v-model="form.options[i]"
+                type="text"
+                :placeholder="`Opção ${LABELS[i]}`"
+                class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+              <button
+                v-if="form.options.length > MIN_OPTIONS"
+                type="button"
+                class="text-xs text-red-400 underline shrink-0"
+                @click="removeOption(i)"
+              >
+                Remover
+              </button>
+            </div>
+          </div>
+          <button
+            v-if="form.options.length < MAX_OPTIONS"
+            type="button"
+            class="mt-2 text-xs text-petro-primary font-semibold underline"
+            @click="addOption"
+          >
+            + Adicionar alínea
+          </button>
         </div>
 
-        <div class="grid grid-cols-3 gap-3">
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">Resposta Certa</label>
-            <select v-model.number="form.correctIndex" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-              <option :value="0">A</option>
-              <option :value="1">B</option>
-              <option :value="2">C</option>
-              <option :value="3">D</option>
-            </select>
-          </div>
+        <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-xs text-gray-500 block mb-1">Pontos</label>
             <input v-model.number="form.points" type="number" min="1" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
@@ -275,7 +328,9 @@ const groupedByPhase = computed(() => {
         class="flex items-center justify-between gap-3 border-b border-gray-50 py-2 last:border-0"
       >
         <div class="text-sm flex-1 truncate">
-          {{ q.text }} <span class="text-petro-primary font-semibold">· {{ q.points }} pts</span>
+          {{ q.text }}
+          <span class="text-gray-400 text-xs">· {{ q.options.length }} alíneas</span>
+          <span class="text-petro-primary font-semibold">· {{ q.points }} pts</span>
         </div>
         <div class="flex gap-2 shrink-0">
           <button class="text-xs text-petro-primary underline" @click="editQuestion(q)">Editar</button>

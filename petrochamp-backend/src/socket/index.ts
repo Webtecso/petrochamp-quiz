@@ -58,6 +58,7 @@ const RESTRICTED_TO_AREA: Record<string, string> = {
   'moderator:removeJuror': 'jurados',
   'moderator:confirmEvaluation': 'jurados',
   'moderator:confirmInitialScores': 'jurados',
+  'moderator:registerJurorLocally': 'jurados',
   'moderator:closeRepescagemVoting': 'repescagem'
 }
 
@@ -89,9 +90,25 @@ async function getTotalPhases(): Promise<number> {
   return count > 0 ? count : 1
 }
 
+// NOVO — suporta A-H (8 alíneas) em vez de só A-D.
 function labelToIndex(label: string | null): number {
   if (!label) return -1
-  return ['A', 'B', 'C', 'D'].indexOf(label)
+  return ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].indexOf(label)
+}
+
+// NOVO — os modelos Question/TiebreakQuestion/EvaluationItem passaram a
+// guardar "correctIndexes" (JSON de vários índices), em vez do antigo
+// "correctIndex" singular. Esta função lê o campo com segurança e devolve
+// sempre um array (mesmo que vazio), para o resto do código não ter de se
+// preocupar com o formato de armazenamento.
+function parseCorrectIndexes(raw: string | null | undefined): number[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map(Number) : []
+  } catch {
+    return []
+  }
 }
 
 async function isRoundComplete(championship: string, round: number): Promise<boolean> {
@@ -329,143 +346,6 @@ async function pickSuspensePhrase(): Promise<string> {
   return phrases.length
     ? phrases[Math.floor(Math.random() * phrases.length)].text
     : 'Preparem-se — a próxima fase está prestes a começar...'
-}
-
-// ---------------------------------------------------------------------
-// CORRIGIDO — o alvo de jurados é sempre o número ESPERADO (configurado
-// na fase via PhaseJurorAuthorization, ou o total de jurados cadastrados
-// em modo aberto). Deixou de usar Math.min(esperados, ligados) — essa
-// versão permitia o "Avançar" aparecer mesmo faltando jurados esperados
-// por ligar, o que contraria o requisito: só avança depois de TODOS OS
-// ESPERADOS avaliarem, estejam ligados ou não.
-//
-// Cobre também dois problemas adicionais:
-// 1) É chamada tanto em 'finishPresentation' como em
-//    'submitPresentationEvaluation' — cobrindo o caso em que todos os
-//    jurados já submeteram antes do moderador clicar em "Finalizar".
-// 2) Filtra entradas de criteriaScores sem criteriaId/jurorId válidos
-//    antes de gravar no Prisma, evitando o crash
-//    "Argument criteriaId must not be null" que travava toda a função
-//    (e por isso o resto da lógica de avanço de ronda) a meio.
-// ---------------------------------------------------------------------
-async function checkAllJurorsSubmitted(): Promise<void> {
-  const flow = liveState.presentationFlow
-  if (flow.stage !== 'concluded' || !flow.teamId) return
-  if (flow.allJurorsSubmitted) return
-
-  const target = liveState.expectedJurorCount
-  if (target <= 0) return
-  if (flow.jurorsSubmitted.length < target) return
-
-  flow.allJurorsSubmitted = true
-
-  const totalsByJuror = new Map<string, number>()
-  for (const entry of flow.criteriaScores) {
-    totalsByJuror.set(entry.jurorId, (totalsByJuror.get(entry.jurorId) ?? 0) + entry.score)
-  }
-  const totals = Array.from(totalsByJuror.values())
-  const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0
-
-  const validEntries = flow.criteriaScores.filter((entry) => !!entry.criteriaId && !!entry.jurorId)
-  for (const entry of validEntries) {
-    try {
-      await prisma.presentationScore.upsert({
-        where: {
-          criteriaId_jurorId_teamId: { criteriaId: entry.criteriaId, jurorId: entry.jurorId, teamId: flow.teamId }
-        },
-        update: { score: entry.score },
-        create: {
-          criteriaId: entry.criteriaId,
-          jurorId: entry.jurorId,
-          teamId: flow.teamId,
-          score: entry.score
-        }
-      })
-    } catch (error) {
-      console.error('Falha ao gravar nota de critério (a ignorar esta entrada):', entry, error)
-    }
-  }
-
-  const team = await prisma.team.findUnique({ where: { id: flow.teamId } })
-  const phaseConfig = await getCurrentPhaseConfig()
-
-  if (phaseConfig?.type === 'apresentacao_quiz') {
-    const existingPresScore = liveState.presentationPhaseScores.find((r) => r.teamId === flow.teamId)
-    if (existingPresScore) {
-      existingPresScore.score = average
-    } else if (team) {
-      liveState.presentationPhaseScores.push({
-        teamId: team.id,
-        name: team.name,
-        institution: team.institution,
-        score: average
-      })
-    }
-  } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
-    addToPhaseRanking(team, average)
-    if (team) {
-      const existingCarried = liveState.carriedPresentationScores.find((r) => r.teamId === team.id)
-      const presentationWeight = phaseConfig.presentationWeight ?? 50
-      const quizWeight = phaseConfig.quizWeight ?? 50
-      if (existingCarried) {
-        existingCarried.score = average
-        existingCarried.presentationWeight = presentationWeight
-        existingCarried.quizWeight = quizWeight
-      } else {
-        liveState.carriedPresentationScores.push({
-          teamId: team.id,
-          name: team.name,
-          institution: team.institution,
-          score: average,
-          presentationWeight,
-          quizWeight
-        })
-      }
-    }
-  } else {
-    addToPhaseRanking(team, average)
-    addToChampionshipRanking(team, average)
-
-    const dupla = await prisma.presentationDupla.findFirst({
-      where: {
-        phaseId: phaseConfig?.id,
-        OR: [{ teamAId: flow.teamId }, { teamBId: flow.teamId }]
-      }
-    })
-    if (liveState.championship && phaseConfig && dupla?.teamAId) {
-      if (!dupla.teamBId) {
-        await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamAId, dupla.teamAId)
-      } else {
-        const rankA = liveState.phaseRankings.find((r) => r.teamId === dupla.teamAId)
-        const rankB = liveState.phaseRankings.find((r) => r.teamId === dupla.teamBId)
-        if (rankA && rankB) {
-          const dWinnerId = rankA.score >= rankB.score ? dupla.teamAId : dupla.teamBId
-          const dLoserId = dWinnerId === dupla.teamAId ? dupla.teamBId : dupla.teamAId
-          await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamBId, dWinnerId)
-          if (!liveState.eliminatedTeamIds.includes(dLoserId)) {
-            liveState.eliminatedTeamIds.push(dLoserId)
-          }
-        }
-      }
-    }
-  }
-
-  if (phaseConfig) {
-    const allTeamIds = await getPresentationTeamIds(phaseConfig.id)
-    const recordedTeamIds =
-      phaseConfig.type === 'apresentacao_quiz'
-        ? liveState.presentationPhaseScores.map((r) => r.teamId)
-        : liveState.phaseRankings.map((r) => r.teamId)
-    const allPresentedAndEvaluated = allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
-
-    if (allPresentedAndEvaluated) {
-      if (phaseConfig.type === 'apresentacao') {
-        liveState.presentationRoundReady = true
-      } else if (phaseConfig.type === 'apresentacao_quiz') {
-        liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
-      }
-    }
-  }
 }
 
 export function registerSocketHandlers(io: Server): void {
@@ -720,7 +600,10 @@ export function registerSocketHandlers(io: Server): void {
         if (payload.team === 'A') liveState.teamAAnswer = payload.optionLabel
         else liveState.teamBAnswer = payload.optionLabel
 
-        const isCorrect = labelToIndex(payload.optionLabel) === item.correctIndex
+        // ALTERADO — usa correctIndexes (JSON de vários índices) em vez do
+        // antigo correctIndex singular, e suporta A-H via labelToIndex.
+        const correctIdxs = parseCorrectIndexes(item.correctIndexes)
+        const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
         if (payload.team === 'A') {
           liveState.teamACorrect = isCorrect
           liveState.teamAAnsweredCount += 1
@@ -766,7 +649,9 @@ export function registerSocketHandlers(io: Server): void {
         else liveState.teamBAnswer = null
         return
       }
-      const isCorrect = labelToIndex(payload.optionLabel) === question.correctIndex
+      // ALTERADO — idem, correctIndexes em vez de correctIndex.
+      const correctIdxs = parseCorrectIndexes(question.correctIndexes)
+      const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
       if (payload.team === 'A') {
         liveState.teamACorrect = isCorrect
         liveState.teamAAnsweredCount += 1
@@ -838,7 +723,9 @@ export function registerSocketHandlers(io: Server): void {
         else liveState.teamBAnswer = null
         return
       }
-      const isCorrect = labelToIndex(payload.optionLabel) === question.correctIndex
+      // ALTERADO — idem, correctIndexes em vez de correctIndex.
+      const correctIdxs = parseCorrectIndexes(question.correctIndexes)
+      const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
       if (payload.team === 'A') {
         liveState.teamACorrect = isCorrect
       } else {
@@ -1397,7 +1284,7 @@ export function registerSocketHandlers(io: Server): void {
       })
     })
 
-    socket.on('moderator:finishPresentation', async () => {
+    socket.on('moderator:finishPresentation', () => {
       if (liveState.presentationFlow.stage !== 'presenting') return
       if (liveState.presentationFlow.timeLeft > 0) return
       liveState.presentationFlow.stage = 'concluded'
@@ -1405,7 +1292,6 @@ export function registerSocketHandlers(io: Server): void {
       if (teamId && !liveState.presentationFlow.presentedTeamIds.includes(teamId)) {
         liveState.presentationFlow.presentedTeamIds.push(teamId)
       }
-      await checkAllJurorsSubmitted()
       broadcast()
     })
 
@@ -1446,8 +1332,116 @@ export function registerSocketHandlers(io: Server): void {
       flow.jurorsSubmitted.push(payload.jurorId)
       broadcast()
 
-      await checkAllJurorsSubmitted()
-      broadcast()
+      const allSubmitted = liveState.expectedJurorCount > 0 && flow.jurorsSubmitted.length >= liveState.expectedJurorCount
+      if (allSubmitted && flow.stage === 'concluded') {
+        flow.allJurorsSubmitted = true
+
+        const totalsByJuror = new Map<string, number>()
+        for (const entry of flow.criteriaScores) {
+          totalsByJuror.set(entry.jurorId, (totalsByJuror.get(entry.jurorId) ?? 0) + entry.score)
+        }
+        const totals = Array.from(totalsByJuror.values())
+        const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0
+
+        for (const entry of flow.criteriaScores) {
+          await prisma.presentationScore.upsert({
+            where: {
+              criteriaId_jurorId_teamId: { criteriaId: entry.criteriaId, jurorId: entry.jurorId, teamId: flow.teamId }
+            },
+            update: { score: entry.score },
+            create: {
+              criteriaId: entry.criteriaId,
+              jurorId: entry.jurorId,
+              teamId: flow.teamId,
+              score: entry.score
+            }
+          })
+        }
+
+        const team = await prisma.team.findUnique({ where: { id: flow.teamId } })
+        const phaseConfig = await getCurrentPhaseConfig()
+
+        if (phaseConfig?.type === 'apresentacao_quiz') {
+          const existingPresScore = liveState.presentationPhaseScores.find((r) => r.teamId === flow.teamId)
+          if (existingPresScore) {
+            existingPresScore.score = average
+          } else if (team) {
+            liveState.presentationPhaseScores.push({
+              teamId: team.id,
+              name: team.name,
+              institution: team.institution,
+              score: average
+            })
+          }
+        } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
+          addToPhaseRanking(team, average)
+          if (team) {
+            const existingCarried = liveState.carriedPresentationScores.find((r) => r.teamId === team.id)
+            const presentationWeight = phaseConfig.presentationWeight ?? 50
+            const quizWeight = phaseConfig.quizWeight ?? 50
+            if (existingCarried) {
+              existingCarried.score = average
+              existingCarried.presentationWeight = presentationWeight
+              existingCarried.quizWeight = quizWeight
+            } else {
+              liveState.carriedPresentationScores.push({
+                teamId: team.id,
+                name: team.name,
+                institution: team.institution,
+                score: average,
+                presentationWeight,
+                quizWeight
+              })
+            }
+          }
+        } else {
+          addToPhaseRanking(team, average)
+          addToChampionshipRanking(team, average)
+
+          const dupla = await prisma.presentationDupla.findFirst({
+            where: {
+              phaseId: phaseConfig?.id,
+              OR: [{ teamAId: flow.teamId }, { teamBId: flow.teamId }]
+            }
+          })
+          if (liveState.championship && phaseConfig && dupla?.teamAId) {
+            if (!dupla.teamBId) {
+              await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamAId, dupla.teamAId)
+            } else {
+              const rankA = liveState.phaseRankings.find((r) => r.teamId === dupla.teamAId)
+              const rankB = liveState.phaseRankings.find((r) => r.teamId === dupla.teamBId)
+              if (rankA && rankB) {
+                const dWinnerId = rankA.score >= rankB.score ? dupla.teamAId : dupla.teamBId
+                const dLoserId = dWinnerId === dupla.teamAId ? dupla.teamBId : dupla.teamAId
+                await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamBId, dWinnerId)
+                if (!liveState.eliminatedTeamIds.includes(dLoserId)) {
+                  liveState.eliminatedTeamIds.push(dLoserId)
+                }
+              }
+            }
+          }
+        }
+
+        if (phaseConfig) {
+          const allTeamIds = await getPresentationTeamIds(phaseConfig.id)
+          const recordedTeamIds =
+            phaseConfig.type === 'apresentacao_quiz'
+              ? liveState.presentationPhaseScores.map((r) => r.teamId)
+              : liveState.phaseRankings.map((r) => r.teamId)
+          const allPresentedAndEvaluated =
+            allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
+
+          if (allPresentedAndEvaluated) {
+            if (phaseConfig.type === 'apresentacao') {
+              liveState.presentationRoundReady = true
+            } else if (phaseConfig.type === 'apresentacao_quiz') {
+              liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
+            }
+          }
+        }
+
+        broadcast()
+      }
     })
 
     socket.on('moderator:advanceToNextPresentation', () => {
@@ -1505,10 +1499,44 @@ export function registerSocketHandlers(io: Server): void {
       callback?.({ success: true, jurorId: juror.id })
     })
 
-    socket.on('moderator:removeJuror', async (payload: { jurorId: string }) => {
+    socket.on('moderator:registerJurorLocally', async (payload: { jurorId: string }, callback?: (res: unknown) => void) => {
+      const juror = await prisma.juror.findUnique({ where: { id: payload.jurorId } })
+      if (!juror) {
+        callback?.({ success: false, error: 'Jurado não encontrado.' })
+        return
+      }
+
+      const phaseConfig = await getCurrentPhaseConfig()
+      if (phaseConfig) {
+        const authRows = await prisma.phaseJurorAuthorization.findMany({ where: { phaseId: phaseConfig.id } })
+        if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
+          callback?.({ success: false, error: 'Este jurado não está autorizado a avaliar esta fase.' })
+          return
+        }
+      }
+
+      if (liveState.jurors.some((j) => j.id === juror.id)) {
+        callback?.({ success: true, jurorId: juror.id })
+        return
+      }
+
+      const maxJurors = await getMaxJurors()
+      if (liveState.jurors.length >= maxJurors) {
+        callback?.({ success: false, error: 'Número máximo de jurados já atingido para esta partida.' })
+        return
+      }
+
+      liveState.jurors.push({ id: juror.id, name: juror.name })
+      socket.data.locallyRegisteredJurorIds = socket.data.locallyRegisteredJurorIds || []
+      socket.data.locallyRegisteredJurorIds.push(juror.id)
+      await refreshExpectedJurorCount()
+      broadcast()
+      callback?.({ success: true, jurorId: juror.id })
+    })
+
+    socket.on('moderator:removeJuror', (payload: { jurorId: string }) => {
       liveState.jurors = liveState.jurors.filter((j) => j.id !== payload.jurorId)
       liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== payload.jurorId)
-      await checkAllJurorsSubmitted()
       broadcast()
     })
 
@@ -1619,7 +1647,7 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', () => {
       console.log('Cliente desligado:', socket.id)
       if (socket.id === moderatorSocketId && liveState.moderatorAdjusting) {
         liveState.moderatorAdjusting = false
@@ -1630,7 +1658,12 @@ export function registerSocketHandlers(io: Server): void {
       if (jurorId) {
         liveState.jurors = liveState.jurors.filter((j) => j.id !== jurorId)
         liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== jurorId)
-        await checkAllJurorsSubmitted()
+        broadcast()
+      }
+      const localJurorIds: string[] = socket.data?.locallyRegisteredJurorIds || []
+      if (localJurorIds.length) {
+        liveState.jurors = liveState.jurors.filter((j) => !localJurorIds.includes(j.id))
+        liveState.jurorEntries = liveState.jurorEntries.filter((e) => !localJurorIds.includes(e.jurorId))
         broadcast()
       }
       const moderatorId = socket.data?.moderatorId as string | undefined

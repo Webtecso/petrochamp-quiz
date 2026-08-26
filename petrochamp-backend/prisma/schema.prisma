@@ -39,7 +39,11 @@ model Question {
   optionB        String
   optionC        String
   optionD        String
-  correctIndexes String?   // <--- Alterado para String (suporta JSON de múltiplos índices)
+  optionE        String?
+  optionF        String?
+  optionG        String?
+  optionH        String?
+  correctIndexes String?
   points         Int
   phase          Int
   createdAt      DateTime  @default(now())
@@ -56,7 +60,11 @@ model TiebreakQuestion {
   optionB        String
   optionC        String
   optionD        String
-  correctIndexes String?   // <--- Alterado para String (suporta JSON de múltiplos índices)
+  optionE        String?
+  optionF        String?
+  optionG        String?
+  optionH        String?
+  correctIndexes String?
   points         Int
   phase          Int
   createdAt      DateTime  @default(now())
@@ -292,6 +300,7 @@ model PhaseJurorAuthorization {
   @@unique([phaseId, jurorId])
 }
 
+
 model EvaluationItem {
   id             String                @id @default(cuid())
   championship   String
@@ -303,7 +312,11 @@ model EvaluationItem {
   optionB        String?
   optionC        String?
   optionD        String?
-  correctIndexes String?               // <--- Alterado para String (suporta JSON de múltiplos índices)
+  optionE        String?
+  optionF        String?
+  optionG        String?
+  optionH        String?
+  correctIndexes String?
   timeSeconds    Int?
   maxPoints      Int
   phase          Int
@@ -315,7 +328,6 @@ model EvaluationItem {
   jurorAssignments EvaluationItemJuror[]
   criteria         EvaluationCriteria[]
 }
-
 model EvaluationItemJuror {
   id        String         @id @default(cuid())
   itemId    String

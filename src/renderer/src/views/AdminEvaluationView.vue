@@ -6,6 +6,10 @@ import { getBackendUrl } from '../services/backendConfig'
 import { uploadImage } from '../services/upload'
 import type { ChampionshipType } from '../stores/campeonato'
 
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const MAX_OPTIONS = 8
+const MIN_OPTIONS = 2
+
 interface Juror {
   id: string
   name: string
@@ -23,8 +27,11 @@ interface EvaluationItemExtended {
   optionB?: string | null
   optionC?: string | null
   optionD?: string | null
+  optionE?: string | null
+  optionF?: string | null
+  optionG?: string | null
+  optionH?: string | null
   correctIndexes?: number[] | string | null
-  correctIndex?: number | null
   timeSeconds?: number | null
   maxPoints: number
   phase: number
@@ -58,10 +65,7 @@ const form = ref({
   maxPoints: 20,
   phase: null as number | null,
   scope: 'single' as 'single' | 'all',
-  optionA: '',
-  optionB: '',
-  optionC: '',
-  optionD: '',
+  options: ['', ''] as string[],
   correctIndexes: [] as number[],
   timeSeconds: 30,
   imageUrl: '',
@@ -98,10 +102,7 @@ function resetForm(): void {
     maxPoints: 20,
     phase: defaultPhase,
     scope: 'single',
-    optionA: '',
-    optionB: '',
-    optionC: '',
-    optionD: '',
+    options: ['', ''],
     correctIndexes: [],
     timeSeconds: 30,
     imageUrl: '',
@@ -110,6 +111,19 @@ function resetForm(): void {
   newCriteriaLabel.value = ''
   newCriteriaPoints.value = 10
   errorMsg.value = ''
+}
+
+function addOption(): void {
+  if (form.value.options.length >= MAX_OPTIONS) return
+  form.value.options.push('')
+}
+
+function removeOption(index: number): void {
+  if (form.value.options.length <= MIN_OPTIONS) return
+  form.value.options.splice(index, 1)
+  form.value.correctIndexes = form.value.correctIndexes
+    .filter((i) => i !== index)
+    .map((i) => (i > index ? i - 1 : i))
 }
 
 function editItem(item: EvaluationItemExtended): void {
@@ -127,20 +141,19 @@ function editItem(item: EvaluationItemExtended): void {
     } catch {
       indexes = []
     }
-  } else if (item.correctIndex !== undefined && item.correctIndex !== null) {
-    indexes = [item.correctIndex]
   }
 
+  const loadedOptions = LABELS
+    .map((label) => (item as any)[`option${label}`] as string | null | undefined)
+    .filter((v) => v !== null && v !== undefined) as string[]
+
   form.value = {
-    mode: item.mode ?? 'aberta',
+    mode: (item.mode as 'aberta' | 'multipla_escolha') ?? 'aberta',
     text: item.text,
     maxPoints: item.maxPoints,
     phase: item.phase,
-    scope: item.scope ?? 'single',
-    optionA: item.optionA ?? '',
-    optionB: item.optionB ?? '',
-    optionC: item.optionC ?? '',
-    optionD: item.optionD ?? '',
+    scope: (item.scope as 'single' | 'all') ?? 'single',
+    options: loadedOptions.length >= MIN_OPTIONS ? loadedOptions : ['', ''],
     correctIndexes: indexes,
     timeSeconds: item.timeSeconds ?? 30,
     imageUrl: item.imageUrl ?? '',
@@ -188,8 +201,8 @@ async function saveItem(): Promise<void> {
     return
   }
   if (form.value.mode === 'multipla_escolha') {
-    if (!form.value.optionA.trim() || !form.value.optionB.trim()) {
-      errorMsg.value = 'Perguntas de múltipla escolha precisam de pelo menos as opções A e B preenchidas.'
+    if (form.value.options.some((o) => !o.trim())) {
+      errorMsg.value = 'Preenche o texto de todas as alíneas.'
       return
     }
     if (form.value.correctIndexes.length === 0) {
@@ -199,6 +212,11 @@ async function saveItem(): Promise<void> {
   }
 
   errorMsg.value = ''
+
+  const optionsPayload = form.value.mode === 'multipla_escolha'
+    ? form.value.options.map((text, i) => ({ label: LABELS[i], text }))
+    : undefined
+
   const payload = {
     championship: selectedChampionship.value,
     type: 'analitica' as const,
@@ -207,10 +225,7 @@ async function saveItem(): Promise<void> {
     maxPoints: form.value.maxPoints,
     phase: Number(form.value.phase),
     scope: form.value.scope,
-    optionA: form.value.mode === 'multipla_escolha' ? form.value.optionA : undefined,
-    optionB: form.value.mode === 'multipla_escolha' ? form.value.optionB : undefined,
-    optionC: form.value.mode === 'multipla_escolha' ? form.value.optionC : undefined,
-    optionD: form.value.mode === 'multipla_escolha' ? form.value.optionD : undefined,
+    options: optionsPayload,
     correctIndexes: form.value.mode === 'multipla_escolha' ? JSON.stringify(form.value.correctIndexes) : undefined,
     timeSeconds: form.value.timeSeconds,
     imageUrl: form.value.imageUrl || undefined,
@@ -225,7 +240,7 @@ async function saveItem(): Promise<void> {
         (i) => i.text === payload.text && i.phase === payload.phase && i.mode === payload.mode
       )
       if (savedItem) {
-        editItem(savedItem)
+        editItem(savedItem as unknown as EvaluationItemExtended)
         return
       }
     }
@@ -264,6 +279,10 @@ function getPhaseLabel(phaseOrder: number): string {
 
 function jurorName(id: string): string {
   return jurors.value.find((j) => j.id === id)?.name ?? '?'
+}
+
+function itemOptionCount(item: EvaluationItemExtended): number {
+  return LABELS.filter((label) => (item as any)[`option${label}`]).length
 }
 
 const newCriteriaLabel = ref('')
@@ -320,8 +339,8 @@ async function removeCriteria(criteriaId: string): Promise<void> {
       </h2>
 
       <p class="text-[11px] text-gray-400 mb-3">
-        Perguntas analíticas podem ser de <b>múltipla escolha</b> (correção automática, tempo próprio) ou
-        <b>abertas</b> (as equipas argumentam e os jurados atribuem a nota). Podes escolher múltiplas opções corretas nos checkboxes abaixo.
+        Perguntas analíticas podem ser de <b>múltipla escolha</b> (correção automática, tempo próprio, até 8 alíneas) ou
+        <b>abertas</b> (as equipas argumentam e os jurados atribuem a nota).
       </p>
 
       <div class="flex flex-col gap-3">
@@ -399,55 +418,47 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           </label>
         </div>
 
-        <!-- MÚLTIPLA ESCOLHA (Todas as 4 opções e checkboxes visíveis de imediato) -->
+        <!-- MÚLTIPLA ESCOLHA (lista dinâmica de 2 a 8 alíneas) -->
         <template v-if="form.mode === 'multipla_escolha'">
-          <div class="grid grid-cols-2 gap-3">
-            <input v-model="form.optionA" type="text" placeholder="Opção A" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            <input v-model="form.optionB" type="text" placeholder="Opção B" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            <input v-model="form.optionC" type="text" placeholder="Opção C (opcional)" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            <input v-model="form.optionD" type="text" placeholder="Opção D (opcional)" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-          </div>
-
           <div>
-            <label class="text-xs text-gray-500 block mb-1">Respostas Corretas (Podes selecionar várias)</label>
-            <div class="flex flex-wrap gap-4 mt-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
-              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <label class="text-xs text-gray-500 block mb-2">
+              Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) — marca as respostas corretas
+            </label>
+            <div class="flex flex-col gap-2">
+              <div v-for="(opt, i) in form.options" :key="i" class="flex items-center gap-2">
+                <label class="flex items-center gap-1.5 shrink-0 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    :checked="form.correctIndexes.includes(i)"
+                    @change="toggleCorrectIndex(i)"
+                    class="rounded text-petro-primary focus:ring-petro-primary"
+                  />
+                  <span class="w-6 text-xs font-bold text-gray-500">{{ LABELS[i] }}</span>
+                </label>
                 <input
-                  type="checkbox"
-                  :checked="form.correctIndexes.includes(0)"
-                  @change="toggleCorrectIndex(0)"
-                  class="rounded text-petro-primary focus:ring-petro-primary"
+                  v-model="form.options[i]"
+                  type="text"
+                  :placeholder="`Opção ${LABELS[i]}`"
+                  class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 />
-                Opção A
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  :checked="form.correctIndexes.includes(1)"
-                  @change="toggleCorrectIndex(1)"
-                  class="rounded text-petro-primary focus:ring-petro-primary"
-                />
-                Opção B
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  :checked="form.correctIndexes.includes(2)"
-                  @change="toggleCorrectIndex(2)"
-                  class="rounded text-petro-primary focus:ring-petro-primary"
-                />
-                Opção C
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  :checked="form.correctIndexes.includes(3)"
-                  @change="toggleCorrectIndex(3)"
-                  class="rounded text-petro-primary focus:ring-petro-primary"
-                />
-                Opção D
-              </label>
+                <button
+                  v-if="form.options.length > MIN_OPTIONS"
+                  type="button"
+                  class="text-xs text-red-400 underline shrink-0"
+                  @click="removeOption(i)"
+                >
+                  Remover
+                </button>
+              </div>
             </div>
+            <button
+              v-if="form.options.length < MAX_OPTIONS"
+              type="button"
+              class="mt-2 text-xs text-petro-primary font-semibold underline"
+              @click="addOption"
+            >
+              + Adicionar alínea
+            </button>
           </div>
         </template>
 
@@ -565,7 +576,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
               class="ml-1 font-bold px-1.5 py-0.5 rounded"
               :class="item.mode === 'multipla_escolha' ? 'bg-amber-100 text-amber-700' : 'bg-petro-primary/10 text-petro-primary'"
             >
-              {{ item.mode === 'multipla_escolha' ? `Múltipla escolha · ${item.timeSeconds ?? 30}s` : `Aberta · ${item.timeSeconds ?? 30}s` }}
+              {{ item.mode === 'multipla_escolha' ? `Múltipla escolha · ${itemOptionCount(item as unknown as EvaluationItemExtended)} alíneas · ${item.timeSeconds ?? 30}s` : `Aberta · ${item.timeSeconds ?? 30}s` }}
             </span>
           </span>
           <div>{{ item.text }} <span class="text-petro-primary font-semibold">· {{ item.maxPoints }} pts</span></div>
@@ -574,7 +585,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           </div>
         </div>
         <div class="flex gap-2 shrink-0">
-          <button class="text-xs text-petro-primary underline" @click="editItem(item)">Editar</button>
+          <button class="text-xs text-petro-primary underline" @click="editItem(item as unknown as EvaluationItemExtended)">Editar</button>
           <button class="text-xs text-red-400 underline" @click="removeItem(item.id)">Remover</button>
         </div>
       </div>

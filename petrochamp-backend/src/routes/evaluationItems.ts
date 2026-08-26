@@ -5,6 +5,21 @@ import { requireAdmin } from '../middleware/requireAdmin'
 
 const router = Router()
 
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function buildOptionsData(mode: string, options: { label: string; text: string }[] | undefined) {
+  const data: Record<string, string | null> = {}
+  for (const label of LABELS) {
+    if (mode !== 'multipla_escolha') {
+      data[`option${label}`] = null
+      continue
+    }
+    const found = options?.find((o) => o.label === label)
+    data[`option${label}`] = found ? found.text : null
+  }
+  return data
+}
+
 router.get('/', async (req, res) => {
   const { championship, phase } = req.query as { championship?: string; phase?: string }
   const items = await prisma.evaluationItem.findMany({
@@ -26,13 +41,18 @@ router.get('/', async (req, res) => {
 })
 
 router.post('/', requireAdmin, async (req, res) => {
-  const { championship, type, mode, text, imageUrl, optionA, optionB, optionC, optionD, correctIndexes, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
+  const { championship, type, mode, text, imageUrl, options, correctIndexes, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
 
   if (!championship || !type || !text || !maxPoints || !phase) {
     return res.status(400).json({ error: 'championship, type, text, maxPoints e phase são obrigatórios' })
   }
-  if (mode === 'multipla_escolha' && (!optionA || !optionB || !correctIndexes)) {
-    return res.status(400).json({ error: 'Perguntas de múltipla escolha precisam de opções e de pelo menos uma resposta correta' })
+  if (mode === 'multipla_escolha') {
+    if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
+      return res.status(400).json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+    }
+    if (!correctIndexes) {
+      return res.status(400).json({ error: 'Seleciona pelo menos uma resposta correta' })
+    }
   }
 
   const serializedCorrectIndexes = mode === 'multipla_escolha'
@@ -46,10 +66,7 @@ router.post('/', requireAdmin, async (req, res) => {
       mode: mode || 'aberta',
       text,
       imageUrl: imageUrl || null,
-      optionA: mode === 'multipla_escolha' ? optionA : null,
-      optionB: mode === 'multipla_escolha' ? optionB : null,
-      optionC: mode === 'multipla_escolha' ? optionC : null,
-      optionD: mode === 'multipla_escolha' ? optionD : null,
+      ...buildOptionsData(mode, options),
       correctIndexes: serializedCorrectIndexes,
       timeSeconds: timeSeconds ? Number(timeSeconds) : 30,
       maxPoints: Number(maxPoints),
@@ -73,7 +90,11 @@ router.post('/', requireAdmin, async (req, res) => {
 
 router.put('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
-  const { type, mode, text, imageUrl, optionA, optionB, optionC, optionD, correctIndexes, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
+  const { type, mode, text, imageUrl, options, correctIndexes, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
+
+  if (mode === 'multipla_escolha' && (!Array.isArray(options) || options.length < 2 || options.length > 8)) {
+    return res.status(400).json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+  }
 
   try {
     await prisma.evaluationItemJuror.deleteMany({ where: { itemId: id } })
@@ -89,10 +110,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
         mode,
         text,
         imageUrl: imageUrl || null,
-        optionA: mode === 'multipla_escolha' ? optionA : null,
-        optionB: mode === 'multipla_escolha' ? optionB : null,
-        optionC: mode === 'multipla_escolha' ? optionC : null,
-        optionD: mode === 'multipla_escolha' ? optionD : null,
+        ...buildOptionsData(mode, options),
         correctIndexes: serializedCorrectIndexes,
         timeSeconds: timeSeconds ? Number(timeSeconds) : 30,
         maxPoints: Number(maxPoints),

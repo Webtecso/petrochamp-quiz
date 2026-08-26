@@ -38,45 +38,49 @@ function isEliminated(teamId: string): boolean {
 </script>
 
 <template>
-  <div v-if="!ranked.length" class="text-center text-sm text-gray-400 max-w-md mx-auto">
+  <div v-if="!ranked.length" class="text-center text-[clamp(0.9rem,1.2vw,1.3rem)] text-gray-400 max-w-md mx-auto">
     Ainda não há partidas concluídas nesta fase. O ranking aparece aqui assim que a primeira partida terminar.
   </div>
 
-  <div v-else class="max-w-2xl mx-auto flex flex-col gap-3 w-full">
+  <!-- ATUALIZADO — max-w-2xl fixo trocado por um teto maior + clamp em vw,
+       para a lista de ranking aproveitar mais espaço horizontal em
+       ecrãs grandes/TVs, em vez de ficar sempre com a mesma largura
+       física independentemente da resolução. -->
+  <div v-else class="max-w-[clamp(32rem,55vw,60rem)] mx-auto flex flex-col gap-[clamp(0.6rem,1vh,1rem)] w-full">
     <div
       v-for="(team, i) in ranked"
       :key="team.teamId"
-      class="bg-white rounded-xl shadow p-4 flex items-center gap-4 ranking-row transition-opacity"
+      class="bg-white rounded-xl shadow p-[clamp(0.75rem,1.4vw,1.5rem)] flex items-center gap-[clamp(0.75rem,1.4vw,1.5rem)] ranking-row transition-opacity"
       :class="[i === 0 ? 'ring-2 ring-yellow-300 leader-glow' : '', isEliminated(team.teamId) ? 'opacity-50' : '']"
       :style="{ animationDelay: i * 0.12 + 's' }"
     >
       <div
-        class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+        class="w-[clamp(2.5rem,3.5vw,4.2rem)] h-[clamp(2.5rem,3.5vw,4.2rem)] rounded-full flex items-center justify-center font-bold text-[clamp(0.9rem,1.2vw,1.5rem)] shrink-0"
         :class="i < 3 ? medalStyles[i] : 'bg-gray-100 text-gray-500'"
       >
         {{ i + 1 }}º
       </div>
 
-      <TeamAvatar :name="team.name" :logo-url="logoFor(team.teamId)" size="md" />
+      <TeamAvatar :name="team.name" :logo-url="logoFor(team.teamId)" size="lg" />
 
       <div class="flex-1">
         <div class="flex items-center justify-between mb-1">
-          <span class="font-semibold">{{ team.name }}</span>
-          <div class="flex items-center gap-2">
+          <span class="font-semibold text-[clamp(1rem,1.5vw,1.8rem)]">{{ team.name }}</span>
+          <div class="flex items-center gap-[clamp(0.4rem,0.7vw,0.75rem)]">
             <span
               v-if="!isEliminated(team.teamId)"
-              class="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full"
+              class="text-[clamp(0.65rem,0.9vw,1rem)] font-bold text-green-600 bg-green-50 px-[clamp(0.4rem,0.7vw,0.75rem)] py-0.5 rounded-full"
             >
               AVANÇA
             </span>
-            <span v-else class="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+            <span v-else class="text-[clamp(0.65rem,0.9vw,1rem)] font-bold text-gray-400 bg-gray-100 px-[clamp(0.4rem,0.7vw,0.75rem)] py-0.5 rounded-full">
               ELIMINADA
             </span>
-            <span class="text-petro-primary font-bold">{{ team.score }} pts</span>
+            <span class="text-petro-primary font-bold text-[clamp(1rem,1.4vw,1.7rem)]">{{ team.score }} pts</span>
           </div>
         </div>
-        <div class="text-xs text-gray-400 mb-1">{{ team.institution }}</div>
-        <div class="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+        <div class="text-[clamp(0.75rem,1vw,1.1rem)] text-gray-400 mb-1">{{ team.institution }}</div>
+        <div class="w-full h-[clamp(0.5rem,0.8vh,1rem)] bg-gray-100 rounded-full overflow-hidden">
           <div
             class="h-full bg-gradient-to-r from-petro-primary to-red-400 rounded-full transition-all duration-1000 ease-out"
             :style="{ width: (barsReady ? (team.score / maxScore) * 100 : 0) + '%' }"
@@ -99,7 +103,7 @@ function isEliminated(teamId: string): boolean {
   animation: rowSlideIn 0.5s ease both, leaderPulse 2.4s ease-in-out infinite 0.6s;
 }
 @keyframes leaderPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.3); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(250, 204, 21, 0); }
 }
 </style>

@@ -1,14 +1,30 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
-import type { QuizQuestion } from '../data/questions'
+
+export interface TiebreakQuestionOption {
+  label: string
+  text: string
+}
+
+export interface TiebreakQuestion {
+  id: string
+  championship: string
+  text: string
+  imageUrl?: string
+  correctIndexes: number[]
+  correctIndex: number
+  points: number
+  phase: number
+  options: TiebreakQuestionOption[]
+}
 
 export const useTiebreakQuestionsStore = defineStore('tiebreakQuestions', {
   state: () => ({
-    questions: [] as QuizQuestion[]
+    questions: [] as TiebreakQuestion[]
   }),
   getters: {
     questionsForPhase: (state) => {
-      return (phase: number): QuizQuestion[] => state.questions.filter((q) => q.phase === phase)
+      return (phase: number): TiebreakQuestion[] => state.questions.filter((q) => q.phase === phase)
     }
   },
   actions: {
@@ -17,19 +33,36 @@ export const useTiebreakQuestionsStore = defineStore('tiebreakQuestions', {
         this.questions = []
         return
       }
-      this.questions = await api.get<QuizQuestion[]>(`/tiebreak-questions?championship=${encodeURIComponent(championship)}`)
+      this.questions = await api.get<TiebreakQuestion[]>(`/tiebreak-questions?championship=${encodeURIComponent(championship)}`)
     },
-    async addQuestion(question: Omit<QuizQuestion, 'id'> & { championship: string }) {
+    async addQuestion(question: {
+      championship: string
+      text: string
+      imageUrl?: string
+      options: TiebreakQuestionOption[]
+      correctIndexes: number[]
+      points: number
+      phase: number
+    }) {
       await api.post('/tiebreak-questions', question)
       await this.fetchQuestions(question.championship)
     },
-    async updateQuestion(id: number, patch: Partial<QuizQuestion> & { championship: string }) {
-      const current = this.questions.find((q) => q.id === id)
-      if (!current) return
-      await api.put(`/tiebreak-questions/${id}`, { ...current, ...patch })
+    async updateQuestion(
+      id: string,
+      patch: {
+        championship: string
+        text: string
+        imageUrl?: string
+        options: TiebreakQuestionOption[]
+        correctIndexes: number[]
+        points: number
+        phase: number
+      }
+    ) {
+      await api.put(`/tiebreak-questions/${id}`, patch)
       await this.fetchQuestions(patch.championship)
     },
-    async deleteQuestion(id: number, championship: string) {
+    async deleteQuestion(id: string, championship: string) {
       await api.delete(`/tiebreak-questions/${id}`)
       await this.fetchQuestions(championship)
     }

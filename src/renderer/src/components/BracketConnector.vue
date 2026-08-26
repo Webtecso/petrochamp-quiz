@@ -1,7 +1,11 @@
 <script setup lang="ts"></script>
 
 <template>
-  <div class="w-10 h-full flex items-center justify-center relative shrink-0">
+  <!-- ATUALIZADO — w-10 fixo trocado por clamp() em vw, para as linhas de
+       ligação do chaveamento escalarem proporcionalmente às caixas das
+       equipas (que também passaram a usar clamp), em vez de ficarem
+       desproporcionalmente curtas/longas em ecrãs grandes. -->
+  <div class="w-[clamp(1.5rem,3vw,3.5rem)] h-full flex items-center justify-center relative shrink-0">
     <div class="connector-vline"></div>
     <div class="connector-hline connector-hline-left"></div>
     <div class="connector-hline connector-hline-right"></div>
