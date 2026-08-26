@@ -28,6 +28,10 @@ import moderatorsRouter from './routes/moderators'
 import adminAuthRouter from './routes/adminAuth'
 import syncRouter from './routes/sync'
 import syncTriggerRouter from './routes/syncTrigger'
+// NOVO — rota que expõe o IP da máquina na rede local, para o frontend
+// conseguir mostrar o link/QR code do portal de jurados sem depender de
+// nenhum IP fixo nem de configuração manual (ver services/networkInfo.ts).
+import networkInfoRouter from './routes/networkInfo'
 import { requireAdmin } from './middleware/requireAdmin'
 import { registerSocketHandlers } from './socket'
 import { initConfigEvents } from './socket/configEvents'
@@ -83,6 +87,10 @@ app.use('/api/presentation', presentationRouter)
 app.use('/api/presentation-documents', presentationDocumentsRouter)
 app.use('/api/moderators', requireAdmin, moderatorsRouter)
 app.use('/api/admin-auth', adminAuthRouter)
+// NOVO — GET /api/network-info: { ip, port, portalUrl }. Sem autenticação
+// de propósito, para o ecrã inicial da app poder mostrar o link/QR do
+// portal de jurados assim que abre, sem exigir login de moderador antes.
+app.use('/api/network-info', networkInfoRouter)
 
 // Rotas de sincronização com o Cloud. syncRouter expõe /pull e /push
 // (usadas pelo Cloud quando é ELE a chamar-nos — não é o caso normal, mas
