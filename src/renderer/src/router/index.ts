@@ -2,7 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import { Capacitor } from '@capacitor/core'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { usePhasesStore } from '../stores/phases'
-import { isAdminLoggedIn } from '../services/adminAuth'
+import { isAdminLoggedIn, checkAdminConfigured } from '../services/adminAuth'
 
 import ModeradorLayout from '../views/ModeradorLayout.vue'
 import AppEntryView from '../views/AppEntryView.vue'
@@ -106,6 +106,24 @@ const isLocalAccess =
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1'
 
+// NOVO — cache simples em memória do resultado de checkAdminConfigured().
+// Depois de confirmarmos que HÁ password configurada, esse facto nunca
+// deixa de ser verdade durante a vida da aplicação (só ficaria falso de
+// novo se a BD fosse apagada, o que implica reiniciar a app de qualquer
+// forma). Isto evita fazer um pedido de rede a cada navegação para dentro
+// da área /admin. Enquanto ainda não sabemos (null) ou sabemos que NÃO
+// está configurado (false), voltamos a perguntar ao servidor a cada
+// navegação — é barato e garante que assim que o setup for concluído
+// nesta mesma sessão, a próxima navegação já reconhece isso.
+let adminConfiguredCache: boolean | null = null
+
+async function isAdminConfigured(): Promise<boolean> {
+  if (adminConfiguredCache === true) return true
+  const configured = await checkAdminConfigured().catch(() => false)
+  adminConfiguredCache = configured
+  return configured
+}
+
 async function resumeRoute(store: ReturnType<typeof useCampeonatoStore>): Promise<string | null> {
   if (!store.championship) return null
 
@@ -163,6 +181,22 @@ router.beforeEach(async (to, from) => {
   }
 
   const store = useCampeonatoStore()
+
+  // NOVO — se estamos a entrar em qualquer página da área /admin (exceto
+  // a própria /admin/setup) e ainda NÃO existe nenhuma password
+  // configurada no backend, manda sempre para /admin/setup em vez de
+  // /admin/login. Antes disto, ir direto a /admin/login sem nunca ter
+  // configurado password mostrava o formulário de login normalmente, e só
+  // ao submeter é que aparecia o erro "Admin ainda não foi configurado." —
+  // confuso para quem está a montar o evento pela primeira vez, ou depois
+  // de uma migração/reset ter apagado a tabela AdminAuth sem se
+  // aperceberem.
+  if (to.path.startsWith('/admin') && to.path !== '/admin/setup') {
+    const configured = await isAdminConfigured()
+    if (!configured) {
+      return '/admin/setup'
+    }
+  }
 
   const isAdminArea = to.path.startsWith('/admin') && to.path !== '/admin/setup' && to.path !== '/admin/login'
   if (isAdminArea && !isAdminLoggedIn()) {

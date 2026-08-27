@@ -18,11 +18,22 @@ function choose(mode: DeviceMode): void {
   modeStore.setDeviceMode(mode)
 
   connectSocket()
-  useCampeonatoStore().listenToServer()
+  const campeonatoStore = useCampeonatoStore()
+  campeonatoStore.listenToServer()
   useJuradosStore().listenToServer()
   useTeamsStore().fetchTeams()
-  useQuizContentStore().fetchQuestions()
-  useQuizContentStore().fetchEvaluationItems()
+  useQuizContentStore().fetchQuestions(campeonatoStore.championship ?? undefined)
+  // CORRIGIDO — chamava fetchEvaluationItems() sem argumento nenhum. O
+  // store trata "sem championship" como "esvazia a lista inteira"
+  // (this.evaluationItems = []), por isso sempre que se escolhia o modo
+  // do dispositivo (o que acontece cada vez que se entra neste ecrã), a
+  // lista de perguntas de avaliação em memória ficava vazia até a
+  // próxima view a repor com o championship certo — dando a falsa
+  // impressão de que as perguntas tinham sido apagadas, quando na
+  // verdade só desapareciam do estado local (nada era tocado no
+  // backend). Agora passa o championship atual da store do campeonato,
+  // tal como as outras views que chamam a mesma função.
+  useQuizContentStore().fetchEvaluationItems(campeonatoStore.championship ?? undefined)
   useSettingsStore().fetchSettings()
   usePhasesStore().fetchPhases()
 

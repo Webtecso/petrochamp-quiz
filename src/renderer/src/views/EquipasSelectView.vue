@@ -48,6 +48,10 @@ onMounted(async () => {
 const hasBracket = computed(() => liveBracketStore.matches.length > 0)
 const isLastPhaseFlow = computed(() => store.phase >= phasesStore.totalPhases)
 
+// NOVO — confrontos pendentes filtrados pela ronda/fase atual. Ver a nota
+// no liveBracket.ts (pendingMatchesForRound) para o motivo da correção.
+const pendingMatchesThisRound = computed(() => liveBracketStore.pendingMatchesForRound(store.phase))
+
 function goToEquipas(): void {
   if (store.phaseFlow.stage === 'quizIntro') {
     store.confirmQuizIntro()
@@ -238,12 +242,12 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
   <div v-else class="flex-1 flex flex-col items-center justify-center px-10 py-12 gap-8">
     <h1 class="text-2xl font-bold text-petro-primary">Escolha o Próximo Confronto</h1>
     <template v-if="hasBracket">
-      <p v-if="liveBracketStore.pendingMatches.length" class="text-sm text-gray-400 text-center max-w-md">
+      <p v-if="pendingMatchesThisRound.length" class="text-sm text-gray-400 text-center max-w-md">
         Escolhe um dos confrontos pendentes — as equipas já usadas nesta fase não voltam a aparecer aqui.
       </p>
-      <div v-if="liveBracketStore.pendingMatches.length" class="grid grid-cols-1 gap-3 w-full max-w-md">
+      <div v-if="pendingMatchesThisRound.length" class="grid grid-cols-1 gap-3 w-full max-w-md">
         <button
-          v-for="m in liveBracketStore.pendingMatches"
+          v-for="m in pendingMatchesThisRound"
           :key="m.id"
           class="bg-white rounded-xl shadow p-4 flex items-center justify-between gap-3 border-2 border-transparent hover:border-petro-primary transition"
           :disabled="starting"

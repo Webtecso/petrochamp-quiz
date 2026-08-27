@@ -177,6 +177,17 @@ const isPhaseBracketVisible = computed(() => {
 const isBattleActiveState = computed(() => {
   return matchStarted.value && !!currentQuestion.value
 })
+
+const roundJustEnded = computed(() => {
+  return (
+    matchStarted.value &&
+    !currentQuestion.value &&
+    !store.tiebreak.active &&
+    !store.tiebreak.pending &&
+    !store.countdown.active &&
+    !store.awaitingJuryEvaluation
+  )
+})
 </script>
 
 <template>
@@ -187,9 +198,16 @@ const isBattleActiveState = computed(() => {
       :style="{ backgroundImage: `url(${projectionBg})` }"
     ></div>
 
-    <div v-if="store.editionName" class="fixed top-6 right-6 z-40 edition-badge">
+    <!--
+      AJUSTADO — a caixa da edição passou de `top-6 right-6` (canto superior
+      direito) para `top-6 left-1/2 -translate-x-1/2` (centro superior), a
+      pedido do utilizador. O -translate-x-1/2 é necessário porque left-1/2
+      por si só só alinha a margem esquerda da caixa ao centro do ecrã, não
+      a caixa inteira.
+    -->
+    <div v-if="store.editionName" class="fixed top-6 left-1/2 -translate-x-1/2 z-40 edition-badge">
       <div class="bg-petro-primary/90 text-white px-5 py-2 rounded-full shadow-lg backdrop-blur-sm">
-        <span class="text-xs font-bold tracking-widest uppercase">{{ store.editionName }}</span>
+        <span class="font-bold tracking-widest uppercase" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">{{ store.editionName }}</span>
       </div>
     </div>
 
@@ -197,8 +215,8 @@ const isBattleActiveState = computed(() => {
     <div v-if="!store.championship" class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white">
       <div class="text-center flex flex-col items-center">
         <LogoMark class="mb-6" />
-        <h1 class="text-4xl font-extrabold mb-3 text-amber-400">Aguardando Seleção do Campeonato</h1>
-        <p class="text-slate-200 text-lg">O moderador irá iniciar a sessão a partir da consola de controlo.</p>
+        <h1 class="font-extrabold mb-3 text-amber-400" style="font-size: clamp(1.75rem, 4vw, 3.5rem)">Aguardando Seleção do Campeonato</h1>
+        <p class="text-slate-200" style="font-size: clamp(1rem, 1.6vw, 1.5rem)">O moderador irá iniciar a sessão a partir da consola de controlo.</p>
       </div>
     </div>
 
@@ -217,12 +235,13 @@ const isBattleActiveState = computed(() => {
         v-if="store.championReveal.logoUrl"
         :src="formatImageUrl(store.championReveal.logoUrl)"
         alt="Campeã"
-        class="w-56 h-56 object-contain champion-logo z-10"
+        class="object-contain champion-logo z-10"
+        style="width: clamp(10rem, 20vw, 20rem); height: clamp(10rem, 20vw, 20rem)"
       />
-      <h1 class="text-5xl font-black text-amber-400 z-10 champion-name text-center">
+      <h1 class="font-black text-amber-400 z-10 champion-name text-center" style="font-size: clamp(2.5rem, 6vw, 5.5rem)">
         {{ store.championReveal.teamName ?? 'Campeã' }}
       </h1>
-      <p class="text-lg text-white/90 z-10 tracking-widest uppercase">
+      <p class="text-white/90 z-10 tracking-widest uppercase" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">
         Grande Campeã{{ store.editionName ? ' — ' + store.editionName : '' }}
       </p>
     </div>
@@ -255,7 +274,7 @@ const isBattleActiveState = computed(() => {
       v-else-if="store.phaseFlow.stage === 'ranking'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
     >
-      <h2 class="text-2xl font-bold text-petro-primary">Ranking da Fase {{ store.phase }}</h2>
+      <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem)">Ranking da Fase {{ store.phase }}</h2>
       <PhaseRankingBoard :rankings="store.phaseRankings" :eliminated-team-ids="store.eliminatedTeamIds" />
     </div>
     <SuspenseScreen
@@ -288,10 +307,10 @@ const isBattleActiveState = computed(() => {
       v-else-if="store.repescagemReveal.stage === 'voting'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white"
     >
-      <h2 class="text-3xl font-bold text-amber-400">Vote na sua equipa favorita!</h2>
+      <h2 class="font-bold text-amber-400" style="font-size: clamp(1.5rem, 3vw, 2.5rem)">Vote na sua equipa favorita!</h2>
       <div class="flex flex-col gap-4 w-full max-w-2xl">
         <div v-for="t in repescagemStore.tally" :key="t.teamId" class="flex flex-col gap-1">
-          <div class="flex items-center justify-between text-sm">
+          <div class="flex items-center justify-between" style="font-size: clamp(0.85rem, 1.3vw, 1.1rem)">
             <span class="font-semibold">{{ t.name }}</span>
             <span class="font-bold text-amber-400">{{ t.votes }} votos</span>
           </div>
@@ -308,13 +327,14 @@ const isBattleActiveState = computed(() => {
       v-else-if="store.repescagemReveal.stage === 'results'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center repescagem-results"
     >
-      <h2 class="text-4xl font-black text-amber-400">ESTAS EQUIPAS ESTÃO DE VOLTA À COMPETIÇÃO!</h2>
-      <p class="text-sm text-white/80 uppercase tracking-widest">Escolhidas pelo público</p>
+      <h2 class="font-black text-amber-400" style="font-size: clamp(2rem, 4.5vw, 3.5rem)">ESTAS EQUIPAS ESTÃO DE VOLTA À COMPETIÇÃO!</h2>
+      <p class="text-white/80 uppercase tracking-widest" style="font-size: clamp(0.8rem, 1.2vw, 1rem)">Escolhidas pelo público</p>
       <div class="flex flex-col gap-3 w-full max-w-md">
         <div
           v-for="name in store.repescagemReveal.repescadaNames"
           :key="name"
-          class="bg-amber-500/20 border-2 border-amber-400 rounded-xl px-6 py-3 font-bold text-lg repescada-glow"
+          class="bg-amber-500/20 border-2 border-amber-400 rounded-xl px-6 py-3 font-bold repescada-glow"
+          style="font-size: clamp(1rem, 1.8vw, 1.5rem)"
         >
           {{ name }}
         </div>
@@ -338,31 +358,75 @@ const isBattleActiveState = computed(() => {
       v-else-if="store.presentationFlow.stage === 'presenting' && store.presentationFlow.presentationMode === 'document'"
       class="min-h-screen bg-black relative overflow-hidden"
     >
-      <div class="absolute top-0 inset-x-0 flex items-center justify-between px-6 py-3 bg-black/70 z-20 text-white">
-        <span class="text-sm font-bold text-amber-400 uppercase tracking-wide">
-          {{ store.presentationFlow.teamName }} · {{ store.presentationFlow.theme }}
-        </span>
-        <div class="flex items-center gap-4 text-xs text-white/70">
-          <span>Slide {{ store.presentationFlow.currentPage }} / {{ store.presentationFlow.slides?.length ?? 0 }}</span>
-          <span>
+      <!--
+        AJUSTADO — cabeçalho:
+        1. Nome da equipa + tema: agora lado a lado (flex-row), em vez de
+           empilhados, a pedido do utilizador. O nome tem `shrink-0` para
+           nunca perder espaço para o tema, e o tema usa `min-w-0` + truncate
+           para cortar corretamente quando o espaço é curto, em vez de
+           empurrar o resto do cabeçalho.
+        2. Contador de slides: pílula com fundo âmbar e texto maior/negrito,
+           bem mais visível sobre o fundo preto.
+        3. Cronómetro: mesma lógica — pílula própria, maior e mais contrastada.
+      -->
+      <div class="absolute top-0 inset-x-0 flex items-start justify-between px-6 py-4 bg-black/70 z-20 text-white gap-4">
+        <div class="flex flex-row items-center gap-3 min-w-0">
+          <span
+            class="font-black text-amber-400 uppercase tracking-wide truncate shrink-0"
+            style="font-size: clamp(1rem, 1.6vw, 1.5rem)"
+          >
+            {{ store.presentationFlow.teamName }}
+          </span>
+          <span
+            v-if="store.presentationFlow.theme"
+            class="inline-block bg-white/10 text-white/90 rounded-full px-3 py-1 font-semibold truncate min-w-0"
+            style="font-size: clamp(0.7rem, 1.1vw, 0.95rem)"
+          >
+            {{ store.presentationFlow.theme }}
+          </span>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <span
+            class="bg-amber-500 text-black rounded-full px-4 py-1.5 font-black tracking-wide"
+            style="font-size: clamp(0.85rem, 1.2vw, 1.1rem)"
+          >
+            Slide {{ store.presentationFlow.currentPage }} / {{ store.presentationFlow.slides?.length ?? 0 }}
+          </span>
+          <span
+            class="bg-white text-black rounded-full px-4 py-1.5 font-black tracking-widest tabular-nums"
+            style="font-size: clamp(0.85rem, 1.2vw, 1.1rem)"
+          >
             {{ String(Math.floor(store.presentationFlow.timeLeft / 60)).padStart(2, '0') }}:{{ String(store.presentationFlow.timeLeft % 60).padStart(2, '0') }}
           </span>
         </div>
       </div>
-      <div
-        class="absolute inset-0 flex transition-transform duration-500 ease-in-out"
-        :style="{
-          transform: `translateX(-${(store.presentationFlow.currentPage - 1) * (100 / slideCount)}%)`,
-          width: `${slideCount * 100}%`
-        }"
-      >
+      <!--
+        CORRIGIDO (2ª vez) — a faixa de slides estava com a classe `flex-1`.
+        Como flex-1 define flex-basis: 0%, o navegador ignora o `width`
+        inline (slideCount * 100%) e calcula a largura pelo algoritmo flex,
+        fazendo a faixa ocupar apenas 100% do ecrã em vez da largura total
+        esticada. Resultado: com 1 slide funcionava bem (não havia diferença),
+        mas com vários slides eles ficavam todos espremidos lado a lado dentro
+        do mesmo ecrã, aparecendo "todos de uma vez". Trocado para `shrink-0`,
+        que não interfere no width inline e deixa o overflow-hidden do pai
+        cortar o excesso corretamente durante a transição.
+      -->
+      <div class="absolute inset-0 pt-20 flex overflow-hidden">
         <div
-          v-for="s in store.presentationFlow.slides ?? []"
-          :key="s.order"
-          class="h-full flex items-center justify-center shrink-0"
-          :style="{ width: `${100 / slideCount}%` }"
+          class="shrink-0 flex transition-transform duration-500 ease-in-out"
+          :style="{
+            transform: `translateX(-${(store.presentationFlow.currentPage - 1) * (100 / slideCount)}%)`,
+            width: `${slideCount * 100}%`
+          }"
         >
-          <img :src="`${getBackendUrl()}${s.imageUrl}`" class="max-w-full max-h-full object-contain" />
+          <div
+            v-for="s in store.presentationFlow.slides ?? []"
+            :key="s.order"
+            class="h-full flex items-center justify-center shrink-0"
+            :style="{ width: `${100 / slideCount}%` }"
+          >
+            <img :src="`${getBackendUrl()}${s.imageUrl}`" class="max-w-full max-h-full object-contain" />
+          </div>
         </div>
       </div>
     </div>
@@ -371,10 +435,10 @@ const isBattleActiveState = computed(() => {
       v-else-if="store.presentationFlow.stage === 'presenting'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
     >
-      <h2 class="text-sm uppercase tracking-widest text-amber-400 font-bold">Apresentação de Projetos</h2>
-      <p class="text-4xl font-black">{{ store.presentationFlow.teamName }}</p>
-      <p class="text-lg text-white/80">Tema: {{ store.presentationFlow.theme }}</p>
-      <div class="text-7xl font-black text-amber-400 mt-4">
+      <h2 class="uppercase tracking-widest text-amber-400 font-bold" style="font-size: clamp(0.8rem, 1.2vw, 1rem)">Apresentação de Projetos</h2>
+      <p class="font-black" style="font-size: clamp(2.5rem, 6vw, 5.5rem)">{{ store.presentationFlow.teamName }}</p>
+      <p class="text-white/80" style="font-size: clamp(1.1rem, 1.8vw, 1.5rem)">Tema: {{ store.presentationFlow.theme }}</p>
+      <div class="font-black text-amber-400 mt-4" style="font-size: clamp(4rem, 12vw, 10rem)">
         {{ String(Math.floor(store.presentationFlow.timeLeft / 60)).padStart(2, '0') }}:{{ String(store.presentationFlow.timeLeft % 60).padStart(2, '0') }}
       </div>
     </div>
@@ -384,8 +448,8 @@ const isBattleActiveState = computed(() => {
       v-else-if="store.presentationFlow.stage === 'concluded'"
       class="min-h-screen flex flex-col items-center justify-center gap-4 p-10 text-white text-center"
     >
-      <h2 class="text-3xl font-black text-amber-400">Apresentação Concluída</h2>
-      <p class="text-xl">Muito obrigado, {{ store.presentationFlow.teamName }}!</p>
+      <h2 class="font-black text-amber-400" style="font-size: clamp(2rem, 4vw, 3.25rem)">Apresentação Concluída</h2>
+      <p style="font-size: clamp(1.1rem, 2vw, 1.75rem)">Muito obrigado, {{ store.presentationFlow.teamName }}!</p>
     </div>
 
     <!-- 6.8 Introdução ao Quiz -->
@@ -430,7 +494,7 @@ const isBattleActiveState = computed(() => {
       class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container tiebreak-container"
     >
       <header class="flex flex-col items-center justify-center gap-2 px-4 py-3 w-full max-w-7xl mx-auto shrink-0">
-        <div class="bg-red-600 text-white text-xs font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg animate-pulse">
+        <div class="bg-red-600 text-white font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg animate-pulse" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">
           Desempate
         </div>
         <TimerRing :seconds="store.timeLeft" />
@@ -448,17 +512,21 @@ const isBattleActiveState = computed(() => {
               :class="tiebreakQuestionImage ? 'flex-1 min-w-[40%]' : 'w-full max-w-4xl items-center text-center'"
             >
               <div
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide bg-red-50 text-red-700 border border-red-200/60"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide bg-red-50 text-red-700 border border-red-200/60"
+                style="font-size: clamp(0.65rem, 1vw, 0.85rem)"
                 :class="tiebreakQuestionImage ? 'self-start' : 'self-center'"
               >
                 <span>⚔️</span> PERGUNTA DE DESEMPATE
               </div>
               <h1
                 class="font-extrabold text-slate-800 leading-tight md:leading-snug transition-all duration-300"
-                :class="[
-                  currentTiebreakQuestion.text && currentTiebreakQuestion.text.length > 120 ? 'text-2xl md:text-3xl' : 'text-3xl md:text-5xl',
-                  tiebreakQuestionImage ? 'text-left' : 'text-center'
-                ]"
+                :class="tiebreakQuestionImage ? 'text-left' : 'text-center'"
+                :style="{
+                  fontSize:
+                    currentTiebreakQuestion.text && currentTiebreakQuestion.text.length > 120
+                      ? 'clamp(1.4rem, 2.6vw, 2.25rem)'
+                      : 'clamp(1.8rem, 3.8vw, 3.5rem)'
+                }"
               >
                 {{ currentTiebreakQuestion.text }}
               </h1>
@@ -486,7 +554,7 @@ const isBattleActiveState = computed(() => {
           </div>
         </div>
         <!-- Fallback: sem pool de perguntas de desempate cadastradas para esta fase -->
-        <div v-else class="text-white text-center text-lg">
+        <div v-else class="text-white text-center" style="font-size: clamp(1rem, 1.6vw, 1.25rem)">
           A aguardar pergunta de desempate do moderador...
         </div>
       </main>
@@ -499,12 +567,12 @@ const isBattleActiveState = computed(() => {
                 <img v-if="teamALogo" :src="formatImageUrl(teamALogo)" :alt="teamAName" class="w-full h-full object-contain rounded-full" />
                 <span v-else class="text-gray-900 font-black text-lg">{{ teamAName.slice(0, 3).toUpperCase() }}</span>
               </div>
-              <span class="text-xl md:text-2xl font-black tracking-wider uppercase text-white drop-shadow">{{ teamAName }}</span>
+              <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">{{ teamAName }}</span>
             </div>
           </div>
           <div class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
             <div class="bg-[#0a0f1d] px-8 py-2 border-x-2 border-red-400 shadow-2xl transform -skew-x-12 flex items-center justify-center">
-              <span class="transform skew-x-12 text-2xl md:text-3xl font-black text-white tracking-widest">VS</span>
+              <span class="transform skew-x-12 font-black text-white tracking-widest" style="font-size: clamp(1.25rem, 2vw, 1.75rem)">VS</span>
             </div>
           </div>
           <div class="relative flex-1 bg-gradient-to-l from-[#002b66] via-[#001d47] to-[#000d24] flex items-center justify-end pr-6 pl-12 text-white [clip-path:polygon(15%_0,100%_0,100%_100%,0_100%)] z-10 ml-auto">
@@ -513,7 +581,7 @@ const isBattleActiveState = computed(() => {
                 <img v-if="teamBLogo" :src="formatImageUrl(teamBLogo)" :alt="teamBName" class="w-full h-full object-contain rounded-full" />
                 <span v-else class="text-gray-900 font-black text-lg">{{ teamBName.slice(0, 3).toUpperCase() }}</span>
               </div>
-              <span class="text-xl md:text-2xl font-black tracking-wider uppercase text-white drop-shadow">{{ teamBName }}</span>
+              <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">{{ teamBName }}</span>
             </div>
           </div>
         </div>
@@ -558,8 +626,8 @@ const isBattleActiveState = computed(() => {
             <PhaseBadge :phase="store.phase" :label="phasesStore.labelFor(store.phase).toUpperCase()" />
             <div class="h-6 w-px bg-gray-200"></div>
             <div class="flex items-center gap-1.5">
-              <span class="text-xs text-gray-400 font-bold uppercase tracking-wider">PERGUNTA</span>
-              <span class="text-base font-black text-gray-800">
+              <span class="text-gray-400 font-bold uppercase tracking-wider" style="font-size: clamp(0.6rem, 0.9vw, 0.75rem)">PERGUNTA</span>
+              <span class="font-black text-gray-800" style="font-size: clamp(0.85rem, 1.3vw, 1.1rem)">
                 {{ store.currentQuestionIndex || 1 }} / {{ totalQuestionsForCounter }}
               </span>
             </div>
@@ -567,7 +635,7 @@ const isBattleActiveState = computed(() => {
         </div>
         <div class="flex flex-col items-center justify-center text-center">
           <LogoMark />
-          <span class="text-[10px] font-bold text-gray-600 tracking-widest uppercase mt-1 whitespace-nowrap">
+          <span class="font-bold text-gray-600 tracking-widest uppercase mt-1 whitespace-nowrap" style="font-size: clamp(0.55rem, 0.8vw, 0.7rem)">
             O QUIZ COMPETITIVO DO MUNDO DO PETRÓLEO
           </span>
         </div>
@@ -588,17 +656,21 @@ const isBattleActiveState = computed(() => {
               :class="questionImage ? 'flex-1 min-w-[40%]' : 'w-full max-w-4xl items-center text-center'"
             >
               <div
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide transition-all"
+                style="font-size: clamp(0.65rem, 1vw, 0.85rem)"
                 :class="questionImage ? 'bg-amber-50 text-amber-700 border border-amber-200/60 self-start' : 'bg-slate-100 text-slate-600 self-center'"
               >
                 <span>❓</span> {{ questionImage ? 'ENUNCIADO' : 'QUESTÃO POR RESPONDER' }}
               </div>
               <h1
                 class="font-extrabold text-slate-800 leading-tight md:leading-snug transition-all duration-300"
-                :class="[
-                  currentQuestion?.text && currentQuestion.text.length > 120 ? 'text-2xl md:text-3xl' : 'text-3xl md:text-5xl',
-                  questionImage ? 'text-left' : 'text-center'
-                ]"
+                :class="questionImage ? 'text-left' : 'text-center'"
+                :style="{
+                  fontSize:
+                    currentQuestion?.text && currentQuestion.text.length > 120
+                      ? 'clamp(1.4rem, 2.6vw, 2.25rem)'
+                      : 'clamp(1.8rem, 3.8vw, 3.5rem)'
+                }"
               >
                 {{ currentQuestion?.text }}
               </h1>
@@ -647,10 +719,10 @@ const isBattleActiveState = computed(() => {
                 </span>
               </div>
               <div class="flex flex-col">
-                <span class="text-xl md:text-2xl font-black tracking-wider uppercase text-white drop-shadow">
+                <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">
                   {{ teamAName }}
                 </span>
-                <span class="text-xs text-amber-300 font-bold tracking-widest">
+                <span class="text-amber-300 font-bold tracking-widest" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">
                   PONTOS: {{ store.teamAScore }}
                 </span>
               </div>
@@ -658,7 +730,10 @@ const isBattleActiveState = computed(() => {
           </div>
           <div class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
             <div class="bg-[#0a0f1d] px-8 py-2 border-x-2 border-amber-400 shadow-2xl transform -skew-x-12 flex items-center justify-center">
-              <span class="transform skew-x-12 text-2xl md:text-3xl font-black text-white tracking-widest drop-shadow-[0_2px_8px_rgba(255,255,255,0.5)]">
+              <span
+                class="transform skew-x-12 font-black text-white tracking-widest drop-shadow-[0_2px_8px_rgba(255,255,255,0.5)]"
+                style="font-size: clamp(1.25rem, 2vw, 1.75rem)"
+              >
                 VS
               </span>
             </div>
@@ -680,10 +755,10 @@ const isBattleActiveState = computed(() => {
                 </span>
               </div>
               <div class="flex flex-col items-end text-right">
-                <span class="text-xl md:text-2xl font-black tracking-wider uppercase text-white drop-shadow">
+                <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">
                   {{ teamBName }}
                 </span>
-                <span class="text-xs text-amber-300 font-bold tracking-widest">
+                <span class="text-amber-300 font-bold tracking-widest" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">
                   PONTOS: {{ store.teamBScore }}
                 </span>
               </div>
@@ -694,6 +769,19 @@ const isBattleActiveState = computed(() => {
       </footer>
     </div>
 
+    <!-- 10.5 Batalha terminou, à espera do moderador avançar -->
+    <div
+      v-else-if="roundJustEnded"
+      class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
+    >
+      <h2 class="font-black text-amber-400" style="font-size: clamp(2rem, 4.5vw, 3.5rem)">
+        A batalha terminou!
+      </h2>
+      <p style="font-size: clamp(1.1rem, 2vw, 1.75rem)">
+        Preparem-se — vamos entrar para a próxima batalha.
+      </p>
+    </div>
+
     <!-- 11. Fallback -->
     <SuspenseScreen v-else message="A aguardar a próxima pergunta do moderador..." transparent />
 
@@ -702,14 +790,14 @@ const isBattleActiveState = computed(() => {
       v-if="store.podiumReveal.finalRankingVisible"
       class="fixed inset-0 z-50 bg-petro-dark/95 flex flex-col items-center justify-center gap-6 p-10"
     >
-      <h2 class="text-2xl font-bold text-white">Ranking Final do Campeonato</h2>
+      <h2 class="font-bold text-white" style="font-size: clamp(1.5rem, 2.8vw, 2.25rem)">Ranking Final do Campeonato</h2>
       <PhaseRankingBoard :rankings="sortedChampionshipRanking" :eliminated-team-ids="[]" />
     </div>
     <div
       v-if="store.phaseRankingReveal.visible"
       class="fixed inset-0 z-50 bg-petro-bg/90 flex flex-col items-center justify-center gap-6 p-10"
     >
-      <h2 class="text-2xl font-bold text-petro-primary">Ranking da Fase {{ store.phase }}</h2>
+      <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.8vw, 2.25rem)">Ranking da Fase {{ store.phase }}</h2>
       <div class="flex flex-col gap-3 w-full max-w-lg">
         <div
           v-for="(r, i) in sortedPhaseRanking"
@@ -721,15 +809,16 @@ const isBattleActiveState = computed(() => {
               : 'bg-white shadow ring-2 ring-yellow-300 phase-rank-glow'
           "
         >
-          <span class="font-semibold">{{ i + 1 }}º {{ r.name }}</span>
+          <span class="font-semibold" style="font-size: clamp(0.9rem, 1.3vw, 1.1rem)">{{ i + 1 }}º {{ r.name }}</span>
           <div class="flex items-center gap-2">
             <span
-              class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              class="font-bold px-2 py-0.5 rounded-full"
+              style="font-size: clamp(0.55rem, 0.75vw, 0.65rem)"
               :class="store.eliminatedTeamIds.includes(r.teamId) ? 'bg-gray-200 text-gray-500' : 'bg-green-100 text-green-700'"
             >
               {{ store.eliminatedTeamIds.includes(r.teamId) ? 'ELIMINADA' : 'AVANÇA' }}
             </span>
-            <span class="font-bold text-petro-primary">{{ r.score }} pts</span>
+            <span class="font-bold text-petro-primary" style="font-size: clamp(0.9rem, 1.3vw, 1.1rem)">{{ r.score }} pts</span>
           </div>
         </div>
       </div>

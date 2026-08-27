@@ -76,6 +76,15 @@ const registeredPhases = computed(() =>
   phasesStore.phases.filter((p) => p.type === 'quiz' || p.type === 'apresentacao_quiz')
 )
 
+function resolveImageUrl(path?: string | null): string {
+  if (!path) return ''
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path
+  }
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  return `${getBackendUrl()}${cleanPath}`
+}
+
 async function loadForChampionship(): Promise<void> {
   await phasesStore.fetchPhases(selectedChampionship.value)
   await quizContent.fetchEvaluationItems(selectedChampionship.value)
@@ -253,7 +262,7 @@ async function saveItem(): Promise<void> {
 async function removeItem(id: string): Promise<void> {
   errorMsg.value = ''
   try {
-    await quizContent.deleteEvaluationItem(id)
+    await quizContent.deleteEvaluationItem(id, selectedChampionship.value)
     if (editingId.value === id) resetForm()
   } catch {
     errorMsg.value = 'Não foi possível remover o item — confirma que o backend está a correr e tenta outra vez.'
@@ -264,7 +273,7 @@ async function clearAllItems(): Promise<void> {
   if (!confirm('Tem a certeza que deseja apagar TODOS os itens de avaliação deste campeonato?')) return
   errorMsg.value = ''
   try {
-    await quizContent.clearAllEvaluationItems()
+    await quizContent.clearAllEvaluationItems(selectedChampionship.value)
     resetForm()
   } catch {
     errorMsg.value = 'Falhou a apagar alguns itens — verifica se ainda há algum na lista e tenta outra vez.'
@@ -409,7 +418,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
 
         <div class="flex items-center gap-4">
           <div class="w-20 h-14 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">
-            <img v-if="form.imageUrl" :src="form.imageUrl" alt="Imagem" class="w-full h-full object-cover" />
+            <img v-if="form.imageUrl" :src="resolveImageUrl(form.imageUrl)" alt="Imagem" class="w-full h-full object-cover" />
             <span v-else class="text-[10px] text-gray-400 text-center px-1">Sem imagem</span>
           </div>
           <label class="bg-petro-primary/10 text-petro-primary text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer text-center">
@@ -418,7 +427,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           </label>
         </div>
 
-        <!-- MÚLTIPLA ESCOLHA (lista dinâmica de 2 a 8 alíneas) -->
+        <!-- MÚLTIPLA ESCOLHA -->
         <template v-if="form.mode === 'multipla_escolha'">
           <div>
             <label class="text-xs text-gray-500 block mb-2">
@@ -462,7 +471,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           </div>
         </template>
 
-        <!-- Campos específicos de ABERTA -->
+        <!-- ABERTA -->
         <template v-else>
           <div>
             <label class="text-xs text-gray-500 block mb-1">Jurados que avaliam esta pergunta</label>

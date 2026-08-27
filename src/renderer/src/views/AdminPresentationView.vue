@@ -113,13 +113,15 @@ function onConfigUpdated(payload: { type: string; championship?: string | null }
 onMounted(async () => {
   await teamsStore.fetchTeams()
   await loadPhases()
+  // No build Admin Cloud, connectSocket() devolve null (o backend Cloud não
+  // tem Socket.io por design) — o optional chaining evita que isso rebente.
   const socket = connectSocket()
-  socket.on('config:updated', onConfigUpdated)
+  socket?.on('config:updated', onConfigUpdated)
 })
 
 onUnmounted(() => {
   const socket = connectSocket()
-  socket.off('config:updated', onConfigUpdated)
+  socket?.off('config:updated', onConfigUpdated)
 })
 
 watch(selectedChampionship, loadPhases)

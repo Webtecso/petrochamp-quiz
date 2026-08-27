@@ -31,9 +31,9 @@ interface MatchCodes {
 interface TiebreakState {
   active: boolean
   pending: boolean
-  matchId: string | null
-  currentQuestionId: string | null
-  usedQuestionIds: string[]
+  matchId: number | null
+  currentQuestionId: number | null
+  usedQuestionIds: number[]
 }
 
 interface PodiumRevealState {
@@ -70,7 +70,7 @@ interface ChampionRevealState {
 interface RepescagemRevealState {
   stage: 'idle' | 'suspense' | 'countdown' | 'voting' | 'results'
   countdownValue: number
-  configId: string | null
+  configId: number | null
   repescadaNames: string[]
 }
 
@@ -82,7 +82,7 @@ interface InitialScoreEntry {
 
 export interface PresentationCriteriaScoreEntry {
   jurorId: string
-  criteriaId: string
+  criteriaId: number
   score: number
 }
 
@@ -93,7 +93,7 @@ export interface PresentationSlideInfo {
 
 export interface PresentationFlowState {
   stage: 'idle' | 'countdown' | 'presenting' | 'concluded'
-  duplaId: string | null
+  duplaId: number | null
   teamId: string | null
   teamName: string | null
   theme: string | null
@@ -107,7 +107,6 @@ export interface PresentationFlowState {
   currentPage: number
 }
 
-// NOVO — espelha AnalyticCriteriaScoreEntry do backend (liveState.ts).
 export interface AnalyticCriteriaScoreEntry {
   jurorId: string
   criteriaId: string
@@ -115,7 +114,6 @@ export interface AnalyticCriteriaScoreEntry {
   score: number
 }
 
-// NOVO — espelha AnalyticEvaluationState do backend.
 export interface AnalyticEvaluationState {
   itemId: string | null
   criteriaScores: AnalyticCriteriaScoreEntry[]
@@ -131,10 +129,10 @@ interface LiveState {
   teamAScore: number
   teamBScore: number
   phase: number
-  currentQuestionId: string | null
+  currentQuestionId: number | null
   currentQuestionIndex: number
   activeTeam: 'A' | 'B'
-  usedQuestionIds: string[]
+  usedQuestionIds: number[]
   teamAAnsweredCount: number
   teamBAnsweredCount: number
   timeLeft: number
@@ -199,7 +197,6 @@ function defaultPresentationFlow(): PresentationFlowState {
   }
 }
 
-// NOVO — valor inicial local do painel de avaliação analítica.
 function defaultAnalyticEvaluation(): AnalyticEvaluationState {
   return {
     itemId: null,
@@ -208,6 +205,14 @@ function defaultAnalyticEvaluation(): AnalyticEvaluationState {
     expectedJurorCount: 0
   }
 }
+
+// NOVO — controlo de debounce para envio de notas ao servidor. Guardados
+// fora do state do Pinia (não precisam de ser reativos nem persistidos)
+// para evitar re-render desnecessário a cada tecla.
+const presentationScoreDebounce: Record<string, ReturnType<typeof setTimeout>> = {}
+const analyticScoreDebounce: Record<string, ReturnType<typeof setTimeout>> = {}
+const PRESENTATION_SCORE_DEBOUNCE_MS = 400
+const ANALYTIC_SCORE_DEBOUNCE_MS = 400
 
 export const useCampeonatoStore = defineStore('campeonato', {
   state: (): LiveState => ({
@@ -313,7 +318,7 @@ export const useCampeonatoStore = defineStore('campeonato', {
     nextQuestion() {
       getSocket().emit('moderator:nextQuestion')
     },
-    forceQuestion(questionId: string) {
+    forceQuestion(questionId: number) {
       getSocket().emit('moderator:forceQuestion', { questionId })
     },
     endOpenQuestion() {
@@ -376,10 +381,10 @@ export const useCampeonatoStore = defineStore('campeonato', {
     hidePhaseTransition() {
       getSocket().emit('moderator:hidePhaseTransition')
     },
-    openRepescagemVoting(configId: string) {
+    openRepescagemVoting(configId: number) {
       getSocket().emit('moderator:openRepescagemVoting', { configId })
     },
-    closeRepescagemVoting(configId: string) {
+    closeRepescagemVoting(configId: number) {
       getSocket().emit('moderator:closeRepescagemVoting', { configId })
     },
     setInitialScore(jurorId: string, scoreA: number, scoreB: number) {
@@ -388,14 +393,43 @@ export const useCampeonatoStore = defineStore('campeonato', {
     confirmInitialScores() {
       getSocket().emit('moderator:confirmInitialScores')
     },
-    startPresentation(duplaId: string, teamId: string, useDocument = false) {
+    startPresentation(duplaId: number, teamId: string, useDocument = false) {
       getSocket().emit('moderator:startPresentation', { duplaId, teamId, useDocument })
     },
     finishPresentation() {
       getSocket().emit('moderator:finishPresentation')
     },
-    setPresentationScore(jurorId: string, criteriaId: string, score: number) {
-      getSocket().emit('juror:setPresentationScore', { jurorId, criteriaId, score })
+    // CORRIGIDO — antes emitia diretamente ao socket a cada chamada, ou
+    // seja, a cada tecla digitada no input de nota (a JuradosView.vue
+    // chama isto em @input). Cada emit despoleta um broadcast() no
+    // backend que reenvia o liveState inteiro a todos os clientes
+    // ligados — com vários jurados a escrever ao mesmo tempo, isto
+    // gerava uma rajada de round-trips completos, dando a sensação de
+    // lentidão e de "a nota não fica gravada" quando um broadcast
+    // atrasado sobrepunha o valor mostrado no ecrã.
+    //
+    // Agora: 1) atualiza otimisticamente o array local
+    // presentationFlow.criteriaScores (o valor aparece no ecrã de
+    // imediato, sem esperar pelo servidor); 2) só emite ao servidor
+    // depois de um pequeno intervalo sem nova alteração para a MESMA
+    // combinação jurado+critério. O próximo state:sync do servidor
+    // confirma (ou corrige) este valor otimista.
+    setPresentationScore(jurorId: string, criteriaId: number, score: number) {
+      const existing = this.presentationFlow.criteriaScores.find(
+        (e) => e.jurorId === jurorId && e.criteriaId === criteriaId
+      )
+      if (existing) {
+        existing.score = score
+      } else {
+        this.presentationFlow.criteriaScores.push({ jurorId, criteriaId, score })
+      }
+
+      const key = `${jurorId}::${criteriaId}`
+      if (presentationScoreDebounce[key]) clearTimeout(presentationScoreDebounce[key])
+      presentationScoreDebounce[key] = setTimeout(() => {
+        getSocket().emit('juror:setPresentationScore', { jurorId, criteriaId, score })
+        delete presentationScoreDebounce[key]
+      }, PRESENTATION_SCORE_DEBOUNCE_MS)
     },
     submitPresentationEvaluation(jurorId: string) {
       getSocket().emit('juror:submitPresentationEvaluation', { jurorId })
@@ -412,8 +446,24 @@ export const useCampeonatoStore = defineStore('campeonato', {
     prevPresentationPage() {
       getSocket().emit('moderator:presentationPrevPage')
     },
+    // CORRIGIDO — mesmo tratamento de debounce + atualização otimista
+    // local para as notas por critério de Perguntas Analíticas.
     setAnalyticCriteriaScore(jurorId: string, criteriaId: string, team: 'A' | 'B', score: number) {
-      getSocket().emit('juror:setAnalyticCriteriaScore', { jurorId, criteriaId, team, score })
+      const existing = this.analyticEvaluation.criteriaScores.find(
+        (e) => e.jurorId === jurorId && e.criteriaId === criteriaId && e.team === team
+      )
+      if (existing) {
+        existing.score = score
+      } else {
+        this.analyticEvaluation.criteriaScores.push({ jurorId, criteriaId, team, score })
+      }
+
+      const key = `${jurorId}::${criteriaId}::${team}`
+      if (analyticScoreDebounce[key]) clearTimeout(analyticScoreDebounce[key])
+      analyticScoreDebounce[key] = setTimeout(() => {
+        getSocket().emit('juror:setAnalyticCriteriaScore', { jurorId, criteriaId, team, score })
+        delete analyticScoreDebounce[key]
+      }, ANALYTIC_SCORE_DEBOUNCE_MS)
     },
     submitAnalyticEvaluation(jurorId: string, itemId: string) {
       getSocket().emit('juror:submitAnalyticEvaluation', { jurorId, itemId })
