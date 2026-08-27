@@ -28,14 +28,17 @@ export async function getEligibleTeams(championship: string, phase: number) {
     loserIds.add(loserId)
   }
   for (const w of winnerIds) loserIds.delete(w)
-  return prisma.team.findMany({ where: { id: { in: Array.from(loserIds) } } })
+  return prisma.team.findMany({ where: { id: { in: Array.from(loserIds) }, deletedAt: null } })
 }
 
 // NOVO — Admin: listar configurações de um campeonato
 router.get('/configs', async (req, res) => {
   const { championship } = req.query as { championship?: string }
   const configs = await prisma.repescagemConfig.findMany({
-    where: championship ? { championship } : undefined,
+    where: {
+      championship: championship || undefined,
+      deletedAt: null // NOVO
+    },
     orderBy: { createdAt: 'desc' }
   })
   res.json(configs)
@@ -66,12 +69,14 @@ router.put('/config/:id', async (req, res) => {
   const id = Number(req.params.id)
   const { maxRepescados, votingDurationSeconds } = req.body
   const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
-  if (!existing) {
+  if (!existing || existing.deletedAt) {
     res.status(404).json({ error: 'Configuração não encontrada' })
     return
   }
   if (existing.started) {
-    res.status(400).json({ error: 'Esta repescagem já foi iniciada pelo Moderador e não pode ser editada.' })
+    res
+      .status(400)
+      .json({ error: 'Esta repescagem já foi iniciada pelo Moderador e não pode ser editada.' })
     return
   }
   const config = await prisma.repescagemConfig.update({
@@ -82,10 +87,11 @@ router.put('/config/:id', async (req, res) => {
 })
 
 // NOVO — Admin: apagar configuração não usada
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/config/:id', async (req, res) => {
   const id = Number(req.params.id)
   const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
-  if (!existing) {
+  if (!existing || existing.deletedAt) {
     res.status(404).json({ error: 'Configuração não encontrada' })
     return
   }
@@ -93,7 +99,7 @@ router.delete('/config/:id', async (req, res) => {
     res.status(400).json({ error: 'Esta repescagem já foi iniciada e não pode ser apagada.' })
     return
   }
-  await prisma.repescagemConfig.delete({ where: { id } })
+  await prisma.repescagemConfig.update({ where: { id }, data: { deletedAt: new Date() } })
   res.status(204).send()
 })
 
@@ -106,7 +112,7 @@ router.get('/for-phase', async (req, res) => {
     return
   }
   const config = await prisma.repescagemConfig.findFirst({
-    where: { championship, phase: Number(phase) },
+    where: { championship, phase: Number(phase), deletedAt: null }, // NOVO
     orderBy: { createdAt: 'desc' }
   })
   res.json(config)
@@ -115,7 +121,7 @@ router.get('/for-phase', async (req, res) => {
 // Portal público + Moderador: repescagem atualmente EM VOTAÇÃO (só as já iniciadas)
 router.get('/active', async (_req, res) => {
   const config = await prisma.repescagemConfig.findFirst({
-    where: { started: true },
+    where: { started: true, deletedAt: null }, // NOVO
     orderBy: { startedAt: 'desc' }
   })
   if (!config) {
@@ -155,7 +161,7 @@ router.post('/vote', async (req, res) => {
     return
   }
   const config = await prisma.repescagemConfig.findUnique({ where: { id: configId } })
-  if (!config || !config.votingOpen) {
+  if (!config || config.deletedAt || !config.votingOpen) {
     res.status(400).json({ error: 'Votação não está aberta' })
     return
   }
@@ -190,6 +196,9 @@ router.post('/:id/generate-bracket', async (req, res) => {
   let selected = ranked.slice(0, config.maxRepescados).map((r) => r.team)
 
   const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
+  // Reset de um chaveamento sintético derivado, sempre recalculado do
+  // zero — intencionalmente hard-delete/deleteMany, não é uma entidade
+  // que o utilizador "apaga" manualmente através de um botão.
   await prisma.bracketMatch.deleteMany({ where: { championship: syntheticChampionship } })
 
   if (selected.length % 2 !== 0 && selected.length > 1) {
@@ -264,10 +273,18 @@ router.get('/:id/bracket', async (req, res) => {
     slot: m.slot,
     groupName: m.groupName,
     teamA: m.teamAId
-      ? { id: m.teamAId, name: teamMap.get(m.teamAId)?.name ?? '?', logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null }
+      ? {
+          id: m.teamAId,
+          name: teamMap.get(m.teamAId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null
+        }
       : null,
     teamB: m.teamBId
-      ? { id: m.teamBId, name: teamMap.get(m.teamBId)?.name ?? '?', logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null }
+      ? {
+          id: m.teamBId,
+          name: teamMap.get(m.teamBId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null
+        }
       : null,
     winnerId: m.winnerId
   }))

@@ -11,13 +11,14 @@ router.get('/:championship', async (req, res) => {
     const rawTeams = await prisma.team.findMany({
       where: {
         category: championship,
-        group: { not: null }
+        group: { not: null },
+        deletedAt: null // NOVO
       },
       orderBy: [{ group: 'asc' }, { bracketPosition: 'asc' }]
     })
 
     // Eliminar duplicados por ID e por Nome (case-insensitive)
-    const uniqueTeamsMap = new Map<string, typeof rawTeams[0]>()
+    const uniqueTeamsMap = new Map<string, (typeof rawTeams)[0]>()
     for (const t of rawTeams) {
       const nameKey = t.name.trim().toLowerCase()
       const exists = Array.from(uniqueTeamsMap.values()).some(
@@ -61,7 +62,11 @@ router.get('/:championship', async (req, res) => {
   }
 })
 
-// Função auxiliar para eliminar o chaveamento, duplas e limpar grupos das equipas
+// Função auxiliar para eliminar o chaveamento, duplas e limpar grupos das
+// equipas. NOTA: este apagamento em massa continua intencionalmente hard
+// delete/deleteMany — é dado derivado, sempre recalculado do zero quando
+// se gera um novo chaveamento, e não uma entidade que o utilizador apaga
+// individualmente através de um botão "remover".
 async function deleteBracketData(championship?: string) {
   return await prisma.$transaction(async (tx) => {
     await tx.presentationScore.deleteMany({})
@@ -104,7 +109,10 @@ router.delete('/:championship', async (req, res) => {
     emitConfigUpdated('presentation')
     emitConfigUpdated('teams')
 
-    res.json({ success: true, message: `Chaveamento e duplas da categoria ${championship} eliminados com sucesso.` })
+    res.json({
+      success: true,
+      message: `Chaveamento e duplas da categoria ${championship} eliminados com sucesso.`
+    })
   } catch (error) {
     console.error('Erro ao eliminar chaveamento:', error)
     res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })
@@ -119,7 +127,10 @@ const handleClearAll = async (_req: any, res: any) => {
     emitConfigUpdated('presentation')
     emitConfigUpdated('teams')
 
-    res.json({ success: true, message: 'Todo o chaveamento e duplas de apresentação foram eliminados com sucesso.' })
+    res.json({
+      success: true,
+      message: 'Todo o chaveamento e duplas de apresentação foram eliminados com sucesso.'
+    })
   } catch (error) {
     console.error('Erro ao eliminar chaveamento:', error)
     res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })

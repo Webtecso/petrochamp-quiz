@@ -6,7 +6,10 @@ import { requireAdmin } from '../middleware/requireAdmin'
 const router = Router()
 
 router.get('/', async (_req, res) => {
-  const phrases = await prisma.suspensePhrase.findMany({ orderBy: { createdAt: 'asc' } })
+  const phrases = await prisma.suspensePhrase.findMany({
+    where: { deletedAt: null }, // NOVO
+    orderBy: { createdAt: 'asc' }
+  })
   res.json(phrases)
 })
 
@@ -21,10 +24,11 @@ router.post('/', requireAdmin, async (req, res) => {
   res.status(201).json(phrase)
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   try {
-    await prisma.suspensePhrase.delete({ where: { id } })
+    await prisma.suspensePhrase.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('suspensePhrases')
     res.status(204).send()
   } catch {

@@ -66,9 +66,10 @@ router.post('/setup', async (req, res) => {
   const totpSecret = auth.generateSecret()
   await prisma.adminAuth.create({ data: { id: 1, passwordHash, totpSecret, totpEnabled: false } })
 
-  const keyuri = typeof auth.keyuri === 'function'
-    ? auth.keyuri('Admin', 'Petrochamp', totpSecret)
-    : `otpauth://totp/Petrochamp:Admin?secret=${totpSecret}&issuer=Petrochamp`
+  const keyuri =
+    typeof auth.keyuri === 'function'
+      ? auth.keyuri('Admin', 'Petrochamp', totpSecret)
+      : `otpauth://totp/Petrochamp:Admin?secret=${totpSecret}&issuer=Petrochamp`
 
   const qrDataUrl = await QRCode.toDataURL(keyuri)
   res.status(201).json({ qrDataUrl, secret: totpSecret })

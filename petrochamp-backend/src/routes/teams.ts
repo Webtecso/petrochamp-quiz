@@ -6,7 +6,10 @@ import { requireAdmin } from '../middleware/requireAdmin'
 const router = Router()
 
 router.get('/', async (_req, res) => {
-  const teams = await prisma.team.findMany({ orderBy: { createdAt: 'asc' } })
+  const teams = await prisma.team.findMany({
+    where: { deletedAt: null }, // NOVO
+    orderBy: { createdAt: 'asc' }
+  })
   res.json(teams)
 })
 
@@ -51,12 +54,15 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {
-    const existing = await prisma.team.findUnique({ where: { id } })
-    await prisma.team.delete({ where: { id } })
-    emitConfigUpdated('teams', existing?.category)
+    const existing = await prisma.team.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    })
+    emitConfigUpdated('teams', existing.category)
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Equipa não encontrada' })

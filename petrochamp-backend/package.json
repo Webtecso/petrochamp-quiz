@@ -9,7 +9,11 @@
     "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "postinstall": "prisma generate",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "db:backup": "node scripts/backup-db.js",
+    "migrate": "npm run db:backup && npx prisma migrate dev",
+    "migrate:deploy": "npm run db:backup && npx prisma migrate deploy",
+    "migrate:reset": "npm run db:backup && node scripts/confirm-reset.js && npx prisma migrate reset"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

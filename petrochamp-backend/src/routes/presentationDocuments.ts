@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
       teamId?: string
     }
 
-    const where: any = {}
+    const where: any = { deletedAt: null } // NOVO
     if (phaseId) where.phaseId = phaseId
     if (duplaId) where.duplaId = duplaId
     if (teamId) where.teamId = teamId
@@ -64,7 +64,9 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
     const files = req.files as Express.Multer.File[] | undefined
 
     if (!duplaId || !teamId || !files || !files.length) {
-      return res.status(400).json({ error: 'duplaId, teamId e pelo menos uma imagem são obrigatórios.' })
+      return res
+        .status(400)
+        .json({ error: 'duplaId, teamId e pelo menos uma imagem são obrigatórios.' })
     }
 
     const dupla = await prisma.presentationDupla.findUnique({ where: { id: duplaId } })
@@ -96,6 +98,9 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
     })
 
     if (existing) {
+      // Ficheiros físicos: continuam a ser apagados do disco imediatamente
+      // — isso é local a esta máquina, não precisa (nem faz sentido)
+      // sincronizar entre admin local e admin cloud.
       for (const slide of existing.slides) {
         await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
       }
@@ -104,7 +109,7 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
 
     const doc = await prisma.presentationDocument.upsert({
       where: { duplaId_teamId: { duplaId, teamId } },
-      update: {},
+      update: { deletedAt: null },
       create: { phaseId: dupla.phaseId, duplaId, teamId }
     })
 
@@ -133,6 +138,9 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
 })
 
 // DELETE /api/presentation-documents/:id
+// CORRIGIDO — soft delete no registo (ver nota em questions.ts); os
+// ficheiros físicos das slides continuam a ser apagados do disco de
+// imediato, já que isso é local e não passa pelo sync.
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params
@@ -150,7 +158,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
     }
 
-    await prisma.presentationDocument.delete({ where: { id } })
+    await prisma.presentationDocument.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('presentation')
 
     return res.status(204).send()

@@ -282,8 +282,19 @@ export const liveState: LiveState = {
   teamACorrect: null,
   teamBCorrect: null,
   countdown: { active: false, value: 0 },
-  tiebreak: { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] },
-  podiumReveal: { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false },
+  tiebreak: {
+    active: false,
+    pending: false,
+    matchId: null,
+    currentQuestionId: null,
+    usedQuestionIds: []
+  },
+  podiumReveal: {
+    stage: 'idle',
+    countdownValue: 0,
+    suspensePhrase: null,
+    finalRankingVisible: false
+  },
   repescagemReveal: { stage: 'idle', countdownValue: 0, configId: null, repescadaNames: [] },
   phaseTransition: { stage: 'idle' },
   phaseFlow: { stage: 'idle', suspensePhrase: null },
@@ -338,7 +349,13 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.timeLeft = questionTimeSeconds
   liveState.isRunning = false
   liveState.countdown = { active: false, value: 0 }
-  liveState.tiebreak = { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] }
+  liveState.tiebreak = {
+    active: false,
+    pending: false,
+    matchId: null,
+    currentQuestionId: null,
+    usedQuestionIds: []
+  }
   liveState.matchStartedAt = null
   liveState.matchCodes = {
     teamACode: null,
@@ -372,7 +389,12 @@ export function addToPhaseRanking(team: LiveTeam | null, score: number): void {
   if (existing) {
     existing.score += score
   } else {
-    liveState.phaseRankings.push({ teamId: team.id, name: team.name, institution: team.institution, score })
+    liveState.phaseRankings.push({
+      teamId: team.id,
+      name: team.name,
+      institution: team.institution,
+      score
+    })
   }
 }
 
@@ -382,7 +404,12 @@ export function addToChampionshipRanking(team: LiveTeam | null, score: number): 
   if (existing) {
     existing.score += score
   } else {
-    liveState.championshipRankings.push({ teamId: team.id, name: team.name, institution: team.institution, score })
+    liveState.championshipRankings.push({
+      teamId: team.id,
+      name: team.name,
+      institution: team.institution,
+      score
+    })
   }
 }
 
@@ -407,7 +434,9 @@ export async function loadPersistedState(): Promise<void> {
       liveState.presentationFlow = {
         ...defaultPresentationFlow(),
         ...liveState.presentationFlow,
-        slides: Array.isArray(liveState.presentationFlow?.slides) ? liveState.presentationFlow.slides : []
+        slides: Array.isArray(liveState.presentationFlow?.slides)
+          ? liveState.presentationFlow.slides
+          : []
       }
       if (!Array.isArray(liveState.carriedPresentationScores)) {
         liveState.carriedPresentationScores = []

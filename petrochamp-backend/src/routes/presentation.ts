@@ -19,7 +19,7 @@ async function attachTeams(duplas: Array<{ teamAId: string; teamBId: string | nu
   return duplas.map((d) => ({
     ...d,
     teamA: teamMap.get(d.teamAId) ?? null,
-    teamB: d.teamBId ? teamMap.get(d.teamBId) ?? null : null
+    teamB: d.teamBId ? (teamMap.get(d.teamBId) ?? null) : null
   }))
 }
 
@@ -28,18 +28,29 @@ router.get('/duplas', async (req, res) => {
   try {
     const { phaseId, championship } = req.query as { phaseId?: string; championship?: string }
 
-    let duplas: Array<{ id: string; phaseId: string; order: number; themeA: string; themeB: string | null; teamAId: string; teamBId: string | null }> = []
+    let duplas: Array<{
+      id: string
+      phaseId: string
+      order: number
+      themeA: string
+      themeB: string | null
+      teamAId: string
+      teamBId: string | null
+    }> = []
 
     if (phaseId && phaseId !== 'undefined' && phaseId !== 'null') {
       duplas = await prisma.presentationDupla.findMany({
-        where: { phaseId },
+        where: { phaseId, deletedAt: null }, // NOVO
         orderBy: { order: 'asc' }
       })
     } else if (championship && championship !== 'undefined' && championship !== 'null') {
-      const phases = await prisma.phase.findMany({ where: { championship }, select: { id: true } })
+      const phases = await prisma.phase.findMany({
+        where: { championship, deletedAt: null },
+        select: { id: true }
+      })
       const phaseIds = phases.map((p) => p.id)
       duplas = await prisma.presentationDupla.findMany({
-        where: { phaseId: { in: phaseIds } },
+        where: { phaseId: { in: phaseIds }, deletedAt: null }, // NOVO
         orderBy: { order: 'asc' }
       })
     }
@@ -55,7 +66,8 @@ router.get('/duplas', async (req, res) => {
 // POST /api/presentation/duplas
 router.post('/duplas', requireAdmin, async (_req, res) => {
   return res.status(400).json({
-    error: 'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
+    error:
+      'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
   })
 })
 
@@ -80,11 +92,12 @@ router.patch('/duplas/:id/theme', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/presentation/duplas/:id
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/duplas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
 
   try {
-    await prisma.presentationDupla.delete({ where: { id } })
+    await prisma.presentationDupla.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('presentation')
     return res.status(204).send()
   } catch (error) {
@@ -99,7 +112,7 @@ router.get('/criteria', async (req, res) => {
     if (!phaseId) return res.json([])
 
     const criteria = await prisma.presentationCriteria.findMany({
-      where: { phaseId },
+      where: { phaseId, deletedAt: null }, // NOVO
       orderBy: { id: 'asc' }
     })
     return res.json(criteria)
@@ -119,7 +132,9 @@ router.post('/criteria', requireAdmin, async (req, res) => {
 
     const points = Number(maxPoints)
     if (isNaN(points) || points <= 0) {
-      return res.status(400).json({ error: 'maxPoints deve ser um número válido e maior que zero.' })
+      return res
+        .status(400)
+        .json({ error: 'maxPoints deve ser um número válido e maior que zero.' })
     }
 
     const criteria = await prisma.presentationCriteria.create({
@@ -134,11 +149,12 @@ router.post('/criteria', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/presentation/criteria/:id
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/criteria/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
 
   try {
-    await prisma.presentationCriteria.delete({ where: { id } })
+    await prisma.presentationCriteria.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('presentation')
     return res.status(204).send()
   } catch (error) {

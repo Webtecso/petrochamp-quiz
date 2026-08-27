@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
   try {
     const { championship } = req.query as { championship?: string }
 
-    const where: any = {}
+    const where: any = { deletedAt: null } // NOVO
     if (championship && championship !== 'undefined' && championship !== 'null') {
       where.championship = championship
     }
@@ -38,7 +38,13 @@ router.post('/swap', requireAdmin, async (req, res) => {
       prisma.phase.findUnique({ where: { id: firstId } }),
       prisma.phase.findUnique({ where: { id: secondId } })
     ])
-    if (!first || !second || first.championship !== second.championship) {
+    if (
+      !first ||
+      !second ||
+      first.deletedAt ||
+      second.deletedAt ||
+      first.championship !== second.championship
+    ) {
       return res.status(404).json({ error: 'Fases não encontradas ou de campeonatos diferentes.' })
     }
 
@@ -50,7 +56,10 @@ router.post('/swap', requireAdmin, async (req, res) => {
     await prisma.phase.update({ where: { id: second.id }, data: { order: orderA } })
     await prisma.phase.update({ where: { id: first.id }, data: { order: orderB } })
 
-    const phases = await prisma.phase.findMany({ where: { championship: first.championship }, orderBy: { order: 'asc' } })
+    const phases = await prisma.phase.findMany({
+      where: { championship: first.championship, deletedAt: null },
+      orderBy: { order: 'asc' }
+    })
     return res.json({ success: true, phases })
   } catch (error: any) {
     console.error('[Phases POST /swap Error]:', error)
@@ -65,14 +74,20 @@ router.post('/repair-numbering', requireAdmin, async (req, res) => {
     if (!championship) {
       return res.status(400).json({ error: 'championship é obrigatório.' })
     }
-    const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+    const phases = await prisma.phase.findMany({
+      where: { championship, deletedAt: null },
+      orderBy: { order: 'asc' }
+    })
     for (let i = 0; i < phases.length; i++) {
       const desiredOrder = i + 1
       if (phases[i].order !== desiredOrder) {
         await prisma.phase.update({ where: { id: phases[i].id }, data: { order: desiredOrder } })
       }
     }
-    const updated = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+    const updated = await prisma.phase.findMany({
+      where: { championship, deletedAt: null },
+      orderBy: { order: 'asc' }
+    })
     return res.json({ success: true, phases: updated })
   } catch (error: any) {
     console.error('[Phases POST /repair-numbering Error]:', error)
@@ -91,7 +106,7 @@ router.get('/:id', async (req, res) => {
 
     const phase = await prisma.phase.findUnique({ where: { id } })
 
-    if (!phase) {
+    if (!phase || phase.deletedAt) {
       return res.status(404).json({ error: 'Fase não encontrada.' })
     }
 
@@ -125,11 +140,12 @@ router.post('/', requireAdmin, async (req, res) => {
       noElimination
     } = req.body || {}
 
-    const phaseLabel = (typeof label === 'string' && label.trim())
-      ? label.trim()
-      : (typeof name === 'string' && name.trim())
-        ? name.trim()
-        : null
+    const phaseLabel =
+      typeof label === 'string' && label.trim()
+        ? label.trim()
+        : typeof name === 'string' && name.trim()
+          ? name.trim()
+          : null
 
     if (!phaseLabel) {
       console.warn('[Backend POST /api/phases] Rejeitado: campo "label" ou "name" em falta.')
@@ -139,14 +155,15 @@ router.post('/', requireAdmin, async (req, res) => {
       })
     }
 
-    const championshipValue = championship && championship !== 'undefined' && championship !== 'null' ? championship : null
+    const championshipValue =
+      championship && championship !== 'undefined' && championship !== 'null' ? championship : null
 
     let resolvedOrder: number
     if (order !== undefined && order !== null) {
       resolvedOrder = Number(order)
     } else {
       const maxOrder = await prisma.phase.aggregate({
-        where: { championship: championshipValue ?? undefined },
+        where: { championship: championshipValue ?? undefined, deletedAt: null },
         _max: { order: true }
       })
       resolvedOrder = (maxOrder._max.order ?? 0) + 1
@@ -164,17 +181,25 @@ router.post('/', requireAdmin, async (req, res) => {
     if (maxQuestions !== undefined) dataToCreate.maxQuestions = Number(maxQuestions)
     if (questionsPerTeam !== undefined) dataToCreate.questionsPerTeam = Number(questionsPerTeam)
     if (useInitialScores !== undefined) dataToCreate.useInitialScores = Boolean(useInitialScores)
-    if (initialScoreMaxPoints !== undefined) dataToCreate.initialScoreMaxPoints = initialScoreMaxPoints ? Number(initialScoreMaxPoints) : null
-    if (presentationMinutes !== undefined) dataToCreate.presentationMinutes = Number(presentationMinutes)
-    if (presentationWeight !== undefined) dataToCreate.presentationWeight = Number(presentationWeight)
+    if (initialScoreMaxPoints !== undefined)
+      dataToCreate.initialScoreMaxPoints = initialScoreMaxPoints
+        ? Number(initialScoreMaxPoints)
+        : null
+    if (presentationMinutes !== undefined)
+      dataToCreate.presentationMinutes = Number(presentationMinutes)
+    if (presentationWeight !== undefined)
+      dataToCreate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToCreate.quizWeight = Number(quizWeight)
-    // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam
-    // e a nota é transportada (ponderada) para o Quiz da fase seguinte.
     if (noElimination !== undefined) dataToCreate.noElimination = Boolean(noElimination)
 
     const phase = await prisma.phase.create({ data: dataToCreate })
 
-    console.log('[Backend POST /api/phases] Fase criada com sucesso:', phase.id, 'order:', phase.order)
+    console.log(
+      '[Backend POST /api/phases] Fase criada com sucesso:',
+      phase.id,
+      'order:',
+      phase.order
+    )
     return res.status(201).json(phase)
   } catch (error: any) {
     console.error('[Phases POST / Error]:', error)
@@ -209,11 +234,13 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
 
     const existing = await prisma.phase.findUnique({ where: { id } })
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       return res.status(404).json({ error: 'Fase não encontrada.' })
     }
 
-    const phaseLabel = (label && typeof label === 'string' && label.trim()) || (name && typeof name === 'string' && name.trim())
+    const phaseLabel =
+      (label && typeof label === 'string' && label.trim()) ||
+      (name && typeof name === 'string' && name.trim())
 
     const dataToUpdate: any = {}
 
@@ -226,11 +253,15 @@ router.put('/:id', requireAdmin, async (req, res) => {
     if (maxQuestions !== undefined) dataToUpdate.maxQuestions = Number(maxQuestions)
     if (questionsPerTeam !== undefined) dataToUpdate.questionsPerTeam = Number(questionsPerTeam)
     if (useInitialScores !== undefined) dataToUpdate.useInitialScores = Boolean(useInitialScores)
-    if (initialScoreMaxPoints !== undefined) dataToUpdate.initialScoreMaxPoints = initialScoreMaxPoints ? Number(initialScoreMaxPoints) : null
-    if (presentationMinutes !== undefined) dataToUpdate.presentationMinutes = Number(presentationMinutes)
-    if (presentationWeight !== undefined) dataToUpdate.presentationWeight = Number(presentationWeight)
+    if (initialScoreMaxPoints !== undefined)
+      dataToUpdate.initialScoreMaxPoints = initialScoreMaxPoints
+        ? Number(initialScoreMaxPoints)
+        : null
+    if (presentationMinutes !== undefined)
+      dataToUpdate.presentationMinutes = Number(presentationMinutes)
+    if (presentationWeight !== undefined)
+      dataToUpdate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToUpdate.quizWeight = Number(quizWeight)
-    // NOVO
     if (noElimination !== undefined) dataToUpdate.noElimination = Boolean(noElimination)
 
     const phase = await prisma.phase.update({ where: { id }, data: dataToUpdate })
@@ -243,6 +274,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/phases/:id
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params
@@ -252,11 +284,11 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     }
 
     const existing = await prisma.phase.findUnique({ where: { id } })
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       return res.status(404).json({ error: 'Fase não encontrada.' })
     }
 
-    await prisma.phase.delete({ where: { id } })
+    await prisma.phase.update({ where: { id }, data: { deletedAt: new Date() } })
 
     return res.json({ message: 'Fase eliminada com sucesso.' })
   } catch (error: any) {

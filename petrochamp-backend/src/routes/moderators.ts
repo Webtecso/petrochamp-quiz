@@ -13,6 +13,7 @@ function sanitizeAreas(input: unknown): string[] {
 
 router.get('/', async (_req, res) => {
   const moderators = await prisma.moderator.findMany({
+    where: { deletedAt: null }, // NOVO
     orderBy: { createdAt: 'asc' },
     include: { areas: true }
   })
@@ -28,15 +29,23 @@ router.get('/', async (_req, res) => {
 })
 
 router.post('/', async (req, res) => {
-  const { name, role, areas } = req.body as { name?: string; role?: 'principal' | 'secundario'; areas?: string[] }
+  const { name, role, areas } = req.body as {
+    name?: string
+    role?: 'principal' | 'secundario'
+    areas?: string[]
+  }
   if (!name) {
     res.status(400).json({ error: 'name é obrigatório' })
     return
   }
   if (role === 'principal') {
-    const existingPrincipal = await prisma.moderator.findFirst({ where: { role: 'principal' } })
+    const existingPrincipal = await prisma.moderator.findFirst({
+      where: { role: 'principal', deletedAt: null }
+    })
     if (existingPrincipal) {
-      res.status(400).json({ error: 'Já existe um Moderador Principal. Remove-o primeiro ou escolhe Secundário.' })
+      res.status(400).json({
+        error: 'Já existe um Moderador Principal. Remove-o primeiro ou escolhe Secundário.'
+      })
       return
     }
   }
@@ -61,9 +70,15 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   const { id } = req.params
-  const { name, role, areas } = req.body as { name?: string; role?: 'principal' | 'secundario'; areas?: string[] }
+  const { name, role, areas } = req.body as {
+    name?: string
+    role?: 'principal' | 'secundario'
+    areas?: string[]
+  }
   if (role === 'principal') {
-    const existingPrincipal = await prisma.moderator.findFirst({ where: { role: 'principal', id: { not: id } } })
+    const existingPrincipal = await prisma.moderator.findFirst({
+      where: { role: 'principal', id: { not: id }, deletedAt: null }
+    })
     if (existingPrincipal) {
       res.status(400).json({ error: 'Já existe outro Moderador Principal.' })
       return
@@ -78,7 +93,7 @@ router.put('/:id', async (req, res) => {
         name,
         role: finalRole,
         // Sempre que 'areas' vem no payload, substitui o conjunto inteiro
-        // (delete + recreate) — mais simples que fazer diff.
+        // (delete + recreate) — tabela auxiliar, não precisa de soft delete.
         ...(areas !== undefined
           ? { areas: { deleteMany: {}, create: cleanAreas.map((area) => ({ area })) } }
           : {})
@@ -91,10 +106,11 @@ router.put('/:id', async (req, res) => {
   }
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', async (req, res) => {
   const { id } = req.params
   try {
-    await prisma.moderator.delete({ where: { id } }) // onDelete: Cascade limpa as áreas também
+    await prisma.moderator.update({ where: { id }, data: { deletedAt: new Date() } })
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Moderador não encontrado' })

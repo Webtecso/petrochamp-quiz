@@ -25,7 +25,8 @@ router.get('/', async (req, res) => {
   const items = await prisma.evaluationItem.findMany({
     where: {
       championship: championship || undefined,
-      phase: phase ? Number(phase) : undefined
+      phase: phase ? Number(phase) : undefined,
+      deletedAt: null // NOVO
     },
     include: { jurorAssignments: true },
     orderBy: { createdAt: 'asc' }
@@ -33,7 +34,10 @@ router.get('/', async (req, res) => {
   res.json(
     items.map((i) => ({
       ...i,
-      correctIndexes: typeof i.correctIndexes === 'string' ? JSON.parse(i.correctIndexes || '[]') : (i.correctIndexes || []),
+      correctIndexes:
+        typeof i.correctIndexes === 'string'
+          ? JSON.parse(i.correctIndexes || '[]')
+          : i.correctIndexes || [],
       jurorIds: i.jurorAssignments.map((a) => a.jurorId),
       jurorAssignments: undefined
     }))
@@ -41,23 +45,43 @@ router.get('/', async (req, res) => {
 })
 
 router.post('/', requireAdmin, async (req, res) => {
-  const { championship, type, mode, text, imageUrl, options, correctIndexes, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
+  const {
+    championship,
+    type,
+    mode,
+    text,
+    imageUrl,
+    options,
+    correctIndexes,
+    timeSeconds,
+    maxPoints,
+    phase,
+    scope,
+    jurorIds
+  } = req.body
 
   if (!championship || !type || !text || !maxPoints || !phase) {
-    return res.status(400).json({ error: 'championship, type, text, maxPoints e phase são obrigatórios' })
+    return res
+      .status(400)
+      .json({ error: 'championship, type, text, maxPoints e phase são obrigatórios' })
   }
   if (mode === 'multipla_escolha') {
     if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
-      return res.status(400).json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+      return res
+        .status(400)
+        .json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
     }
     if (!correctIndexes) {
       return res.status(400).json({ error: 'Seleciona pelo menos uma resposta correta' })
     }
   }
 
-  const serializedCorrectIndexes = mode === 'multipla_escolha'
-    ? (typeof correctIndexes === 'string' ? correctIndexes : JSON.stringify(correctIndexes || []))
-    : null
+  const serializedCorrectIndexes =
+    mode === 'multipla_escolha'
+      ? typeof correctIndexes === 'string'
+        ? correctIndexes
+        : JSON.stringify(correctIndexes || [])
+      : null
 
   const item = await prisma.evaluationItem.create({
     data: {
@@ -83,25 +107,52 @@ router.post('/', requireAdmin, async (req, res) => {
   emitConfigUpdated('evaluationItems', championship)
   res.status(201).json({
     ...item,
-    correctIndexes: typeof item.correctIndexes === 'string' ? JSON.parse(item.correctIndexes || '[]') : (item.correctIndexes || []),
+    correctIndexes:
+      typeof item.correctIndexes === 'string'
+        ? JSON.parse(item.correctIndexes || '[]')
+        : item.correctIndexes || [],
     jurorIds: item.jurorAssignments.map((a) => a.jurorId)
   })
 })
 
 router.put('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
-  const { type, mode, text, imageUrl, options, correctIndexes, timeSeconds, maxPoints, phase, scope, jurorIds } = req.body
+  const {
+    type,
+    mode,
+    text,
+    imageUrl,
+    options,
+    correctIndexes,
+    timeSeconds,
+    maxPoints,
+    phase,
+    scope,
+    jurorIds
+  } = req.body
 
-  if (mode === 'multipla_escolha' && (!Array.isArray(options) || options.length < 2 || options.length > 8)) {
-    return res.status(400).json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+  if (
+    mode === 'multipla_escolha' &&
+    (!Array.isArray(options) || options.length < 2 || options.length > 8)
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
   }
 
   try {
+    // Esta tabela de junção continua hard delete de propósito: é
+    // recriada por inteiro a cada PUT do item, não é uma entidade que o
+    // utilizador apaga diretamente através de um botão "remover" — não
+    // precisa de soft delete nem de sincronizar como "apagado".
     await prisma.evaluationItemJuror.deleteMany({ where: { itemId: id } })
 
-    const serializedCorrectIndexes = mode === 'multipla_escolha'
-      ? (typeof correctIndexes === 'string' ? correctIndexes : JSON.stringify(correctIndexes || []))
-      : null
+    const serializedCorrectIndexes =
+      mode === 'multipla_escolha'
+        ? typeof correctIndexes === 'string'
+          ? correctIndexes
+          : JSON.stringify(correctIndexes || [])
+        : null
 
     const item = await prisma.evaluationItem.update({
       where: { id },
@@ -127,7 +178,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
     emitConfigUpdated('evaluationItems', item.championship)
     res.json({
       ...item,
-      correctIndexes: typeof item.correctIndexes === 'string' ? JSON.parse(item.correctIndexes || '[]') : (item.correctIndexes || []),
+      correctIndexes:
+        typeof item.correctIndexes === 'string'
+          ? JSON.parse(item.correctIndexes || '[]')
+          : item.correctIndexes || [],
       jurorIds: item.jurorAssignments.map((a) => a.jurorId)
     })
   } catch (err) {
@@ -136,10 +190,14 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {
-    const existing = await prisma.evaluationItem.delete({ where: { id } })
+    const existing = await prisma.evaluationItem.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    })
     emitConfigUpdated('evaluationItems', existing.championship)
     res.status(204).send()
   } catch {

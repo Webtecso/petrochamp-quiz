@@ -82,25 +82,23 @@ async function getPartnersDurationSeconds(): Promise<number> {
 }
 
 async function getCurrentPhaseConfig() {
-  return prisma.phase.findFirst({ where: { order: liveState.phase, championship: liveState.championship ?? undefined } })
+  return prisma.phase.findFirst({
+    where: { order: liveState.phase, championship: liveState.championship ?? undefined }
+  })
 }
 
 async function getTotalPhases(): Promise<number> {
-  const count = await prisma.phase.count({ where: { championship: liveState.championship ?? undefined } })
+  const count = await prisma.phase.count({
+    where: { championship: liveState.championship ?? undefined }
+  })
   return count > 0 ? count : 1
 }
 
-// NOVO — suporta A-H (8 alíneas) em vez de só A-D.
 function labelToIndex(label: string | null): number {
   if (!label) return -1
   return ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].indexOf(label)
 }
 
-// NOVO — os modelos Question/TiebreakQuestion/EvaluationItem passaram a
-// guardar "correctIndexes" (JSON de vários índices), em vez do antigo
-// "correctIndex" singular. Esta função lê o campo com segurança e devolve
-// sempre um array (mesmo que vazio), para o resto do código não ter de se
-// preocupar com o formato de armazenamento.
 function parseCorrectIndexes(raw: string | null | undefined): number[] {
   if (!raw) return []
   try {
@@ -153,7 +151,10 @@ async function startPostRoundSequence(): Promise<void> {
   liveState.bracketVisible = false
 }
 
-function applyPresentationWeighting(phaseConfig: { presentationWeight: number | null; quizWeight: number | null }): void {
+function applyPresentationWeighting(phaseConfig: {
+  presentationWeight: number | null
+  quizWeight: number | null
+}): void {
   const presentationWeight = phaseConfig.presentationWeight ?? 50
   const quizWeight = phaseConfig.quizWeight ?? 50
   const totalWeight = presentationWeight + quizWeight || 1
@@ -171,11 +172,19 @@ function applyPresentationWeighting(phaseConfig: { presentationWeight: number | 
 
 type PoolItem =
   | { source: 'question'; id: string; timeSeconds: number; scope: 'single' }
-  | { source: 'analytic'; id: string; timeSeconds: number; scope: 'single' | 'all'; mode: 'multipla_escolha' | 'aberta' }
+  | {
+      source: 'analytic'
+      id: string
+      timeSeconds: number
+      scope: 'single' | 'all'
+      mode: 'multipla_escolha' | 'aberta'
+    }
 
 async function buildPool(): Promise<PoolItem[]> {
   const [questions, analyticItems, defaultTime] = await Promise.all([
-    prisma.question.findMany({ where: { phase: liveState.phase, championship: liveState.championship ?? undefined } }),
+    prisma.question.findMany({
+      where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+    }),
     prisma.evaluationItem.findMany({
       where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
     }),
@@ -208,20 +217,28 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     pool = await buildPool()
   } else if (!avoidRepeat) {
     const [questions, analyticItems, defaultTime] = await Promise.all([
-      prisma.question.findMany({ where: { phase: liveState.phase, championship: liveState.championship ?? undefined } }),
+      prisma.question.findMany({
+        where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+      }),
       prisma.evaluationItem.findMany({
         where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
       }),
       getQuestionTimeSeconds()
     ])
     pool = [
-      ...questions.map((q) => ({ source: 'question' as const, id: q.id, timeSeconds: defaultTime, scope: 'single' as const })),
+      ...questions.map((q) => ({
+        source: 'question' as const,
+        id: q.id,
+        timeSeconds: defaultTime,
+        scope: 'single' as const
+      })),
       ...analyticItems.map((it) => ({
         source: 'analytic' as const,
         id: it.id,
         timeSeconds: it.timeSeconds ?? defaultTime,
         scope: (it.scope === 'all' ? 'all' : 'single') as 'single' | 'all',
-        mode: (it.mode === 'multipla_escolha' ? 'multipla_escolha' : 'aberta') as 'multipla_escolha' | 'aberta'
+        mode: (it.mode === 'multipla_escolha' ? 'multipla_escolha' : 'aberta') as
+          'multipla_escolha' | 'aberta'
       }))
     ]
   }
@@ -267,7 +284,12 @@ async function roundQuestionsComplete(): Promise<boolean> {
   )
 }
 
-async function recordBracketResult(championship: string, teamAId: string, teamBId: string, winnerId: string): Promise<void> {
+async function recordBracketResult(
+  championship: string,
+  teamAId: string,
+  teamBId: string,
+  winnerId: string
+): Promise<void> {
   const match = await prisma.bracketMatch.findFirst({
     where: {
       championship,
@@ -300,7 +322,11 @@ async function recordBracketResult(championship: string, teamAId: string, teamBI
   }
 }
 
-async function recordRepescagemResult(teamAId: string, teamBId: string, winnerId: string): Promise<void> {
+async function recordRepescagemResult(
+  teamAId: string,
+  teamBId: string,
+  winnerId: string
+): Promise<void> {
   const match = await prisma.bracketMatch.findFirst({
     where: {
       championship: { contains: '__repescagem__' },
@@ -348,6 +374,195 @@ async function pickSuspensePhrase(): Promise<string> {
     : 'Preparem-se — a próxima fase está prestes a começar...'
 }
 
+// ---------------------------------------------------------------------
+// CORRIGIDO — reintroduzido depois de ter sido perdido numa edição
+// posterior do ficheiro. Antes, toda esta lógica estava só dentro de
+// 'juror:submitPresentationEvaluation', condicionada a
+// 'flow.stage === concluded' NO MOMENTO EXATO da submissão. Isso causava
+// o botão "Avançar" a não aparecer, em especial na ÚLTIMA apresentação
+// da fase, em dois cenários:
+//
+// 1) Se o último jurado submetesse a avaliação ENQUANTO a apresentação
+//    ainda estava em 'presenting' (antes do moderador clicar em
+//    "Finalizar Apresentação"), a condição falhava, e como
+//    'moderator:finishPresentation' nunca voltava a verificar isto,
+//    'allJurorsSubmitted' ficava para sempre 'false'.
+//
+// 2) 'expectedJurorCount' vem de uma contagem estática na BD (jurados
+//    autorizados na fase, ou todos os jurados cadastrados) e não do
+//    número de jurados REALMENTE ligados (liveState.jurors). Se um
+//    jurado nunca se ligar, ou se desligar (ou for removido) antes de
+//    submeter, 'jurorsSubmitted.length' nunca alcançava
+//    'expectedJurorCount'.
+//
+// Esta função central é chamada em todos os pontos onde o conjunto de
+// jurados ligados ou de submissões pode mudar: fim de
+// finishPresentation, fim de submitPresentationEvaluation, remoção de
+// jurado, e desconexão de jurado (normal ou local).
+//
+// ATUALIZADO — o loop que grava presentationScore na BD ficava exposto a
+// uma exceção não apanhada sempre que flow.criteriaScores continha uma
+// entrada com criteriaId nulo/inválido (podia acontecer se algum payload
+// malformado tivesse entrado antes da guarda adicionada em
+// juror:setPresentationScore, ou se tivesse sobrevivido num LiveSession
+// persistido de uma sessão anterior a essa correção). Essa exceção
+// interrompia a função a meio, e como o broadcast() do chamador vem
+// sempre a seguir, o frontend nunca era notificado — o botão "Avançar"
+// só aparecia muito mais tarde, quando a sincronização periódica (a cada
+// 3 min) por acaso disparava outro state:sync. Agora: entradas sem
+// criteriaId são filtradas antes de entrarem no cálculo/gravação, e cada
+// upsert corre isolado num try/catch, para uma falha pontual num único
+// registo nunca mais travar toda a função.
+//
+// NOVO — a função passou a receber 'broadcast' como parâmetro e a
+// chamá-lo IMEDIATAMENTE a seguir a marcar 'flow.allJurorsSubmitted =
+// true', antes de gravar as notas na BD e calcular ranking/pesos. Isto
+// resolve o "colar": o frontend recebe o state:sync com
+// allJurorsSubmitted: true quase instantaneamente (o botão "Avançar" já
+// pode aparecer aí), e a atualização final (ranking, pesos) chega no
+// broadcast() seguinte, feito pelo chamador, sem bloquear a UI. As
+// gravações de presentationScore passaram também de um for...await
+// sequencial para Promise.all, para não somar a latência de cada upsert.
+// ---------------------------------------------------------------------
+async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
+  const flow = liveState.presentationFlow
+  if (flow.stage !== 'concluded' || !flow.teamId) return
+  if (flow.allJurorsSubmitted) return
+
+  const connectedCount = liveState.jurors.length
+  const target =
+    connectedCount > 0
+      ? Math.min(liveState.expectedJurorCount || connectedCount, connectedCount)
+      : liveState.expectedJurorCount
+
+  if (target <= 0) return
+  if (flow.jurorsSubmitted.length < target) return
+
+  flow.allJurorsSubmitted = true
+  broadcast() // NOVO — o botão "Avançar" já pode aparecer aqui, sem esperar pelo resto.
+
+  // filtra entradas com criteriaId ausente/inválido antes de as usar em
+  // qualquer cálculo ou gravação (ver nota acima).
+  const validCriteriaScores = flow.criteriaScores.filter((e) => !!e.criteriaId)
+
+  const totalsByJuror = new Map<string, number>()
+  for (const entry of validCriteriaScores) {
+    totalsByJuror.set(entry.jurorId, (totalsByJuror.get(entry.jurorId) ?? 0) + entry.score)
+  }
+  const totals = Array.from(totalsByJuror.values())
+  const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0
+
+  // NOVO — gravações paralelizadas com Promise.all em vez de
+  // sequenciais (for...await), cada uma isolada no seu próprio
+  // catch para uma falha pontual num único registo nunca travar as
+  // restantes.
+  await Promise.all(
+    validCriteriaScores.map((entry) =>
+      prisma.presentationScore
+        .upsert({
+          where: {
+            criteriaId_jurorId_teamId: {
+              criteriaId: entry.criteriaId,
+              jurorId: entry.jurorId,
+              teamId: flow.teamId!
+            }
+          },
+          update: { score: entry.score },
+          create: {
+            criteriaId: entry.criteriaId,
+            jurorId: entry.jurorId,
+            teamId: flow.teamId!,
+            score: entry.score
+          }
+        })
+        .catch((err) =>
+          console.error('[checkAllJurorsSubmitted] Falha ao gravar nota (ignorada, a continuar):', err)
+        )
+    )
+  )
+
+  const team = await prisma.team.findUnique({ where: { id: flow.teamId } })
+  const phaseConfig = await getCurrentPhaseConfig()
+
+  if (phaseConfig?.type === 'apresentacao_quiz') {
+    const existingPresScore = liveState.presentationPhaseScores.find((r) => r.teamId === flow.teamId)
+    if (existingPresScore) {
+      existingPresScore.score = average
+    } else if (team) {
+      liveState.presentationPhaseScores.push({
+        teamId: team.id,
+        name: team.name,
+        institution: team.institution,
+        score: average
+      })
+    }
+  } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
+    addToPhaseRanking(team, average)
+    if (team) {
+      const existingCarried = liveState.carriedPresentationScores.find((r) => r.teamId === team.id)
+      const presentationWeight = phaseConfig.presentationWeight ?? 50
+      const quizWeight = phaseConfig.quizWeight ?? 50
+      if (existingCarried) {
+        existingCarried.score = average
+        existingCarried.presentationWeight = presentationWeight
+        existingCarried.quizWeight = quizWeight
+      } else {
+        liveState.carriedPresentationScores.push({
+          teamId: team.id,
+          name: team.name,
+          institution: team.institution,
+          score: average,
+          presentationWeight,
+          quizWeight
+        })
+      }
+    }
+  } else {
+    addToPhaseRanking(team, average)
+    addToChampionshipRanking(team, average)
+
+    const dupla = await prisma.presentationDupla.findFirst({
+      where: {
+        phaseId: phaseConfig?.id,
+        OR: [{ teamAId: flow.teamId }, { teamBId: flow.teamId }]
+      }
+    })
+    if (liveState.championship && phaseConfig && dupla?.teamAId) {
+      if (!dupla.teamBId) {
+        await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamAId, dupla.teamAId)
+      } else {
+        const rankA = liveState.phaseRankings.find((r) => r.teamId === dupla.teamAId)
+        const rankB = liveState.phaseRankings.find((r) => r.teamId === dupla.teamBId)
+        if (rankA && rankB) {
+          const dWinnerId = rankA.score >= rankB.score ? dupla.teamAId : dupla.teamBId
+          const dLoserId = dWinnerId === dupla.teamAId ? dupla.teamBId : dupla.teamAId
+          await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamBId, dWinnerId)
+          if (!liveState.eliminatedTeamIds.includes(dLoserId)) {
+            liveState.eliminatedTeamIds.push(dLoserId)
+          }
+        }
+      }
+    }
+  }
+
+  if (phaseConfig) {
+    const allTeamIds = await getPresentationTeamIds(phaseConfig.id)
+    const recordedTeamIds =
+      phaseConfig.type === 'apresentacao_quiz'
+        ? liveState.presentationPhaseScores.map((r) => r.teamId)
+        : liveState.phaseRankings.map((r) => r.teamId)
+    const allPresentedAndEvaluated = allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
+
+    if (allPresentedAndEvaluated) {
+      if (phaseConfig.type === 'apresentacao') {
+        liveState.presentationRoundReady = true
+      } else if (phaseConfig.type === 'apresentacao_quiz') {
+        liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
+      }
+    }
+  }
+}
+
 export function registerSocketHandlers(io: Server): void {
   function broadcast(): void {
     io.emit('state:sync', liveState)
@@ -362,13 +577,19 @@ export function registerSocketHandlers(io: Server): void {
           liveState.timeLeft -= 1
         } else {
           liveState.isRunning = false
-          if (liveState.currentItemSource === 'analytic' && liveState.currentItemMode === 'aberta') {
+          if (
+            liveState.currentItemSource === 'analytic' &&
+            liveState.currentItemMode === 'aberta'
+          ) {
             liveState.awaitingJuryEvaluation = true
           }
         }
         changed = true
       }
-      if (liveState.presentationFlow.stage === 'presenting' && liveState.presentationFlow.timeLeft > 0) {
+      if (
+        liveState.presentationFlow.stage === 'presenting' &&
+        liveState.presentationFlow.timeLeft > 0
+      ) {
         liveState.presentationFlow.timeLeft -= 1
         changed = true
       }
@@ -397,38 +618,59 @@ export function registerSocketHandlers(io: Server): void {
     console.log('Cliente ligado:', socket.id)
     socket.emit('state:sync', liveState)
 
-    socket.on('moderator:register', async (payload: { code: string }, callback?: (res: unknown) => void) => {
-      const code = (payload.code || '').trim()
-      const moderator = await prisma.moderator.findUnique({
-        where: { code },
-        include: { areas: true }
-      })
-      if (!moderator) {
-        callback?.({ success: false, error: 'Código de moderador inválido.' })
-        return
-      }
-      socket.data.moderatorId = moderator.id
-      socket.data.moderatorRole = moderator.role
-      socket.data.moderatorAreas = moderator.areas.map((a) => a.area)
-      moderatorRegisteredEver = true
-      if (!liveState.activeModerators.some((m) => m.id === moderator.id)) {
-        liveState.activeModerators.push({
-          id: moderator.id,
+    socket.on(
+      'moderator:register',
+      async (payload: { code: string }, callback?: (res: unknown) => void) => {
+        const code = (payload.code || '').trim()
+        const moderator = await prisma.moderator.findUnique({
+          where: { code },
+          include: { areas: true }
+        })
+        if (!moderator) {
+          callback?.({ success: false, error: 'Código de moderador inválido.' })
+          return
+        }
+        socket.data.moderatorId = moderator.id
+        socket.data.moderatorRole = moderator.role
+        socket.data.moderatorAreas = moderator.areas.map((a) => a.area)
+        moderatorRegisteredEver = true
+        if (!liveState.activeModerators.some((m) => m.id === moderator.id)) {
+          liveState.activeModerators.push({
+            id: moderator.id,
+            name: moderator.name,
+            role: moderator.role === 'principal' ? 'principal' : 'secundario'
+          })
+        }
+        broadcast()
+        callback?.({
+          success: true,
+          moderatorId: moderator.id,
+          role: moderator.role,
           name: moderator.name,
-          role: moderator.role === 'principal' ? 'principal' : 'secundario'
+          areas: moderator.areas.map((a) => a.area)
         })
       }
-      broadcast()
-      callback?.({
-        success: true,
-        moderatorId: moderator.id,
-        role: moderator.role,
-        name: moderator.name,
-        areas: moderator.areas.map((a) => a.area)
-      })
-    })
+    )
 
-    socket.use(([eventName], next) => {
+    // ATUALIZADO — quando uma ação é bloqueada (Principal ou área em
+    // falta), agora responde ao "ack" (callback) do próprio evento, se o
+    // frontend tiver passado um, com { success: false, error: '...' } em
+    // vez de simplesmente ignorar o pedido em silêncio. Antes, um clique
+    // bloqueado parecia "colar" — o utilizador não tinha nenhuma pista de
+    // que a ação tinha sido rejeitada, só via nada acontecer. Isto
+    // funciona para QUALQUER evento na lista, mesmo os que hoje não
+    // declaram um parâmetro de callback no seu próprio handler — o
+    // socket.io entrega sempre a função de ack (se o emit() do cliente
+    // tiver passado uma) como o último argumento bruto do evento, e o
+    // middleware consegue aceder a ela diretamente aqui.
+    socket.use(([eventName, ...args], next) => {
+      const maybeCallback = args[args.length - 1]
+      const respondBlocked = (message: string): void => {
+        if (typeof maybeCallback === 'function') {
+          maybeCallback({ success: false, error: message })
+        }
+      }
+
       if (RESTRICTED_TO_PRINCIPAL.has(eventName)) {
         if (!hasRegisteredModerators()) {
           next()
@@ -438,7 +680,10 @@ export function registerSocketHandlers(io: Server): void {
           next()
           return
         }
-        console.log(`Ação restrita a Principal bloqueada: ${eventName} (socket ${socket.id} não é Principal)`)
+        console.log(
+          `Ação restrita a Principal bloqueada: ${eventName} (socket ${socket.id} não é Principal)`
+        )
+        respondBlocked('Esta ação só pode ser feita pelo Moderador Principal.')
         return
       }
 
@@ -458,6 +703,9 @@ export function registerSocketHandlers(io: Server): void {
           return
         }
         console.log(`Ação sem área "${requiredArea}" bloqueada: ${eventName} (socket ${socket.id})`)
+        respondBlocked(
+          `Este moderador não tem a área "${requiredArea}" atribuída. Vai a Admin → Moderadores para autorizar.`
+        )
         return
       }
 
@@ -466,7 +714,8 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on('moderator:enterAdmin', () => {
       moderatorSocketId = socket.id
-      const hasActivity = (!!liveState.teamA && !!liveState.teamB) || liveState.presentationFlow.stage !== 'idle'
+      const hasActivity =
+        (!!liveState.teamA && !!liveState.teamB) || liveState.presentationFlow.stage !== 'idle'
       if (hasActivity && !liveState.moderatorAdjusting) {
         liveState.moderatorAdjusting = true
         broadcast()
@@ -482,7 +731,10 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on(
       'moderator:selectChampionship',
-      async (payload: { championship: string; editionName?: string }, callback?: (ok: boolean) => void) => {
+      async (
+        payload: { championship: string; editionName?: string },
+        callback?: (ok: boolean) => void
+      ) => {
         liveState.championship = payload.championship
         liveState.editionName = payload.editionName || null
         liveState.phase = 1
@@ -593,15 +845,15 @@ export function registerSocketHandlers(io: Server): void {
         if (payload.team === 'A' && liveState.teamAAnswer) return
         if (payload.team === 'B' && liveState.teamBAnswer) return
 
-        const item = await prisma.evaluationItem.findUnique({ where: { id: liveState.currentAnalyticItemId } })
+        const item = await prisma.evaluationItem.findUnique({
+          where: { id: liveState.currentAnalyticItemId }
+        })
         if (!item) return
         if (item.scope !== 'all' && payload.team !== liveState.activeTeam) return
 
         if (payload.team === 'A') liveState.teamAAnswer = payload.optionLabel
         else liveState.teamBAnswer = payload.optionLabel
 
-        // ALTERADO — usa correctIndexes (JSON de vários índices) em vez do
-        // antigo correctIndex singular, e suporta A-H via labelToIndex.
         const correctIdxs = parseCorrectIndexes(item.correctIndexes)
         const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
         if (payload.team === 'A') {
@@ -616,7 +868,8 @@ export function registerSocketHandlers(io: Server): void {
         liveState.isRunning = false
         broadcast()
 
-        const readyToAdvance = item.scope === 'all' ? liveState.teamAAnswer && liveState.teamBAnswer : true
+        const readyToAdvance =
+          item.scope === 'all' ? liveState.teamAAnswer && liveState.teamBAnswer : true
 
         if (readyToAdvance) {
           setTimeout(async () => {
@@ -643,13 +896,14 @@ export function registerSocketHandlers(io: Server): void {
       if (payload.team === 'A') liveState.teamAAnswer = payload.optionLabel
       else liveState.teamBAnswer = payload.optionLabel
 
-      const question = await prisma.question.findUnique({ where: { id: liveState.currentQuestionId } })
+      const question = await prisma.question.findUnique({
+        where: { id: liveState.currentQuestionId }
+      })
       if (!question) {
         if (payload.team === 'A') liveState.teamAAnswer = null
         else liveState.teamBAnswer = null
         return
       }
-      // ALTERADO — idem, correctIndexes em vez de correctIndex.
       const correctIdxs = parseCorrectIndexes(question.correctIndexes)
       const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
       if (payload.team === 'A') {
@@ -676,7 +930,8 @@ export function registerSocketHandlers(io: Server): void {
     })
 
     socket.on('moderator:endOpenQuestion', () => {
-      if (liveState.currentItemSource !== 'analytic' || liveState.currentItemMode !== 'aberta') return
+      if (liveState.currentItemSource !== 'analytic' || liveState.currentItemMode !== 'aberta')
+        return
       liveState.isRunning = false
       liveState.awaitingJuryEvaluation = true
       broadcast()
@@ -699,63 +954,73 @@ export function registerSocketHandlers(io: Server): void {
             teamBId: liveState.teamB.id
           }
         })
-        liveState.tiebreak = { active: true, pending: false, matchId: match.id, currentQuestionId: null, usedQuestionIds: [] }
+        liveState.tiebreak = {
+          active: true,
+          pending: false,
+          matchId: match.id,
+          currentQuestionId: null,
+          usedQuestionIds: []
+        }
         await drawTiebreakQuestion()
         liveState.timeLeft = await getQuestionTimeSeconds()
         resetAnswerState()
       })
     })
 
-    socket.on('tiebreak:submitAnswer', async (payload: { team: 'A' | 'B'; optionLabel: string }) => {
-      if (!liveState.tiebreak.active || liveState.tiebreak.currentQuestionId === null) return
-      if (payload.team === 'A' && liveState.teamAAnswer) return
-      if (payload.team === 'B' && liveState.teamBAnswer) return
+    socket.on(
+      'tiebreak:submitAnswer',
+      async (payload: { team: 'A' | 'B'; optionLabel: string }) => {
+        if (!liveState.tiebreak.active || liveState.tiebreak.currentQuestionId === null) return
+        if (payload.team === 'A' && liveState.teamAAnswer) return
+        if (payload.team === 'B' && liveState.teamBAnswer) return
 
-      if (payload.team === 'A') {
-        liveState.teamAAnswer = payload.optionLabel
-      } else {
-        liveState.teamBAnswer = payload.optionLabel
-      }
+        if (payload.team === 'A') {
+          liveState.teamAAnswer = payload.optionLabel
+        } else {
+          liveState.teamBAnswer = payload.optionLabel
+        }
 
-      const question = await prisma.tiebreakQuestion.findUnique({ where: { id: liveState.tiebreak.currentQuestionId } })
-      if (!question) {
-        if (payload.team === 'A') liveState.teamAAnswer = null
-        else liveState.teamBAnswer = null
-        return
+        const question = await prisma.tiebreakQuestion.findUnique({
+          where: { id: liveState.tiebreak.currentQuestionId }
+        })
+        if (!question) {
+          if (payload.team === 'A') liveState.teamAAnswer = null
+          else liveState.teamBAnswer = null
+          return
+        }
+        const correctIdxs = parseCorrectIndexes(question.correctIndexes)
+        const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
+        if (payload.team === 'A') {
+          liveState.teamACorrect = isCorrect
+        } else {
+          liveState.teamBCorrect = isCorrect
+        }
+        broadcast()
+        if (liveState.teamAAnswer && liveState.teamBAnswer) {
+          setTimeout(async () => {
+            const aCorrect = liveState.teamACorrect
+            const bCorrect = liveState.teamBCorrect
+            let winner: 'A' | 'B' | null = null
+            if (aCorrect && !bCorrect) winner = 'A'
+            else if (bCorrect && !aCorrect) winner = 'B'
+            if (winner && liveState.tiebreak.matchId && liveState.teamA && liveState.teamB) {
+              const winnerId = winner === 'A' ? liveState.teamA.id : liveState.teamB.id
+              await prisma.tiebreakMatch.update({
+                where: { id: liveState.tiebreak.matchId },
+                data: { winnerId, resolved: true }
+              })
+              liveState.tiebreak.active = false
+              resetAnswerState()
+              broadcast()
+            } else {
+              resetAnswerState()
+              await drawTiebreakQuestion()
+              broadcast()
+            }
+          }, 2500)
+        }
       }
-      // ALTERADO — idem, correctIndexes em vez de correctIndex.
-      const correctIdxs = parseCorrectIndexes(question.correctIndexes)
-      const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
-      if (payload.team === 'A') {
-        liveState.teamACorrect = isCorrect
-      } else {
-        liveState.teamBCorrect = isCorrect
-      }
-      broadcast()
-      if (liveState.teamAAnswer && liveState.teamBAnswer) {
-        setTimeout(async () => {
-          const aCorrect = liveState.teamACorrect
-          const bCorrect = liveState.teamBCorrect
-          let winner: 'A' | 'B' | null = null
-          if (aCorrect && !bCorrect) winner = 'A'
-          else if (bCorrect && !aCorrect) winner = 'B'
-          if (winner && liveState.tiebreak.matchId && liveState.teamA && liveState.teamB) {
-            const winnerId = winner === 'A' ? liveState.teamA.id : liveState.teamB.id
-            await prisma.tiebreakMatch.update({
-              where: { id: liveState.tiebreak.matchId },
-              data: { winnerId, resolved: true }
-            })
-            liveState.tiebreak.active = false
-            resetAnswerState()
-            broadcast()
-          } else {
-            resetAnswerState()
-            await drawTiebreakQuestion()
-            broadcast()
-          }
-        }, 2500)
-      }
-    })
+    )
 
     socket.on('moderator:finishMatch', async () => {
       const questionTime = await getQuestionTimeSeconds()
@@ -766,23 +1031,37 @@ export function registerSocketHandlers(io: Server): void {
         let compareAScore = liveState.teamAScore
         let compareBScore = liveState.teamBScore
         if (phaseConfig?.type === 'apresentacao_quiz') {
-          const presA = liveState.presentationPhaseScores.find((p) => p.teamId === liveState.teamA!.id)?.score ?? 0
-          const presB = liveState.presentationPhaseScores.find((p) => p.teamId === liveState.teamB!.id)?.score ?? 0
+          const presA =
+            liveState.presentationPhaseScores.find((p) => p.teamId === liveState.teamA!.id)
+              ?.score ?? 0
+          const presB =
+            liveState.presentationPhaseScores.find((p) => p.teamId === liveState.teamB!.id)
+              ?.score ?? 0
           const quizWeight = phaseConfig.quizWeight ?? 50
           const presWeight = phaseConfig.presentationWeight ?? 50
           const totalWeight = quizWeight + presWeight || 1
           compareAScore = (liveState.teamAScore * quizWeight + presA * presWeight) / totalWeight
           compareBScore = (liveState.teamBScore * quizWeight + presB * presWeight) / totalWeight
         } else {
-          const carriedA = liveState.carriedPresentationScores.find((p) => p.teamId === liveState.teamA!.id)
-          const carriedB = liveState.carriedPresentationScores.find((p) => p.teamId === liveState.teamB!.id)
+          const carriedA = liveState.carriedPresentationScores.find(
+            (p) => p.teamId === liveState.teamA!.id
+          )
+          const carriedB = liveState.carriedPresentationScores.find(
+            (p) => p.teamId === liveState.teamB!.id
+          )
           if (carriedA) {
             const totalWeight = carriedA.presentationWeight + carriedA.quizWeight || 1
-            compareAScore = (liveState.teamAScore * carriedA.quizWeight + carriedA.score * carriedA.presentationWeight) / totalWeight
+            compareAScore =
+              (liveState.teamAScore * carriedA.quizWeight +
+                carriedA.score * carriedA.presentationWeight) /
+              totalWeight
           }
           if (carriedB) {
             const totalWeight = carriedB.presentationWeight + carriedB.quizWeight || 1
-            compareBScore = (liveState.teamBScore * carriedB.quizWeight + carriedB.score * carriedB.presentationWeight) / totalWeight
+            compareBScore =
+              (liveState.teamBScore * carriedB.quizWeight +
+                carriedB.score * carriedB.presentationWeight) /
+              totalWeight
           }
         }
 
@@ -797,7 +1076,11 @@ export function registerSocketHandlers(io: Server): void {
         }
 
         const winnerName =
-          winnerId === liveState.teamA.id ? liveState.teamA.name : winnerId === liveState.teamB.id ? liveState.teamB.name : null
+          winnerId === liveState.teamA.id
+            ? liveState.teamA.name
+            : winnerId === liveState.teamB.id
+              ? liveState.teamB.name
+              : null
         await prisma.matchHistory.create({
           data: {
             championship: liveState.championship,
@@ -816,11 +1099,18 @@ export function registerSocketHandlers(io: Server): void {
             deviceMode: null,
             startedAt: new Date(liveState.matchStartedAt ?? Date.now()),
             endedAt: new Date(),
-            durationSeconds: liveState.matchStartedAt ? Math.round((Date.now() - liveState.matchStartedAt) / 1000) : 0
+            durationSeconds: liveState.matchStartedAt
+              ? Math.round((Date.now() - liveState.matchStartedAt) / 1000)
+              : 0
           }
         })
         if (winnerId) {
-          await recordBracketResult(liveState.championship, liveState.teamA.id, liveState.teamB.id, winnerId)
+          await recordBracketResult(
+            liveState.championship,
+            liveState.teamA.id,
+            liveState.teamB.id,
+            winnerId
+          )
           await recordRepescagemResult(liveState.teamA.id, liveState.teamB.id, winnerId)
           const loserId = winnerId === liveState.teamA.id ? liveState.teamB.id : liveState.teamA.id
           if (!liveState.eliminatedTeamIds.includes(loserId)) {
@@ -840,9 +1130,11 @@ export function registerSocketHandlers(io: Server): void {
         const idx = liveState.carriedPresentationScores.findIndex((p) => p.teamId === team.id)
         if (idx === -1) continue
         const carried = liveState.carriedPresentationScores[idx]
-        const rawScore = team.id === liveState.teamA?.id ? liveState.teamAScore : liveState.teamBScore
+        const rawScore =
+          team.id === liveState.teamA?.id ? liveState.teamAScore : liveState.teamBScore
         const totalWeight = carried.presentationWeight + carried.quizWeight || 1
-        const weighted = (rawScore * carried.quizWeight + carried.score * carried.presentationWeight) / totalWeight
+        const weighted =
+          (rawScore * carried.quizWeight + carried.score * carried.presentationWeight) / totalWeight
         const delta = weighted - rawScore
         const phaseEntry = liveState.phaseRankings.find((r) => r.teamId === team.id)
         const champEntry = liveState.championshipRankings.find((r) => r.teamId === team.id)
@@ -870,7 +1162,10 @@ export function registerSocketHandlers(io: Server): void {
       if (liveState.phaseFlow.stage !== 'repescagem') return
       const totalPhases = await getTotalPhases()
       const isLastPhase = liveState.phase >= totalPhases
-      liveState.phaseFlow = { stage: isLastPhase ? 'partnersPending' : 'ranking', suspensePhrase: null }
+      liveState.phaseFlow = {
+        stage: isLastPhase ? 'partnersPending' : 'ranking',
+        suspensePhrase: null
+      }
       broadcast()
     })
 
@@ -883,7 +1178,12 @@ export function registerSocketHandlers(io: Server): void {
         data: { started: true, votingOpen: true, startedAt: new Date() }
       })
 
-      liveState.repescagemReveal = { stage: 'suspense', countdownValue: 10, configId: config.id, repescadaNames: [] }
+      liveState.repescagemReveal = {
+        stage: 'suspense',
+        countdownValue: 10,
+        configId: config.id,
+        repescadaNames: []
+      }
       broadcast()
 
       setTimeout(() => {
@@ -923,18 +1223,32 @@ export function registerSocketHandlers(io: Server): void {
         .sort((a, b) => b.votes - a.votes)
       const repescadaNames = ranked.slice(0, config.maxRepescados).map((r) => r.team.name)
 
-      liveState.repescagemReveal = { stage: 'results', countdownValue: 0, configId: config.id, repescadaNames }
+      liveState.repescagemReveal = {
+        stage: 'results',
+        countdownValue: 0,
+        configId: config.id,
+        repescadaNames
+      }
       broadcast()
 
       setTimeout(() => {
         if (liveState.repescagemReveal.configId !== config.id) return
-        liveState.repescagemReveal = { stage: 'idle', countdownValue: 0, configId: null, repescadaNames: [] }
+        liveState.repescagemReveal = {
+          stage: 'idle',
+          countdownValue: 0,
+          configId: null,
+          repescadaNames: []
+        }
         broadcast()
       }, 8000)
     })
 
     socket.on('moderator:showPartners', async () => {
-      if (liveState.phaseFlow.stage !== 'ranking' && liveState.phaseFlow.stage !== 'partnersPending') return
+      if (
+        liveState.phaseFlow.stage !== 'ranking' &&
+        liveState.phaseFlow.stage !== 'partnersPending'
+      )
+        return
       const isLastPhase = liveState.phaseFlow.stage === 'partnersPending'
       const seconds = await getPartnersDurationSeconds()
 
@@ -1029,14 +1343,21 @@ export function registerSocketHandlers(io: Server): void {
           data: { winnerId: null }
         })
 
-        const phases = await prisma.phase.findMany({ where: { championship: liveState.championship } })
+        const phases = await prisma.phase.findMany({
+          where: { championship: liveState.championship }
+        })
         const phaseIds = phases.map((p) => p.id)
         if (phaseIds.length) {
           const criteriaIds = (
-            await prisma.presentationCriteria.findMany({ where: { phaseId: { in: phaseIds } }, select: { id: true } })
+            await prisma.presentationCriteria.findMany({
+              where: { phaseId: { in: phaseIds } },
+              select: { id: true }
+            })
           ).map((c) => c.id)
           if (criteriaIds.length) {
-            await prisma.presentationScore.deleteMany({ where: { criteriaId: { in: criteriaIds } } })
+            await prisma.presentationScore.deleteMany({
+              where: { criteriaId: { in: criteriaIds } }
+            })
           }
           await prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })
         }
@@ -1056,7 +1377,12 @@ export function registerSocketHandlers(io: Server): void {
       resetPresentationFlow()
       liveState.bracketVisible = !!liveState.championship
       liveState.podium.active = false
-      liveState.podiumReveal = { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false }
+      liveState.podiumReveal = {
+        stage: 'idle',
+        countdownValue: 0,
+        suspensePhrase: null,
+        finalRankingVisible: false
+      }
       liveState.phaseTransition = { stage: 'idle' }
       liveState.expectedJurorCount = 0
       resetMatch(questionTime)
@@ -1081,7 +1407,12 @@ export function registerSocketHandlers(io: Server): void {
       resetPresentationFlow()
       liveState.bracketVisible = false
       liveState.podium.active = false
-      liveState.podiumReveal = { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false }
+      liveState.podiumReveal = {
+        stage: 'idle',
+        countdownValue: 0,
+        suspensePhrase: null,
+        finalRankingVisible: false
+      }
       liveState.phaseTransition = { stage: 'idle' }
       liveState.expectedJurorCount = 0
       const questionTime = await getQuestionTimeSeconds()
@@ -1101,7 +1432,12 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on(
       'moderator:showPodium',
-      (payload: { phaseNumber: number; phaseLabel: string; entries: PodiumEntry[]; isGrandFinal: boolean }) => {
+      (payload: {
+        phaseNumber: number
+        phaseLabel: string
+        entries: PodiumEntry[]
+        isGrandFinal: boolean
+      }) => {
         liveState.podium.active = true
         liveState.podium.phaseNumber = payload.phaseNumber
         liveState.podium.phaseLabel = payload.phaseLabel
@@ -1136,7 +1472,12 @@ export function registerSocketHandlers(io: Server): void {
             const top3 = [...liveState.championshipRankings]
               .sort((a, b) => b.score - a.score)
               .slice(0, 3)
-              .map((r) => ({ id: r.teamId, name: r.name, institution: r.institution, score: r.score }))
+              .map((r) => ({
+                id: r.teamId,
+                name: r.name,
+                institution: r.institution,
+                score: r.score
+              }))
             liveState.podium.active = true
             liveState.podium.phaseNumber = liveState.phase
             liveState.podium.phaseLabel = 'Grande Final'
@@ -1207,7 +1548,12 @@ export function registerSocketHandlers(io: Server): void {
       resetPresentationFlow()
       liveState.bracketVisible = false
       liveState.podium.active = false
-      liveState.podiumReveal = { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false }
+      liveState.podiumReveal = {
+        stage: 'idle',
+        countdownValue: 0,
+        suspensePhrase: null,
+        finalRankingVisible: false
+      }
       liveState.phaseTransition = { stage: 'idle' }
       liveState.expectedJurorCount = 0
       const questionTime = await getQuestionTimeSeconds()
@@ -1230,61 +1576,73 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('moderator:startPresentation', async (payload: { duplaId: string; teamId: string; useDocument?: boolean }) => {
-      const phaseConfig = await getCurrentPhaseConfig()
-      if (!phaseConfig || (phaseConfig.type !== 'apresentacao' && phaseConfig.type !== 'apresentacao_quiz')) return
-      if (liveState.presentationFlow.stage !== 'idle') return
-      if (liveState.presentationFlow.presentedTeamIds.includes(payload.teamId)) return
-      liveState.bracketVisible = false
+    socket.on(
+      'moderator:startPresentation',
+      async (payload: { duplaId: string; teamId: string; useDocument?: boolean }) => {
+        const phaseConfig = await getCurrentPhaseConfig()
+        if (
+          !phaseConfig ||
+          (phaseConfig.type !== 'apresentacao' && phaseConfig.type !== 'apresentacao_quiz')
+        )
+          return
+        if (liveState.presentationFlow.stage !== 'idle') return
+        if (liveState.presentationFlow.presentedTeamIds.includes(payload.teamId)) return
+        liveState.bracketVisible = false
 
-      const dupla = await prisma.presentationDupla.findUnique({ where: { id: payload.duplaId } })
-      if (!dupla || (dupla.teamAId !== payload.teamId && dupla.teamBId !== payload.teamId)) return
+        const dupla = await prisma.presentationDupla.findUnique({ where: { id: payload.duplaId } })
+        if (!dupla || (dupla.teamAId !== payload.teamId && dupla.teamBId !== payload.teamId)) return
 
-      const team = await prisma.team.findUnique({ where: { id: payload.teamId } })
-      if (!team) return
+        const team = await prisma.team.findUnique({ where: { id: payload.teamId } })
+        if (!team) return
 
-      let presentationMode: 'standard' | 'document' = 'standard'
-      let slides: { order: number; imageUrl: string }[] = []
+        let presentationMode: 'standard' | 'document' = 'standard'
+        let slides: { order: number; imageUrl: string }[] = []
 
-      if (payload.useDocument) {
-        const doc = await prisma.presentationDocument.findUnique({
-          where: { duplaId_teamId: { duplaId: payload.duplaId, teamId: payload.teamId } },
-          include: { slides: { orderBy: { order: 'asc' } } }
-        })
-        if (doc && doc.slides.length > 0) {
-          presentationMode = 'document'
-          slides = doc.slides.map((s) => ({ order: s.order, imageUrl: s.imageUrl }))
+        if (payload.useDocument) {
+          const doc = await prisma.presentationDocument.findUnique({
+            where: { duplaId_teamId: { duplaId: payload.duplaId, teamId: payload.teamId } },
+            include: { slides: { orderBy: { order: 'asc' } } }
+          })
+          if (doc && doc.slides.length > 0) {
+            presentationMode = 'document'
+            slides = doc.slides.map((s) => ({ order: s.order, imageUrl: s.imageUrl }))
+          }
         }
+
+        const minutes = phaseConfig.presentationMinutes ?? 10
+        const presentedTeamIds = liveState.presentationFlow.presentedTeamIds
+
+        liveState.presentationFlow = {
+          stage: 'countdown',
+          duplaId: payload.duplaId,
+          teamId: team.id,
+          teamName: team.name,
+          theme: payload.teamId === dupla.teamAId ? dupla.themeA : (dupla.themeB ?? dupla.themeA),
+          timeLeft: minutes * 60,
+          presentedTeamIds,
+          criteriaScores: [],
+          jurorsSubmitted: [],
+          allJurorsSubmitted: false,
+          presentationMode,
+          slides,
+          currentPage: 1
+        }
+        await refreshExpectedJurorCount()
+        broadcast()
+
+        startCountdown(10, async () => {
+          if (liveState.presentationFlow.teamId !== team.id) return
+          liveState.presentationFlow.stage = 'presenting'
+        })
       }
+    )
 
-      const minutes = phaseConfig.presentationMinutes ?? 10
-      const presentedTeamIds = liveState.presentationFlow.presentedTeamIds
-
-      liveState.presentationFlow = {
-        stage: 'countdown',
-        duplaId: payload.duplaId,
-        teamId: team.id,
-        teamName: team.name,
-        theme: payload.teamId === dupla.teamAId ? dupla.themeA : (dupla.themeB ?? dupla.themeA),
-        timeLeft: minutes * 60,
-        presentedTeamIds,
-        criteriaScores: [],
-        jurorsSubmitted: [],
-        allJurorsSubmitted: false,
-        presentationMode,
-        slides,
-        currentPage: 1
-      }
-      await refreshExpectedJurorCount()
-      broadcast()
-
-      startCountdown(10, async () => {
-        if (liveState.presentationFlow.teamId !== team.id) return
-        liveState.presentationFlow.stage = 'presenting'
-      })
-    })
-
-    socket.on('moderator:finishPresentation', () => {
+    // CORRIGIDO — agora async e chama checkAllJurorsSubmitted(broadcast)
+    // depois de marcar 'concluded', para cobrir o caso em que todos os
+    // jurados já tinham submetido a avaliação ANTES do moderador clicar
+    // em "Finalizar" (o que antes deixava 'allJurorsSubmitted' preso em
+    // 'false' para sempre, e o botão "Avançar" nunca aparecia).
+    socket.on('moderator:finishPresentation', async () => {
       if (liveState.presentationFlow.stage !== 'presenting') return
       if (liveState.presentationFlow.timeLeft > 0) return
       liveState.presentationFlow.stage = 'concluded'
@@ -1292,6 +1650,7 @@ export function registerSocketHandlers(io: Server): void {
       if (teamId && !liveState.presentationFlow.presentedTeamIds.includes(teamId)) {
         liveState.presentationFlow.presentedTeamIds.push(teamId)
       }
+      await checkAllJurorsSubmitted(broadcast)
       broadcast()
     })
 
@@ -1309,20 +1668,39 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('juror:setPresentationScore', (payload: { jurorId: string; criteriaId: string; score: number }) => {
-      if (liveState.presentationFlow.stage === 'idle') return
-      if (liveState.presentationFlow.jurorsSubmitted.includes(payload.jurorId)) return
-      const existing = liveState.presentationFlow.criteriaScores.find(
-        (e) => e.jurorId === payload.jurorId && e.criteriaId === payload.criteriaId
-      )
-      if (existing) {
-        existing.score = payload.score
-      } else {
-        liveState.presentationFlow.criteriaScores.push({ ...payload })
+    // ATUALIZADO — payload.criteriaId inválido (ausente, vazio, ou
+    // qualquer coisa "falsy") é agora rejeitado logo aqui, silenciosamente
+    // do ponto de vista do jurado (não quebra a UI dele, só não regista a
+    // nota). Sem isto, uma entrada envenenada entrava em
+    // presentationFlow.criteriaScores e mais tarde fazia o
+    // prisma.presentationScore.upsert() dentro de checkAllJurorsSubmitted()
+    // rebentar com "Argument criteriaId must not be null" — uma exceção
+    // não apanhada que impedia o broadcast() seguinte de correr, fazendo
+    // o botão "Avançar" no painel do Moderador demorar muito a aparecer
+    // (só quando a sincronização periódica de 3 em 3 min por acaso
+    // disparava outro state:sync).
+    socket.on(
+      'juror:setPresentationScore',
+      (payload: { jurorId: string; criteriaId: string; score: number }) => {
+        if (liveState.presentationFlow.stage === 'idle') return
+        if (liveState.presentationFlow.jurorsSubmitted.includes(payload.jurorId)) return
+        if (!payload.criteriaId) return
+        const existing = liveState.presentationFlow.criteriaScores.find(
+          (e) => e.jurorId === payload.jurorId && e.criteriaId === payload.criteriaId
+        )
+        if (existing) {
+          existing.score = payload.score
+        } else {
+          liveState.presentationFlow.criteriaScores.push({ ...payload })
+        }
+        broadcast()
       }
-      broadcast()
-    })
+    )
 
+    // CORRIGIDO — só regista a submissão do jurado; toda a lógica de
+    // "já submeteram todos?" e o cálculo/gravação da nota foi movida para
+    // checkAllJurorsSubmitted(broadcast), reutilizada também em
+    // finishPresentation.
     socket.on('juror:submitPresentationEvaluation', async (payload: { jurorId: string }) => {
       const flow = liveState.presentationFlow
       if (flow.stage === 'idle' || !flow.teamId) return
@@ -1332,120 +1710,16 @@ export function registerSocketHandlers(io: Server): void {
       flow.jurorsSubmitted.push(payload.jurorId)
       broadcast()
 
-      const allSubmitted = liveState.expectedJurorCount > 0 && flow.jurorsSubmitted.length >= liveState.expectedJurorCount
-      if (allSubmitted && flow.stage === 'concluded') {
-        flow.allJurorsSubmitted = true
-
-        const totalsByJuror = new Map<string, number>()
-        for (const entry of flow.criteriaScores) {
-          totalsByJuror.set(entry.jurorId, (totalsByJuror.get(entry.jurorId) ?? 0) + entry.score)
-        }
-        const totals = Array.from(totalsByJuror.values())
-        const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0
-
-        for (const entry of flow.criteriaScores) {
-          await prisma.presentationScore.upsert({
-            where: {
-              criteriaId_jurorId_teamId: { criteriaId: entry.criteriaId, jurorId: entry.jurorId, teamId: flow.teamId }
-            },
-            update: { score: entry.score },
-            create: {
-              criteriaId: entry.criteriaId,
-              jurorId: entry.jurorId,
-              teamId: flow.teamId,
-              score: entry.score
-            }
-          })
-        }
-
-        const team = await prisma.team.findUnique({ where: { id: flow.teamId } })
-        const phaseConfig = await getCurrentPhaseConfig()
-
-        if (phaseConfig?.type === 'apresentacao_quiz') {
-          const existingPresScore = liveState.presentationPhaseScores.find((r) => r.teamId === flow.teamId)
-          if (existingPresScore) {
-            existingPresScore.score = average
-          } else if (team) {
-            liveState.presentationPhaseScores.push({
-              teamId: team.id,
-              name: team.name,
-              institution: team.institution,
-              score: average
-            })
-          }
-        } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
-          addToPhaseRanking(team, average)
-          if (team) {
-            const existingCarried = liveState.carriedPresentationScores.find((r) => r.teamId === team.id)
-            const presentationWeight = phaseConfig.presentationWeight ?? 50
-            const quizWeight = phaseConfig.quizWeight ?? 50
-            if (existingCarried) {
-              existingCarried.score = average
-              existingCarried.presentationWeight = presentationWeight
-              existingCarried.quizWeight = quizWeight
-            } else {
-              liveState.carriedPresentationScores.push({
-                teamId: team.id,
-                name: team.name,
-                institution: team.institution,
-                score: average,
-                presentationWeight,
-                quizWeight
-              })
-            }
-          }
-        } else {
-          addToPhaseRanking(team, average)
-          addToChampionshipRanking(team, average)
-
-          const dupla = await prisma.presentationDupla.findFirst({
-            where: {
-              phaseId: phaseConfig?.id,
-              OR: [{ teamAId: flow.teamId }, { teamBId: flow.teamId }]
-            }
-          })
-          if (liveState.championship && phaseConfig && dupla?.teamAId) {
-            if (!dupla.teamBId) {
-              await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamAId, dupla.teamAId)
-            } else {
-              const rankA = liveState.phaseRankings.find((r) => r.teamId === dupla.teamAId)
-              const rankB = liveState.phaseRankings.find((r) => r.teamId === dupla.teamBId)
-              if (rankA && rankB) {
-                const dWinnerId = rankA.score >= rankB.score ? dupla.teamAId : dupla.teamBId
-                const dLoserId = dWinnerId === dupla.teamAId ? dupla.teamBId : dupla.teamAId
-                await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamBId, dWinnerId)
-                if (!liveState.eliminatedTeamIds.includes(dLoserId)) {
-                  liveState.eliminatedTeamIds.push(dLoserId)
-                }
-              }
-            }
-          }
-        }
-
-        if (phaseConfig) {
-          const allTeamIds = await getPresentationTeamIds(phaseConfig.id)
-          const recordedTeamIds =
-            phaseConfig.type === 'apresentacao_quiz'
-              ? liveState.presentationPhaseScores.map((r) => r.teamId)
-              : liveState.phaseRankings.map((r) => r.teamId)
-          const allPresentedAndEvaluated =
-            allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
-
-          if (allPresentedAndEvaluated) {
-            if (phaseConfig.type === 'apresentacao') {
-              liveState.presentationRoundReady = true
-            } else if (phaseConfig.type === 'apresentacao_quiz') {
-              liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
-            }
-          }
-        }
-
-        broadcast()
-      }
+      await checkAllJurorsSubmitted(broadcast)
+      broadcast()
     })
 
     socket.on('moderator:advanceToNextPresentation', () => {
-      if (liveState.presentationFlow.stage !== 'concluded' || !liveState.presentationFlow.allJurorsSubmitted) return
+      if (
+        liveState.presentationFlow.stage !== 'concluded' ||
+        !liveState.presentationFlow.allJurorsSubmitted
+      )
+        return
       liveState.presentationFlow = {
         stage: 'idle',
         duplaId: null,
@@ -1464,79 +1738,105 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('juror:register', async (payload: { code: string }, callback?: (res: unknown) => void) => {
-      const code = (payload.code || '').trim().toUpperCase()
-      const juror = await prisma.juror.findUnique({ where: { code } })
-      if (!juror) {
-        callback?.({ success: false, error: 'Código de jurado inválido.' })
-        return
-      }
-
-      const phaseConfig = await getCurrentPhaseConfig()
-      if (phaseConfig) {
-        const authRows = await prisma.phaseJurorAuthorization.findMany({ where: { phaseId: phaseConfig.id } })
-        if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
-          callback?.({ success: false, error: 'Este jurado não está autorizado a avaliar esta fase.' })
+    socket.on(
+      'juror:register',
+      async (payload: { code: string }, callback?: (res: unknown) => void) => {
+        const code = (payload.code || '').trim().toUpperCase()
+        const juror = await prisma.juror.findUnique({ where: { code } })
+        if (!juror) {
+          callback?.({ success: false, error: 'Código de jurado inválido.' })
           return
         }
-      }
 
-      if (liveState.jurors.some((j) => j.id === juror.id)) {
-        callback?.({ success: false, error: 'Este jurado já está ligado a esta partida.' })
-        return
-      }
+        const phaseConfig = await getCurrentPhaseConfig()
+        if (phaseConfig) {
+          const authRows = await prisma.phaseJurorAuthorization.findMany({
+            where: { phaseId: phaseConfig.id }
+          })
+          if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
+            callback?.({
+              success: false,
+              error: 'Este jurado não está autorizado a avaliar esta fase.'
+            })
+            return
+          }
+        }
 
-      const maxJurors = await getMaxJurors()
-      if (liveState.jurors.length >= maxJurors) {
-        callback?.({ success: false, error: 'Número máximo de jurados já atingido para esta partida.' })
-        return
-      }
-
-      liveState.jurors.push({ id: juror.id, name: juror.name })
-      socket.data.jurorId = juror.id
-      await refreshExpectedJurorCount()
-      broadcast()
-      callback?.({ success: true, jurorId: juror.id })
-    })
-
-    socket.on('moderator:registerJurorLocally', async (payload: { jurorId: string }, callback?: (res: unknown) => void) => {
-      const juror = await prisma.juror.findUnique({ where: { id: payload.jurorId } })
-      if (!juror) {
-        callback?.({ success: false, error: 'Jurado não encontrado.' })
-        return
-      }
-
-      const phaseConfig = await getCurrentPhaseConfig()
-      if (phaseConfig) {
-        const authRows = await prisma.phaseJurorAuthorization.findMany({ where: { phaseId: phaseConfig.id } })
-        if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
-          callback?.({ success: false, error: 'Este jurado não está autorizado a avaliar esta fase.' })
+        if (liveState.jurors.some((j) => j.id === juror.id)) {
+          callback?.({ success: false, error: 'Este jurado já está ligado a esta partida.' })
           return
         }
-      }
 
-      if (liveState.jurors.some((j) => j.id === juror.id)) {
+        const maxJurors = await getMaxJurors()
+        if (liveState.jurors.length >= maxJurors) {
+          callback?.({
+            success: false,
+            error: 'Número máximo de jurados já atingido para esta partida.'
+          })
+          return
+        }
+
+        liveState.jurors.push({ id: juror.id, name: juror.name })
+        socket.data.jurorId = juror.id
+        await refreshExpectedJurorCount()
+        broadcast()
         callback?.({ success: true, jurorId: juror.id })
-        return
       }
+    )
 
-      const maxJurors = await getMaxJurors()
-      if (liveState.jurors.length >= maxJurors) {
-        callback?.({ success: false, error: 'Número máximo de jurados já atingido para esta partida.' })
-        return
+    socket.on(
+      'moderator:registerJurorLocally',
+      async (payload: { jurorId: string }, callback?: (res: unknown) => void) => {
+        const juror = await prisma.juror.findUnique({ where: { id: payload.jurorId } })
+        if (!juror) {
+          callback?.({ success: false, error: 'Jurado não encontrado.' })
+          return
+        }
+
+        const phaseConfig = await getCurrentPhaseConfig()
+        if (phaseConfig) {
+          const authRows = await prisma.phaseJurorAuthorization.findMany({
+            where: { phaseId: phaseConfig.id }
+          })
+          if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
+            callback?.({
+              success: false,
+              error: 'Este jurado não está autorizado a avaliar esta fase.'
+            })
+            return
+          }
+        }
+
+        if (liveState.jurors.some((j) => j.id === juror.id)) {
+          callback?.({ success: true, jurorId: juror.id })
+          return
+        }
+
+        const maxJurors = await getMaxJurors()
+        if (liveState.jurors.length >= maxJurors) {
+          callback?.({
+            success: false,
+            error: 'Número máximo de jurados já atingido para esta partida.'
+          })
+          return
+        }
+
+        liveState.jurors.push({ id: juror.id, name: juror.name })
+        socket.data.locallyRegisteredJurorIds = socket.data.locallyRegisteredJurorIds || []
+        socket.data.locallyRegisteredJurorIds.push(juror.id)
+        await refreshExpectedJurorCount()
+        broadcast()
+        callback?.({ success: true, jurorId: juror.id })
       }
+    )
 
-      liveState.jurors.push({ id: juror.id, name: juror.name })
-      socket.data.locallyRegisteredJurorIds = socket.data.locallyRegisteredJurorIds || []
-      socket.data.locallyRegisteredJurorIds.push(juror.id)
-      await refreshExpectedJurorCount()
-      broadcast()
-      callback?.({ success: true, jurorId: juror.id })
-    })
-
-    socket.on('moderator:removeJuror', (payload: { jurorId: string }) => {
+    // CORRIGIDO — remover um jurado pode ser precisamente o que faltava
+    // para desbloquear o "Avançar" (ex: jurado que ficou preso sem
+    // conseguir submeter). Reavalia de imediato.
+    socket.on('moderator:removeJuror', async (payload: { jurorId: string }) => {
       liveState.jurors = liveState.jurors.filter((j) => j.id !== payload.jurorId)
       liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== payload.jurorId)
+      await checkAllJurorsSubmitted(broadcast)
       broadcast()
     })
 
@@ -1562,7 +1862,8 @@ export function registerSocketHandlers(io: Server): void {
       if (liveState.expectedJurorCount > 0) {
         if (liveState.jurors.length < liveState.expectedJurorCount) return
         const missing = liveState.jurors.some(
-          (j) => !liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === payload.itemId)
+          (j) =>
+            !liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === payload.itemId)
         )
         if (missing) return
       }
@@ -1597,17 +1898,20 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('juror:setInitialScore', (payload: { jurorId: string; scoreA: number; scoreB: number }) => {
-      if (liveState.initialScoresConfirmed) return
-      const existing = liveState.initialScoreEntries.find((e) => e.jurorId === payload.jurorId)
-      if (existing) {
-        existing.scoreA = payload.scoreA
-        existing.scoreB = payload.scoreB
-      } else {
-        liveState.initialScoreEntries.push({ ...payload })
+    socket.on(
+      'juror:setInitialScore',
+      (payload: { jurorId: string; scoreA: number; scoreB: number }) => {
+        if (liveState.initialScoresConfirmed) return
+        const existing = liveState.initialScoreEntries.find((e) => e.jurorId === payload.jurorId)
+        if (existing) {
+          existing.scoreA = payload.scoreA
+          existing.scoreB = payload.scoreB
+        } else {
+          liveState.initialScoreEntries.push({ ...payload })
+        }
+        broadcast()
       }
-      broadcast()
-    })
+    )
 
     socket.on('moderator:confirmInitialScores', () => {
       if (liveState.initialScoresConfirmed) return
@@ -1647,7 +1951,7 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log('Cliente desligado:', socket.id)
       if (socket.id === moderatorSocketId && liveState.moderatorAdjusting) {
         liveState.moderatorAdjusting = false
@@ -1658,12 +1962,16 @@ export function registerSocketHandlers(io: Server): void {
       if (jurorId) {
         liveState.jurors = liveState.jurors.filter((j) => j.id !== jurorId)
         liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== jurorId)
+        await checkAllJurorsSubmitted(broadcast)
         broadcast()
       }
       const localJurorIds: string[] = socket.data?.locallyRegisteredJurorIds || []
       if (localJurorIds.length) {
         liveState.jurors = liveState.jurors.filter((j) => !localJurorIds.includes(j.id))
-        liveState.jurorEntries = liveState.jurorEntries.filter((e) => !localJurorIds.includes(e.jurorId))
+        liveState.jurorEntries = liveState.jurorEntries.filter(
+          (e) => !localJurorIds.includes(e.jurorId)
+        )
+        await checkAllJurorsSubmitted(broadcast)
         broadcast()
       }
       const moderatorId = socket.data?.moderatorId as string | undefined

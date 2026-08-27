@@ -1,0 +1,5210 @@
+===== src\routes\adminAuth.ts =====  
+import { Router } from 'express'
+import bcrypt from 'bcryptjs'
+import * as otplibModule from 'otplib'
+import { randomUUID } from 'crypto'
+import QRCode from 'qrcode'
+import { prisma } from '../db'
+
+// Resolução robusta de compatibilidade ESM/CJS para otplib + tsx
+function getAuthenticator(): any {
+  const m = otplibModule as any
+  if (m.authenticator && typeof m.authenticator.generateSecret === 'function') {
+    return m.authenticator
+  }
+  if (m.default?.authenticator && typeof m.default.authenticator.generateSecret === 'function') {
+    return m.default.authenticator
+  }
+  if (m.default && typeof m.default.generateSecret === 'function') {
+    return m.default
+  }
+  if (typeof m.generateSecret === 'function') {
+    return m
+  }
+  if (m.Authenticator) {
+    return new m.Authenticator()
+  }
+  if (m.default?.Authenticator) {
+    return new m.default.Authenticator()
+  }
+  return m
+}
+
+function verifyTOTP(token: string, secret: string): boolean {
+  const auth = getAuthenticator()
+  try {
+    if (typeof auth.verify === 'function') {
+      return auth.verify({ token, secret })
+    }
+  } catch (_) {}
+  if (typeof auth.check === 'function') {
+    return auth.check(token, secret)
+  }
+  return false
+}
+
+const router = Router()
+const SESSION_DAYS = 7
+
+async function getAuth() {
+  return prisma.adminAuth.findUnique({ where: { id: 1 } })
+}
+
+// Primeira configuração — só corre se ainda não existir password configurada.
+router.post('/setup', async (req, res) => {
+  const existing = await getAuth()
+  if (existing) {
+    res.status(400).json({ error: 'Já existe uma password configurada.' })
+    return
+  }
+  const { password } = req.body as { password?: string }
+  if (!password || password.length < 8) {
+    res.status(400).json({ error: 'A password tem de ter pelo menos 8 caracteres.' })
+    return
+  }
+  const passwordHash = await bcrypt.hash(password, 12)
+  const auth = getAuthenticator()
+  const totpSecret = auth.generateSecret()
+  await prisma.adminAuth.create({ data: { id: 1, passwordHash, totpSecret, totpEnabled: false } })
+
+  const keyuri =
+    typeof auth.keyuri === 'function'
+      ? auth.keyuri('Admin', 'Petrochamp', totpSecret)
+      : `otpauth://totp/Petrochamp:Admin?secret=${totpSecret}&issuer=Petrochamp`
+
+  const qrDataUrl = await QRCode.toDataURL(keyuri)
+  res.status(201).json({ qrDataUrl, secret: totpSecret })
+})
+
+// Confirma o primeiro código TOTP e ativa definitivamente o 2FA.
+router.post('/confirm-totp', async (req, res) => {
+  const { token } = req.body as { token?: string }
+  const auth = await getAuth()
+  if (!auth?.totpSecret) {
+    res.status(400).json({ error: 'Configuração não iniciada.' })
+    return
+  }
+  const valid = verifyTOTP(token ?? '', auth.totpSecret)
+  if (!valid) {
+    res.status(400).json({ error: 'Código inválido.' })
+    return
+  }
+  await prisma.adminAuth.update({ where: { id: 1 }, data: { totpEnabled: true } })
+  res.json({ success: true })
+})
+
+router.post('/login', async (req, res) => {
+  const { password, token } = req.body as { password?: string; token?: string }
+  const auth = await getAuth()
+  if (!auth || !auth.totpEnabled) {
+    res.status(400).json({ error: 'Admin ainda não foi configurado.' })
+    return
+  }
+  const passwordOk = await bcrypt.compare(password ?? '', auth.passwordHash)
+  if (!passwordOk) {
+    res.status(401).json({ error: 'Password incorreta.' })
+    return
+  }
+  const totpOk = verifyTOTP(token ?? '', auth.totpSecret!)
+  if (!totpOk) {
+    res.status(401).json({ error: 'Código de autenticação inválido.' })
+    return
+  }
+  const sessionToken = randomUUID()
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000)
+  await prisma.adminSession.create({ data: { token: sessionToken, expiresAt } })
+
+  res.json({ token: sessionToken })
+})
+
+router.get('/status', async (_req, res) => {
+  const auth = await getAuth()
+  res.json({ configured: !!auth?.totpEnabled })
+})
+
+router.post('/logout', async (req, res) => {
+  const { token } = req.body as { token?: string }
+  if (token) await prisma.adminSession.delete({ where: { token } }).catch(() => {})
+  res.json({ success: true })
+})
+
+export default router
+ 
+===== src\routes\bracket.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+
+const router = Router()
+
+// GET /api/bracket/:championship - Obter a estrutura do chaveamento
+router.get('/:championship', async (req, res) => {
+  try {
+    const { championship } = req.params
+    const rawTeams = await prisma.team.findMany({
+      where: {
+        category: championship,
+        group: { not: null }
+      },
+      orderBy: [{ group: 'asc' }, { bracketPosition: 'asc' }]
+    })
+
+    // Eliminar duplicados por ID e por Nome (case-insensitive)
+    const uniqueTeamsMap = new Map<string, (typeof rawTeams)[0]>()
+    for (const t of rawTeams) {
+      const nameKey = t.name.trim().toLowerCase()
+      const exists = Array.from(uniqueTeamsMap.values()).some(
+        (existing) => existing.id === t.id || existing.name.trim().toLowerCase() === nameKey
+      )
+      if (!exists && t.group) {
+        uniqueTeamsMap.set(t.id, t)
+      }
+    }
+    const teams = Array.from(uniqueTeamsMap.values())
+
+    const grouped = new Map<string, typeof teams>()
+    for (const t of teams) {
+      const g = t.group!
+      if (!grouped.has(g)) grouped.set(g, [])
+      grouped.get(g)!.push(t)
+    }
+
+    const round1Matches: unknown[] = []
+    for (const [groupName, groupTeams] of grouped) {
+      for (let i = 0; i < groupTeams.length; i += 2) {
+        const teamA = groupTeams[i]
+        const teamB = groupTeams[i + 1]
+        round1Matches.push({
+          id: `r1-${teamA.id}`,
+          groupName,
+          teamA: { id: teamA.id, name: teamA.name, logoUrl: teamA.logoUrl },
+          teamB: teamB ? { id: teamB.id, name: teamB.name, logoUrl: teamB.logoUrl } : null
+        })
+      }
+    }
+
+    let totalSlots = 1
+    while (totalSlots < Math.max(round1Matches.length * 2, 2)) totalSlots *= 2
+    const totalRounds = Math.log2(totalSlots)
+
+    res.json({ championship, teamCount: teams.length, round1Matches, totalRounds })
+  } catch (error) {
+    console.error('Erro ao obter chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao carregar chaveamento.' })
+  }
+})
+
+// Função auxiliar para eliminar o chaveamento, duplas e limpar grupos das equipas
+async function deleteBracketData(championship?: string) {
+  return await prisma.$transaction(async (tx) => {
+    await tx.presentationScore.deleteMany({})
+
+    if (championship) {
+      await tx.presentationDupla.deleteMany({
+        where: {
+          phase: {
+            championship
+          }
+        }
+      })
+
+      await tx.bracketMatch.deleteMany({
+        where: { championship }
+      })
+
+      // Limpar o grupo e a posição para o chaveamento ficar vazio
+      await tx.team.updateMany({
+        where: { category: championship },
+        data: { group: null, bracketPosition: null }
+      })
+    } else {
+      await tx.presentationDupla.deleteMany({})
+      await tx.bracketMatch.deleteMany({})
+      await tx.team.updateMany({
+        data: { group: null, bracketPosition: null }
+      })
+    }
+  })
+}
+
+// DELETE /api/bracket/:championship
+router.delete('/:championship', async (req, res) => {
+  try {
+    const { championship } = req.params
+    await deleteBracketData(championship)
+
+    emitConfigUpdated('bracket')
+    emitConfigUpdated('presentation')
+    emitConfigUpdated('teams')
+
+    res.json({
+      success: true,
+      message: `Chaveamento e duplas da categoria ${championship} eliminados com sucesso.`
+    })
+  } catch (error) {
+    console.error('Erro ao eliminar chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })
+  }
+})
+
+const handleClearAll = async (_req: any, res: any) => {
+  try {
+    await deleteBracketData()
+
+    emitConfigUpdated('bracket')
+    emitConfigUpdated('presentation')
+    emitConfigUpdated('teams')
+
+    res.json({
+      success: true,
+      message: 'Todo o chaveamento e duplas de apresentação foram eliminados com sucesso.'
+    })
+  } catch (error) {
+    console.error('Erro ao eliminar chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })
+  }
+}
+
+router.post('/clear', handleClearAll)
+router.delete('/', handleClearAll)
+
+export default router
+ 
+===== src\routes\bracketLive.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
+import { emitConfigUpdated } from '../socket/configEvents'
+
+const router = Router()
+
+// evita que duas chamadas a /generate corram em paralelo para a
+// mesma categoria (ex: duplo clique, ou um pedido novo disparado antes do
+// anterior terminar). Sem isto, o deleteMany de um pedido podia correr
+// entre o deleteMany e o createMany de outro, e os dois createMany
+// acabavam por inserir os mesmos confrontos duas vezes (ou mais, se
+// houvesse mais pedidos concorrentes) — foi isto que causou os
+// chaveamentos duplicados infinitamente.
+const generatingChampionships = new Set<string>()
+
+function nextPowerOfTwo(n: number): number {
+  let p = 1
+  while (p < n) p *= 2
+  return p
+}
+
+function roundLabel(round: number, total: number): string {
+  const remaining = total - round
+  if (remaining === 0) return 'Final'
+  if (remaining === 1) return 'Meias-Finais'
+  if (remaining === 2) return 'Quartas de Final'
+  return `Ronda ${round}`
+}
+
+async function ensurePhasesForRounds(championship: string, totalRounds: number): Promise<void> {
+  const existing = await prisma.phase.findMany({
+    where: { championship },
+    orderBy: { order: 'asc' }
+  })
+  for (let round = 1; round <= totalRounds; round++) {
+    const already = existing.find((p) => p.order === round)
+    if (!already) {
+      await prisma.phase.create({
+        data: {
+          championship,
+          order: round,
+          label: roundLabel(round, totalRounds),
+          useQuestions: true,
+          useJudges: false,
+          avoidRepeatQuestions: true
+        }
+      })
+    }
+  }
+}
+
+async function resolveByesRecursively(championship: string, totalRounds: number): Promise<void> {
+  for (let round = 1; round < totalRounds; round++) {
+    const matches = await prisma.bracketMatch.findMany({
+      where: { championship, round, winnerId: null }
+    })
+    for (const m of matches) {
+      const hasA = !!m.teamAId
+      const hasB = !!m.teamBId
+      if (hasA !== hasB) {
+        const winnerId = hasA ? m.teamAId! : m.teamBId!
+        await prisma.bracketMatch.update({ where: { id: m.id }, data: { winnerId } })
+        const nextSlot = Math.floor(m.slot / 2)
+        const nextMatch = await prisma.bracketMatch.findFirst({
+          where: { championship, round: m.round + 1, slot: nextSlot }
+        })
+        if (nextMatch) {
+          const isFirstChild = m.slot % 2 === 0
+          await prisma.bracketMatch.update({
+            where: { id: nextMatch.id },
+            data: isFirstChild ? { teamAId: winnerId } : { teamBId: winnerId }
+          })
+        }
+      }
+    }
+  }
+}
+
+// Cria/atualiza as PresentationDuplas de uma ronda específica, sempre que
+// essa ronda corresponder a uma fase de Apresentação (pura ou + Quiz) e já
+// tiver equipas definidas nos confrontos. Chamada tanto ao gerar o
+// chaveamento (Ronda 1) como sempre que uma equipa avança para uma ronda
+// seguinte (ver recordBracketResult em socket/index.ts) — assim as duplas
+// nunca dessincronizam do chaveamento, seja qual for a ronda escolhida
+// para ser de Apresentação.
+//
+// IMPORTANTE: como os dois jogos que alimentam uma mesma dupla de
+// Apresentação normalmente NÃO terminam ao mesmo tempo, esta função pode
+// ser chamada primeiro só com teamAId preenchido (e teamBId ainda null),
+// e mais tarde outra vez já com teamBId preenchido. Por isso a
+// identidade de uma dupla é sempre o teamAId (que nunca muda depois de
+// definido) — nunca comparamos teamAId+teamBId juntos, para não criar
+// duplicados quando a segunda equipa só chega mais tarde.
+//
+// CORRIGIDO — a causa da duplicação de duplas: o array `existingDuplas`
+// era lido UMA VEZ antes do loop e nunca atualizado depois de criar uma
+// dupla nova dentro do próprio loop. Sempre que havia mais do que um
+// `bracketMatch` com o mesmo teamAId na mesma ronda (exatamente o que a
+// duplicação do /generate produzia), a 1ª ocorrência criava a dupla mas
+// as seguintes não a encontravam no array desatualizado — e criavam-na
+// outra vez. Agora usamos um Map local que é atualizado a cada criação, e
+// além disso o upsert usa a constraint única (phaseId, teamAId) da BD
+// como rede de segurança final, mesmo que outra via de código chame esta
+// função em paralelo.
+export async function syncPresentationDuplasForRound(
+  championship: string,
+  round: number
+): Promise<void> {
+  const phase = await prisma.phase.findFirst({ where: { championship, order: round } })
+  if (!phase || (phase.type !== 'apresentacao' && phase.type !== 'apresentacao_quiz')) return
+
+  const matches = await prisma.bracketMatch.findMany({
+    where: { championship, round },
+    orderBy: { slot: 'asc' }
+  })
+  const existingDuplas = await prisma.presentationDupla.findMany({ where: { phaseId: phase.id } })
+
+  // Map local mantido em sincronia com as criações feitas dentro deste
+  // próprio loop — é isto que faltava antes.
+  const byTeamA = new Map(existingDuplas.map((d) => [d.teamAId, d]))
+
+  let order = existingDuplas.length + 1
+  let changedAny = false
+
+  for (const m of matches) {
+    if (!m.teamAId) continue
+
+    const existing = byTeamA.get(m.teamAId)
+
+    if (!existing) {
+      const created = await prisma.presentationDupla.upsert({
+        where: { phaseId_teamAId: { phaseId: phase.id, teamAId: m.teamAId } },
+        create: {
+          phaseId: phase.id,
+          order: order++,
+          themeA: '',
+          themeB: m.teamBId ? '' : null,
+          teamAId: m.teamAId,
+          teamBId: m.teamBId ?? null
+        },
+        update: {}
+      })
+      byTeamA.set(m.teamAId, created)
+      changedAny = true
+      continue
+    }
+
+    // A dupla já existe (foi criada quando só a equipa A tinha avançado,
+    // ou por uma iteração anterior deste mesmo loop). Se agora a equipa B
+    // já está definida no confronto e a dupla ainda não a tem, atualiza-a
+    // em vez de criar uma duplicada.
+    if (m.teamBId && !existing.teamBId) {
+      const updated = await prisma.presentationDupla.update({
+        where: { id: existing.id },
+        data: { teamBId: m.teamBId, themeB: existing.themeB ?? '' }
+      })
+      byTeamA.set(m.teamAId, updated)
+      changedAny = true
+    }
+  }
+  if (changedAny) emitConfigUpdated('presentation', championship)
+}
+
+router.get('/:championship', async (req, res) => {
+  const { championship } = req.params
+  const matches = await prisma.bracketMatch.findMany({
+    where: { championship },
+    orderBy: [{ round: 'asc' }, { slot: 'asc' }]
+  })
+
+  const teamIds = new Set<string>()
+  for (const m of matches) {
+    if (m.teamAId) teamIds.add(m.teamAId)
+    if (m.teamBId) teamIds.add(m.teamBId)
+  }
+  const teams = await prisma.team.findMany({ where: { id: { in: Array.from(teamIds) } } })
+  const teamMap = new Map(teams.map((t) => [t.id, t]))
+
+  const shaped = matches.map((m) => ({
+    id: m.id,
+    round: m.round,
+    slot: m.slot,
+    groupName: m.groupName,
+    teamA: m.teamAId
+      ? {
+          id: m.teamAId,
+          name: teamMap.get(m.teamAId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null
+        }
+      : null,
+    teamB: m.teamBId
+      ? {
+          id: m.teamBId,
+          name: teamMap.get(m.teamBId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null
+        }
+      : null,
+    winnerId: m.winnerId
+  }))
+
+  res.json({ championship, matches: shaped })
+})
+
+// a causa da duplicação infinita de bracketMatch: o deleteMany e o
+// createMany corriam como duas operações separadas, sem transação. Se o
+// /generate fosse chamado mais do que uma vez em sucessão (duplo clique,
+// nova chamada antes da resposta anterior voltar, etc.), os pedidos
+// entrelaçavam-se — ex: A apaga, B apaga (nada a apagar), A cria, B cria
+// — e cada chamada extra ficava a somar mais um conjunto completo de
+// confrontos em cima dos anteriores, sem nunca limpar os que já lá
+// estavam. Agora:
+//   1. Um "lock" em memória (generatingChampionships) rejeita pedidos
+//      concorrentes para a mesma categoria com 409, em vez de os deixar
+//      correr ao mesmo tempo.
+//   2. O apagar + criar corre dentro de uma prisma.$transaction, que
+//      garante atomicidade mesmo que o lock falhe por algum motivo (ex:
+//      reinício do processo entre pedidos).
+//   3. A constraint @@unique([championship, round, slot]) na BD rejeita
+//      qualquer duplicado que ainda assim escape aos dois pontos acima.
+router.post('/:championship/generate', requireAdmin, async (req, res) => {
+  const { championship } = req.params
+
+  if (generatingChampionships.has(championship)) {
+    res.status(409).json({
+      error: 'Já existe uma geração de chaveamento em curso para esta categoria. Aguarde terminar.'
+    })
+    return
+  }
+  generatingChampionships.add(championship)
+
+  try {
+    const teams = await prisma.team.findMany({
+      where: { category: championship },
+      orderBy: [{ group: 'asc' }, { bracketPosition: 'asc' }]
+    })
+
+    if (teams.length < 2) {
+      res.status(400).json({ error: 'É preciso pelo menos 2 equipas cadastradas nesta categoria.' })
+      return
+    }
+
+    const slotsNeeded = nextPowerOfTwo(teams.length)
+    const round1Count = slotsNeeded / 2
+    const totalRounds = Math.log2(slotsNeeded)
+
+    const created: {
+      round: number
+      slot: number
+      teamAId?: string | null
+      teamBId?: string | null
+      groupName?: string
+    }[] = []
+
+    for (let slot = 0; slot < round1Count; slot++) {
+      const teamA = teams[slot * 2]
+      const teamB = teams[slot * 2 + 1]
+      created.push({
+        round: 1,
+        slot,
+        teamAId: teamA?.id ?? null,
+        teamBId: teamB?.id ?? null,
+        groupName: teamA?.group ?? undefined
+      })
+    }
+
+    for (let round = 2; round <= totalRounds; round++) {
+      const count = slotsNeeded / Math.pow(2, round)
+      for (let slot = 0; slot < count; slot++) {
+        created.push({ round, slot })
+      }
+    }
+
+    // Apagar o chaveamento anterior e criar o novo dentro da mesma
+    // transação: ou as duas operações são aplicadas juntas, ou nenhuma é
+    // — nunca fica um estado a meio onde os antigos já foram apagados mas
+    // os novos ainda não existem (nem o inverso, os dois a coexistir).
+    //
+    // As PresentationDuplas da categoria também são apagadas aqui: como o
+    // chaveamento vai ser todo recriado com IDs novos, as duplas antigas
+    // (que apontam para teamAId de confrontos que deixam de existir da
+    // forma anterior) deixam de fazer sentido e seriam reconstruídas de
+    // qualquer forma pelo syncPresentationDuplasForRound logo a seguir.
+    const phaseIds = (
+      await prisma.phase.findMany({ where: { championship }, select: { id: true } })
+    ).map((p) => p.id)
+
+    await prisma.$transaction([
+      ...(phaseIds.length
+        ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })]
+        : []),
+      prisma.bracketMatch.deleteMany({ where: { championship } }),
+      prisma.bracketMatch.createMany({
+        data: created.map((c) => ({
+          championship,
+          round: c.round,
+          slot: c.slot,
+          teamAId: c.teamAId ?? null,
+          teamBId: c.teamBId ?? null,
+          groupName: c.groupName ?? null
+        }))
+      })
+    ])
+
+    await resolveByesRecursively(championship, totalRounds)
+    await ensurePhasesForRounds(championship, totalRounds)
+
+    // Sincroniza duplas para todas as rondas já preenchidas neste momento
+    // (normalmente só a Ronda 1, a não ser que resolveByesRecursively já
+    // tenha avançado alguma equipa automaticamente por falta de adversário).
+    for (let round = 1; round <= totalRounds; round++) {
+      await syncPresentationDuplasForRound(championship, round)
+    }
+
+    emitConfigUpdated('bracket', championship)
+    res.status(201).json({ success: true, totalRounds })
+  } finally {
+    generatingChampionships.delete(championship)
+  }
+})
+
+// re-sincroniza as duplas de Apresentação de todas as fases já
+// existentes, sem apagar/regerar o chaveamento. Útil sempre que se edita
+// o "type" de uma fase (ex: mudar de "quiz" para "apresentacao_quiz")
+// depois de o chaveamento já ter sido gerado — nesse caso as duplas dessa
+// ronda nunca tinham sido criadas, porque syncPresentationDuplasForRound
+// só corre automaticamente ao gerar o chaveamento e quando uma equipa
+// avança de ronda.
+router.post('/:championship/resync-presentation', requireAdmin, async (req, res) => {
+  const { championship } = req.params
+  const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+  for (const phase of phases) {
+    await syncPresentationDuplasForRound(championship, phase.order)
+  }
+  res.json({ success: true })
+})
+
+router.delete('/:championship', requireAdmin, async (req, res) => {
+  const { championship } = req.params
+  const phaseIds = (
+    await prisma.phase.findMany({ where: { championship }, select: { id: true } })
+  ).map((p) => p.id)
+  await prisma.$transaction([
+    ...(phaseIds.length
+      ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })]
+      : []),
+    prisma.bracketMatch.deleteMany({ where: { championship } })
+  ])
+  emitConfigUpdated('bracket', championship)
+  res.status(204).send()
+})
+
+export default router
+ 
+===== src\routes\championshipHistory.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+const router = Router()
+
+router.get('/', async (req, res) => {
+  const { championship } = req.query as { championship?: string }
+  const entries = await prisma.championshipHistory.findMany({
+    where: championship ? { championship } : undefined,
+    orderBy: { endedAt: 'desc' }
+  })
+  res.json(entries)
+})
+
+router.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.championshipHistory.delete({ where: { id } })
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Registo não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\evaluationCriteria.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+export const evaluationCriteriaRouter = Router()
+
+// GET /api/evaluation-criteria?itemId=xxx
+evaluationCriteriaRouter.get('/', async (req, res) => {
+  const itemId = req.query.itemId as string | undefined
+  if (!itemId) {
+    res.json([])
+    return
+  }
+  const criteria = await prisma.evaluationCriteria.findMany({
+    where: { itemId },
+    orderBy: { order: 'asc' }
+  })
+  res.json(criteria)
+})
+
+evaluationCriteriaRouter.post('/', async (req, res) => {
+  const { itemId, label, maxPoints } = req.body as {
+    itemId?: string
+    label?: string
+    maxPoints?: number
+  }
+  if (!itemId || !label || !label.trim()) {
+    res.status(400).json({ error: 'itemId e label são obrigatórios.' })
+    return
+  }
+  const count = await prisma.evaluationCriteria.count({ where: { itemId } })
+  const created = await prisma.evaluationCriteria.create({
+    data: { itemId, label: label.trim(), maxPoints: Number(maxPoints) || 10, order: count }
+  })
+  res.json(created)
+})
+
+evaluationCriteriaRouter.put('/:id', async (req, res) => {
+  const { label, maxPoints } = req.body as { label?: string; maxPoints?: number }
+  const updated = await prisma.evaluationCriteria.update({
+    where: { id: req.params.id },
+    data: {
+      ...(label !== undefined ? { label } : {}),
+      ...(maxPoints !== undefined ? { maxPoints: Number(maxPoints) } : {})
+    }
+  })
+  res.json(updated)
+})
+
+evaluationCriteriaRouter.delete('/:id', async (req, res) => {
+  await prisma.evaluationCriteria.delete({ where: { id: req.params.id } })
+  res.json({ success: true })
+})
+ 
+===== src\routes\evaluationItems.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function buildOptionsData(mode: string, options: { label: string; text: string }[] | undefined) {
+  const data: Record<string, string | null> = {}
+  for (const label of LABELS) {
+    if (mode !== 'multipla_escolha') {
+      data[`option${label}`] = null
+      continue
+    }
+    const found = options?.find((o) => o.label === label)
+    data[`option${label}`] = found ? found.text : null
+  }
+  return data
+}
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  const items = await prisma.evaluationItem.findMany({
+    where: {
+      championship: championship || undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    include: { jurorAssignments: true },
+    orderBy: { createdAt: 'asc' }
+  })
+  res.json(
+    items.map((i) => ({
+      ...i,
+      correctIndexes:
+        typeof i.correctIndexes === 'string'
+          ? JSON.parse(i.correctIndexes || '[]')
+          : i.correctIndexes || [],
+      jurorIds: i.jurorAssignments.map((a) => a.jurorId),
+      jurorAssignments: undefined
+    }))
+  )
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const {
+    championship,
+    type,
+    mode,
+    text,
+    imageUrl,
+    options,
+    correctIndexes,
+    timeSeconds,
+    maxPoints,
+    phase,
+    scope,
+    jurorIds
+  } = req.body
+
+  if (!championship || !type || !text || !maxPoints || !phase) {
+    return res
+      .status(400)
+      .json({ error: 'championship, type, text, maxPoints e phase são obrigatórios' })
+  }
+  if (mode === 'multipla_escolha') {
+    if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
+      return res
+        .status(400)
+        .json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+    }
+    if (!correctIndexes) {
+      return res.status(400).json({ error: 'Seleciona pelo menos uma resposta correta' })
+    }
+  }
+
+  const serializedCorrectIndexes =
+    mode === 'multipla_escolha'
+      ? typeof correctIndexes === 'string'
+        ? correctIndexes
+        : JSON.stringify(correctIndexes || [])
+      : null
+
+  const item = await prisma.evaluationItem.create({
+    data: {
+      championship,
+      type,
+      mode: mode || 'aberta',
+      text,
+      imageUrl: imageUrl || null,
+      ...buildOptionsData(mode, options),
+      correctIndexes: serializedCorrectIndexes,
+      timeSeconds: timeSeconds ? Number(timeSeconds) : 30,
+      maxPoints: Number(maxPoints),
+      phase: Number(phase),
+      scope: scope || 'single',
+      jurorAssignments:
+        mode === 'aberta' && Array.isArray(jurorIds) && jurorIds.length
+          ? { create: jurorIds.map((jurorId: string) => ({ jurorId })) }
+          : undefined
+    },
+    include: { jurorAssignments: true }
+  })
+
+  emitConfigUpdated('evaluationItems', championship)
+  res.status(201).json({
+    ...item,
+    correctIndexes:
+      typeof item.correctIndexes === 'string'
+        ? JSON.parse(item.correctIndexes || '[]')
+        : item.correctIndexes || [],
+    jurorIds: item.jurorAssignments.map((a) => a.jurorId)
+  })
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const {
+    type,
+    mode,
+    text,
+    imageUrl,
+    options,
+    correctIndexes,
+    timeSeconds,
+    maxPoints,
+    phase,
+    scope,
+    jurorIds
+  } = req.body
+
+  if (
+    mode === 'multipla_escolha' &&
+    (!Array.isArray(options) || options.length < 2 || options.length > 8)
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+  }
+
+  try {
+    await prisma.evaluationItemJuror.deleteMany({ where: { itemId: id } })
+
+    const serializedCorrectIndexes =
+      mode === 'multipla_escolha'
+        ? typeof correctIndexes === 'string'
+          ? correctIndexes
+          : JSON.stringify(correctIndexes || [])
+        : null
+
+
+
+        
+
+    const item = await prisma.evaluationItem.update({
+      where: { id },
+      data: {
+        type,
+        mode,
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(mode, options),
+        correctIndexes: serializedCorrectIndexes,
+        timeSeconds: timeSeconds ? Number(timeSeconds) : 30,
+        maxPoints: Number(maxPoints),
+        phase: Number(phase),
+        scope,
+        jurorAssignments:
+          mode === 'aberta' && Array.isArray(jurorIds) && jurorIds.length
+            ? { create: jurorIds.map((jurorId: string) => ({ jurorId })) }
+            : undefined
+      },
+      include: { jurorAssignments: true }
+    })
+
+    emitConfigUpdated('evaluationItems', item.championship)
+    res.json({
+      ...item,
+      correctIndexes:
+        typeof item.correctIndexes === 'string'
+          ? JSON.parse(item.correctIndexes || '[]')
+          : item.correctIndexes || [],
+      jurorIds: item.jurorAssignments.map((a) => a.jurorId)
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(404).json({ error: 'Item não encontrado ou erro na atualização' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.evaluationItem.delete({ where: { id } })
+    emitConfigUpdated('evaluationItems', existing.championship)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Item não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\jurors.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { generateJurorCode } from '../socket/liveState'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+/* ==========================================================================
+   ROTAS DE AUTORIZAÇÕES (Devem vir antes de /:id para evitar sobreposição)
+   ========================================================================== */
+
+router.get('/authorizations', async (req, res) => {
+  try {
+    const { phaseId } = req.query as { phaseId?: string }
+
+    // phaseId tratado como String (CUID), evitando conversão para NaN
+    const auths = await prisma.phaseJurorAuthorization.findMany({
+      where: phaseId ? { phaseId: String(phaseId) } : {}
+    })
+    res.json(auths)
+  } catch (error) {
+    console.error('[GET /authorizations Error]:', error)
+    res.status(500).json({ error: 'Erro ao buscar autorizações dos jurados.' })
+  }
+})
+
+router.post('/authorizations', requireAdmin, async (req, res) => {
+  const { phaseId, jurorId } = req.body
+  if (!phaseId || !jurorId) {
+    res.status(400).json({ error: 'phaseId e jurorId são obrigatórios' })
+    return
+  }
+  try {
+    const auth = await prisma.phaseJurorAuthorization.create({
+      data: {
+        phaseId: String(phaseId),
+        jurorId: String(jurorId)
+      }
+    })
+    emitConfigUpdated('jurors')
+    res.status(201).json(auth)
+  } catch (error) {
+    console.error('[POST /authorizations Error]:', error)
+    res.status(400).json({ error: 'Já autorizado, ou erro ao criar.' })
+  }
+})
+
+router.delete('/authorizations/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  if (!id) {
+    res.status(400).json({ error: 'ID de autorização inválido.' })
+    return
+  }
+
+  try {
+    const parsedId = isNaN(Number(id)) ? id : Number(id)
+    await prisma.phaseJurorAuthorization.delete({
+      where: { id: parsedId as any }
+    })
+    emitConfigUpdated('jurors')
+    res.status(204).send()
+  } catch (error) {
+    console.error('[DELETE /authorizations Error]:', error)
+    res.status(404).json({ error: 'Autorização não encontrada' })
+  }
+})
+
+/* ==========================================================================
+   ROTAS PRINCIPAIS DE JURADOS
+   ========================================================================== */
+
+router.get('/', async (_req, res) => {
+  try {
+    const jurors = await prisma.juror.findMany({ orderBy: { createdAt: 'asc' } })
+    res.json(jurors)
+  } catch (error) {
+    console.error('[GET /jurors Error]:', error)
+    res.status(500).json({ error: 'Erro ao buscar jurados.' })
+  }
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { name } = req.body
+  if (!name) {
+    res.status(400).json({ error: 'name é obrigatório' })
+    return
+  }
+  try {
+    let code = generateJurorCode()
+    for (let i = 0; i < 5; i++) {
+      const exists = await prisma.juror.findUnique({ where: { code } })
+      if (!exists) break
+      code = generateJurorCode()
+    }
+    const juror = await prisma.juror.create({ data: { name, code } })
+    emitConfigUpdated('jurors')
+    res.status(201).json(juror)
+  } catch (error) {
+    console.error('[POST /jurors Error]:', error)
+    res.status(500).json({ error: 'Erro ao criar jurado.' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    await prisma.phaseJurorAuthorization.deleteMany({ where: { jurorId: id } })
+    await prisma.juror.delete({ where: { id } })
+    emitConfigUpdated('jurors')
+    res.status(204).send()
+  } catch (error) {
+    console.error('[DELETE /jurors Error]:', error)
+    res.status(404).json({ error: 'Jurado não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\matchHistory.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+const router = Router()
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query
+  const history = await prisma.matchHistory.findMany({
+    where: {
+      championship: championship ? String(championship) : undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    orderBy: { endedAt: 'desc' }
+  })
+  res.json(history)
+})
+
+router.get('/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  const entry = await prisma.matchHistory.findUnique({ where: { id } })
+  if (!entry) {
+    res.status(404).json({ error: 'Registo não encontrado' })
+    return
+  }
+  res.json(entry)
+})
+
+router.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.matchHistory.delete({ where: { id } })
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Registo não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\moderators.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { generateModeratorCode } from '../socket/liveState'
+
+const router = Router()
+
+const VALID_AREAS = ['quiz', 'apresentacao', 'jurados', 'repescagem']
+
+function sanitizeAreas(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+  return Array.from(new Set(input.filter((a): a is string => VALID_AREAS.includes(a))))
+}
+
+router.get('/', async (_req, res) => {
+  const moderators = await prisma.moderator.findMany({
+    orderBy: { createdAt: 'asc' },
+    include: { areas: true }
+  })
+  res.json(
+    moderators.map((m) => ({
+      id: m.id,
+      name: m.name,
+      code: m.code,
+      role: m.role,
+      areas: m.areas.map((a) => a.area)
+    }))
+  )
+})
+
+router.post('/', async (req, res) => {
+  const { name, role, areas } = req.body as {
+    name?: string
+    role?: 'principal' | 'secundario'
+    areas?: string[]
+  }
+  if (!name) {
+    res.status(400).json({ error: 'name é obrigatório' })
+    return
+  }
+  if (role === 'principal') {
+    const existingPrincipal = await prisma.moderator.findFirst({ where: { role: 'principal' } })
+    if (existingPrincipal) {
+      res.status(400).json({
+        error: 'Já existe um Moderador Principal. Remove-o primeiro ou escolhe Secundário.'
+      })
+      return
+    }
+  }
+  let code = generateModeratorCode()
+  for (let i = 0; i < 5; i++) {
+    const exists = await prisma.moderator.findUnique({ where: { code } })
+    if (!exists) break
+    code = generateModeratorCode()
+  }
+  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas — já tem tudo
+  const moderator = await prisma.moderator.create({
+    data: {
+      name,
+      code,
+      role: role === 'principal' ? 'principal' : 'secundario',
+      areas: { create: cleanAreas.map((area) => ({ area })) }
+    },
+    include: { areas: true }
+  })
+  res.status(201).json({ ...moderator, areas: moderator.areas.map((a) => a.area) })
+})
+
+router.put('/:id', async (req, res) => {
+  const { id } = req.params
+  const { name, role, areas } = req.body as {
+    name?: string
+    role?: 'principal' | 'secundario'
+    areas?: string[]
+  }
+  if (role === 'principal') {
+    const existingPrincipal = await prisma.moderator.findFirst({
+      where: { role: 'principal', id: { not: id } }
+    })
+    if (existingPrincipal) {
+      res.status(400).json({ error: 'Já existe outro Moderador Principal.' })
+      return
+    }
+  }
+  try {
+    const finalRole = role === 'principal' ? 'principal' : 'secundario'
+    const cleanAreas = finalRole === 'principal' ? [] : sanitizeAreas(areas)
+    const moderator = await prisma.moderator.update({
+      where: { id },
+      data: {
+        name,
+        role: finalRole,
+        // Sempre que 'areas' vem no payload, substitui o conjunto inteiro
+        // (delete + recreate) — mais simples que fazer diff.
+        ...(areas !== undefined
+          ? { areas: { deleteMany: {}, create: cleanAreas.map((area) => ({ area })) } }
+          : {})
+      },
+      include: { areas: true }
+    })
+    res.json({ ...moderator, areas: moderator.areas.map((a) => a.area) })
+  } catch {
+    res.status(404).json({ error: 'Moderador não encontrado' })
+  }
+})
+
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params
+  try {
+    await prisma.moderator.delete({ where: { id } }) // onDelete: Cascade limpa as áreas também
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Moderador não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\partners.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+router.get('/', async (_req, res) => {
+  const partners = await prisma.partner.findMany({ orderBy: { order: 'asc' } })
+  res.json(partners)
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { name, logoUrl, order } = req.body
+  if (!name || !logoUrl) {
+    res.status(400).json({ error: 'name e logoUrl são obrigatórios' })
+    return
+  }
+  const partner = await prisma.partner.create({ data: { name, logoUrl, order: order ?? 0 } })
+  emitConfigUpdated('partners')
+  res.status(201).json(partner)
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id)
+  const { name, logoUrl, order } = req.body
+  try {
+    const partner = await prisma.partner.update({ where: { id }, data: { name, logoUrl, order } })
+    emitConfigUpdated('partners')
+    res.json(partner)
+  } catch {
+    res.status(404).json({ error: 'Parceiro não encontrado' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.partner.delete({ where: { id } })
+    emitConfigUpdated('partners')
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Parceiro não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\phases.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+// GET /api/phases?championship=universitario
+router.get('/', async (req, res) => {
+  try {
+    const { championship } = req.query as { championship?: string }
+
+    const where: any = {}
+    if (championship && championship !== 'undefined' && championship !== 'null') {
+      where.championship = championship
+    }
+
+    const phases = await prisma.phase.findMany({
+      where,
+      orderBy: { order: 'asc' }
+    })
+
+    return res.json(phases)
+  } catch (error: any) {
+    console.error('[Phases GET / Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar as fases.' })
+  }
+})
+
+// POST /api/phases/swap — troca a posição (order) de duas fases.
+router.post('/swap', requireAdmin, async (req, res) => {
+  try {
+    const { firstId, secondId } = req.body as { firstId?: string; secondId?: string }
+    if (!firstId || !secondId) {
+      return res.status(400).json({ error: 'firstId e secondId são obrigatórios.' })
+    }
+
+    const [first, second] = await Promise.all([
+      prisma.phase.findUnique({ where: { id: firstId } }),
+      prisma.phase.findUnique({ where: { id: secondId } })
+    ])
+    if (!first || !second || first.championship !== second.championship) {
+      return res.status(404).json({ error: 'Fases não encontradas ou de campeonatos diferentes.' })
+    }
+
+    const orderA = first.order
+    const orderB = second.order
+    const TEMP_ORDER = -1
+
+    await prisma.phase.update({ where: { id: first.id }, data: { order: TEMP_ORDER } })
+    await prisma.phase.update({ where: { id: second.id }, data: { order: orderA } })
+    await prisma.phase.update({ where: { id: first.id }, data: { order: orderB } })
+
+    const phases = await prisma.phase.findMany({
+      where: { championship: first.championship },
+      orderBy: { order: 'asc' }
+    })
+    return res.json({ success: true, phases })
+  } catch (error: any) {
+    console.error('[Phases POST /swap Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao trocar a ordem das fases.' })
+  }
+})
+
+// POST /api/phases/repair-numbering — corrige buracos na numeração de ordem.
+router.post('/repair-numbering', requireAdmin, async (req, res) => {
+  try {
+    const { championship } = req.body as { championship?: string }
+    if (!championship) {
+      return res.status(400).json({ error: 'championship é obrigatório.' })
+    }
+    const phases = await prisma.phase.findMany({
+      where: { championship },
+      orderBy: { order: 'asc' }
+    })
+    for (let i = 0; i < phases.length; i++) {
+      const desiredOrder = i + 1
+      if (phases[i].order !== desiredOrder) {
+        await prisma.phase.update({ where: { id: phases[i].id }, data: { order: desiredOrder } })
+      }
+    }
+    const updated = await prisma.phase.findMany({
+      where: { championship },
+      orderBy: { order: 'asc' }
+    })
+    return res.json({ success: true, phases: updated })
+  } catch (error: any) {
+    console.error('[Phases POST /repair-numbering Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao reparar numeração.' })
+  }
+})
+
+// GET /api/phases/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'ID da fase inválido ou não fornecido.' })
+    }
+
+    const phase = await prisma.phase.findUnique({ where: { id } })
+
+    if (!phase) {
+      return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+
+    return res.json(phase)
+  } catch (error: any) {
+    console.error('[Phases GET /:id Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao obter a fase.' })
+  }
+})
+
+// POST /api/phases
+router.post('/', requireAdmin, async (req, res) => {
+  try {
+    console.log('[Backend POST /api/phases] Body recebido:', req.body)
+
+    const {
+      name,
+      label,
+      championship,
+      order,
+      type,
+      useQuestions,
+      useJudges,
+      maxQuestions,
+      questionsPerTeam,
+      useInitialScores,
+      initialScoreMaxPoints,
+      presentationMinutes,
+      presentationWeight,
+      quizWeight,
+      noElimination
+    } = req.body || {}
+
+    const phaseLabel =
+      typeof label === 'string' && label.trim()
+        ? label.trim()
+        : typeof name === 'string' && name.trim()
+          ? name.trim()
+          : null
+
+    if (!phaseLabel) {
+      console.warn('[Backend POST /api/phases] Rejeitado: campo "label" ou "name" em falta.')
+      return res.status(400).json({
+        error: 'O nome da fase é obrigatório (envie "label" ou "name").',
+        receivedData: req.body
+      })
+    }
+
+    const championshipValue =
+      championship && championship !== 'undefined' && championship !== 'null' ? championship : null
+
+    let resolvedOrder: number
+    if (order !== undefined && order !== null) {
+      resolvedOrder = Number(order)
+    } else {
+      const maxOrder = await prisma.phase.aggregate({
+        where: { championship: championshipValue ?? undefined },
+        _max: { order: true }
+      })
+      resolvedOrder = (maxOrder._max.order ?? 0) + 1
+    }
+
+    const dataToCreate: any = {
+      label: phaseLabel,
+      championship: championshipValue,
+      order: resolvedOrder
+    }
+
+    if (type !== undefined) dataToCreate.type = type
+    if (useQuestions !== undefined) dataToCreate.useQuestions = Boolean(useQuestions)
+    if (useJudges !== undefined) dataToCreate.useJudges = Boolean(useJudges)
+    if (maxQuestions !== undefined) dataToCreate.maxQuestions = Number(maxQuestions)
+    if (questionsPerTeam !== undefined) dataToCreate.questionsPerTeam = Number(questionsPerTeam)
+    if (useInitialScores !== undefined) dataToCreate.useInitialScores = Boolean(useInitialScores)
+    if (initialScoreMaxPoints !== undefined)
+      dataToCreate.initialScoreMaxPoints = initialScoreMaxPoints
+        ? Number(initialScoreMaxPoints)
+        : null
+    if (presentationMinutes !== undefined)
+      dataToCreate.presentationMinutes = Number(presentationMinutes)
+    if (presentationWeight !== undefined)
+      dataToCreate.presentationWeight = Number(presentationWeight)
+    if (quizWeight !== undefined) dataToCreate.quizWeight = Number(quizWeight)
+    // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam
+    // e a nota é transportada (ponderada) para o Quiz da fase seguinte.
+    if (noElimination !== undefined) dataToCreate.noElimination = Boolean(noElimination)
+
+    const phase = await prisma.phase.create({ data: dataToCreate })
+
+    console.log(
+      '[Backend POST /api/phases] Fase criada com sucesso:',
+      phase.id,
+      'order:',
+      phase.order
+    )
+    return res.status(201).json(phase)
+  } catch (error: any) {
+    console.error('[Phases POST / Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao criar a fase.' })
+  }
+})
+
+// PUT /api/phases/:id
+router.put('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    const {
+      name,
+      label,
+      championship,
+      order,
+      type,
+      useQuestions,
+      useJudges,
+      maxQuestions,
+      questionsPerTeam,
+      useInitialScores,
+      initialScoreMaxPoints,
+      presentationMinutes,
+      presentationWeight,
+      quizWeight,
+      noElimination
+    } = req.body || {}
+
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'ID da fase inválido.' })
+    }
+
+    const existing = await prisma.phase.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+
+    const phaseLabel =
+      (label && typeof label === 'string' && label.trim()) ||
+      (name && typeof name === 'string' && name.trim())
+
+    const dataToUpdate: any = {}
+
+    if (phaseLabel) dataToUpdate.label = phaseLabel
+    if (championship !== undefined) dataToUpdate.championship = championship || null
+    if (order !== undefined) dataToUpdate.order = Number(order)
+    if (type !== undefined) dataToUpdate.type = type
+    if (useQuestions !== undefined) dataToUpdate.useQuestions = Boolean(useQuestions)
+    if (useJudges !== undefined) dataToUpdate.useJudges = Boolean(useJudges)
+    if (maxQuestions !== undefined) dataToUpdate.maxQuestions = Number(maxQuestions)
+    if (questionsPerTeam !== undefined) dataToUpdate.questionsPerTeam = Number(questionsPerTeam)
+    if (useInitialScores !== undefined) dataToUpdate.useInitialScores = Boolean(useInitialScores)
+    if (initialScoreMaxPoints !== undefined)
+      dataToUpdate.initialScoreMaxPoints = initialScoreMaxPoints
+        ? Number(initialScoreMaxPoints)
+        : null
+    if (presentationMinutes !== undefined)
+      dataToUpdate.presentationMinutes = Number(presentationMinutes)
+    if (presentationWeight !== undefined)
+      dataToUpdate.presentationWeight = Number(presentationWeight)
+    if (quizWeight !== undefined) dataToUpdate.quizWeight = Number(quizWeight)
+    // NOVO
+    if (noElimination !== undefined) dataToUpdate.noElimination = Boolean(noElimination)
+
+    const phase = await prisma.phase.update({ where: { id }, data: dataToUpdate })
+
+    return res.json(phase)
+  } catch (error: any) {
+    console.error('[Phases PUT /:id Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao atualizar a fase.' })
+  }
+})
+
+// DELETE /api/phases/:id
+router.delete('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'ID da fase inválido.' })
+    }
+
+    const existing = await prisma.phase.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+
+    await prisma.phase.delete({ where: { id } })
+
+    return res.json({ message: 'Fase eliminada com sucesso.' })
+  } catch (error: any) {
+    console.error('[Phases DELETE /:id Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao eliminar a fase.' })
+  }
+})
+
+export default router
+ 
+===== src\routes\presentation.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+// PresentationDupla não tem relações Prisma definidas para Team/Phase (só
+// teamAId/teamBId/phaseId como texto simples) — por isso, em vez de
+// include, buscamos as equipas à parte e juntamos manualmente.
+async function attachTeams(duplas: Array<{ teamAId: string; teamBId: string | null }>) {
+  const teamIds = new Set<string>()
+  for (const d of duplas) {
+    teamIds.add(d.teamAId)
+    if (d.teamBId) teamIds.add(d.teamBId)
+  }
+  const teams = await prisma.team.findMany({ where: { id: { in: Array.from(teamIds) } } })
+  const teamMap = new Map(teams.map((t) => [t.id, t]))
+  return duplas.map((d) => ({
+    ...d,
+    teamA: teamMap.get(d.teamAId) ?? null,
+    teamB: d.teamBId ? (teamMap.get(d.teamBId) ?? null) : null
+  }))
+}
+
+// GET /api/presentation/duplas?phaseId=...&championship=...
+router.get('/duplas', async (req, res) => {
+  try {
+    const { phaseId, championship } = req.query as { phaseId?: string; championship?: string }
+
+    let duplas: Array<{
+      id: string
+      phaseId: string
+      order: number
+      themeA: string
+      themeB: string | null
+      teamAId: string
+      teamBId: string | null
+    }> = []
+
+    if (phaseId && phaseId !== 'undefined' && phaseId !== 'null') {
+      duplas = await prisma.presentationDupla.findMany({
+        where: { phaseId },
+        orderBy: { order: 'asc' }
+      })
+    } else if (championship && championship !== 'undefined' && championship !== 'null') {
+      const phases = await prisma.phase.findMany({ where: { championship }, select: { id: true } })
+      const phaseIds = phases.map((p) => p.id)
+      duplas = await prisma.presentationDupla.findMany({
+        where: { phaseId: { in: phaseIds } },
+        orderBy: { order: 'asc' }
+      })
+    }
+
+    const shaped = await attachTeams(duplas)
+    return res.json(shaped)
+  } catch (error: any) {
+    console.error('[Presentation Duplas GET Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar as duplas.' })
+  }
+})
+
+// POST /api/presentation/duplas
+router.post('/duplas', requireAdmin, async (_req, res) => {
+  return res.status(400).json({
+    error:
+      'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
+  })
+})
+
+// PATCH /api/presentation/duplas/:id/theme
+router.patch('/duplas/:id/theme', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { team, theme } = req.body as { team?: 'A' | 'B'; theme?: string }
+
+  if (!team || !theme || !['A', 'B'].includes(team)) {
+    return res.status(400).json({ error: 'team ("A" ou "B") e theme são obrigatórios.' })
+  }
+
+  try {
+    const dataUpdate = team === 'A' ? { themeA: theme } : { themeB: theme }
+    const dupla = await prisma.presentationDupla.update({ where: { id }, data: dataUpdate })
+    const [shaped] = await attachTeams([dupla])
+    emitConfigUpdated('presentation')
+    return res.json(shaped)
+  } catch (error) {
+    return res.status(404).json({ error: 'Dupla não encontrada.' })
+  }
+})
+
+// DELETE /api/presentation/duplas/:id
+router.delete('/duplas/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+
+  try {
+    await prisma.presentationDupla.delete({ where: { id } })
+    emitConfigUpdated('presentation')
+    return res.status(204).send()
+  } catch (error) {
+    return res.status(404).json({ error: 'Dupla não encontrada.' })
+  }
+})
+
+// GET /api/presentation/criteria?phaseId=...
+router.get('/criteria', async (req, res) => {
+  try {
+    const { phaseId } = req.query as { phaseId?: string }
+    if (!phaseId) return res.json([])
+
+    const criteria = await prisma.presentationCriteria.findMany({
+      where: { phaseId },
+      orderBy: { id: 'asc' }
+    })
+    return res.json(criteria)
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar os critérios.' })
+  }
+})
+
+// POST /api/presentation/criteria
+router.post('/criteria', requireAdmin, async (req, res) => {
+  try {
+    const { phaseId, label, maxPoints } = req.body
+
+    if (!phaseId || !label || maxPoints === undefined || maxPoints === null) {
+      return res.status(400).json({ error: 'phaseId, label e maxPoints são obrigatórios.' })
+    }
+
+    const points = Number(maxPoints)
+    if (isNaN(points) || points <= 0) {
+      return res
+        .status(400)
+        .json({ error: 'maxPoints deve ser um número válido e maior que zero.' })
+    }
+
+    const criteria = await prisma.presentationCriteria.create({
+      data: { phaseId, label, maxPoints: points }
+    })
+
+    emitConfigUpdated('presentation')
+    return res.status(201).json(criteria)
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao criar o critério.' })
+  }
+})
+
+// DELETE /api/presentation/criteria/:id
+router.delete('/criteria/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+
+  try {
+    await prisma.presentationCriteria.delete({ where: { id } })
+    emitConfigUpdated('presentation')
+    return res.status(204).send()
+  } catch (error) {
+    return res.status(404).json({ error: 'Critério não encontrado.' })
+  }
+})
+
+export default router
+ 
+===== src\routes\presentationDocuments.ts =====  
+import { Router } from 'express'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs/promises'
+import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
+import { emitConfigUpdated } from '../socket/configEvents'
+
+const router = Router()
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 80 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== 'image/png' && file.mimetype !== 'image/jpeg') {
+      cb(new Error('Só são aceites imagens PNG ou JPEG (exportadas do PowerPoint como imagens).'))
+      return
+    }
+    cb(null, true)
+  }
+})
+
+const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads', 'presentations')
+
+function extractOrder(filename: string, fallbackIndex: number): number {
+  const match = filename.match(/(\d+)(?=\.[^.]*$)/)
+  if (match) return Number(match[1])
+  return 100000 + fallbackIndex
+}
+
+// GET /api/presentation-documents
+router.get('/', async (req, res) => {
+  try {
+    const { phaseId, duplaId, teamId } = req.query as {
+      phaseId?: string
+      duplaId?: string
+      teamId?: string
+    }
+
+    const where: any = {}
+    if (phaseId) where.phaseId = phaseId
+    if (duplaId) where.duplaId = duplaId
+    if (teamId) where.teamId = teamId
+
+    const docs = await prisma.presentationDocument.findMany({
+      where,
+      include: {
+        slides: {
+          orderBy: { order: 'asc' }
+        }
+      }
+    })
+
+    return res.json(docs)
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar os documentos.' })
+  }
+})
+
+// POST /api/presentation-documents
+router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
+  try {
+    const { duplaId, teamId } = req.body as { duplaId?: string; teamId?: string }
+    const files = req.files as Express.Multer.File[] | undefined
+
+    if (!duplaId || !teamId || !files || !files.length) {
+      return res
+        .status(400)
+        .json({ error: 'duplaId, teamId e pelo menos uma imagem são obrigatórios.' })
+    }
+
+    const dupla = await prisma.presentationDupla.findUnique({ where: { id: duplaId } })
+    if (!dupla || (dupla.teamAId !== teamId && dupla.teamBId !== teamId)) {
+      return res.status(400).json({ error: 'Esta equipa não pertence a esta dupla.' })
+    }
+
+    const ordersRaw = req.body.orders as string | string[] | undefined
+    let explicitOrders: number[] | null = null
+    if (ordersRaw) {
+      const arr = Array.isArray(ordersRaw) ? ordersRaw : [ordersRaw]
+      if (arr.length === files.length) {
+        explicitOrders = arr.map(Number)
+      }
+    }
+
+    const indexed = files.map((file, i) => ({
+      file,
+      order: explicitOrders ? explicitOrders[i] : extractOrder(file.originalname, i)
+    }))
+    indexed.sort((a, b) => a.order - b.order)
+
+    const folder = path.join(UPLOADS_ROOT, dupla.phaseId, teamId)
+    await fs.mkdir(folder, { recursive: true })
+
+    const existing = await prisma.presentationDocument.findUnique({
+      where: { duplaId_teamId: { duplaId, teamId } },
+      include: { slides: true }
+    })
+
+    if (existing) {
+      for (const slide of existing.slides) {
+        await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
+      }
+      await prisma.presentationSlide.deleteMany({ where: { documentId: existing.id } })
+    }
+
+    const doc = await prisma.presentationDocument.upsert({
+      where: { duplaId_teamId: { duplaId, teamId } },
+      update: {},
+      create: { phaseId: dupla.phaseId, duplaId, teamId }
+    })
+
+    let order = 1
+    for (const { file } of indexed) {
+      const safeName = `${Date.now()}-${order}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      await fs.writeFile(path.join(folder, safeName), file.buffer)
+      const imageUrl = `/uploads/presentations/${dupla.phaseId}/${teamId}/${safeName}`
+
+      await prisma.presentationSlide.create({
+        data: { documentId: doc.id, order, imageUrl }
+      })
+      order += 1
+    }
+
+    const full = await prisma.presentationDocument.findUnique({
+      where: { id: doc.id },
+      include: { slides: { orderBy: { order: 'asc' } } }
+    })
+
+    emitConfigUpdated('presentation')
+    return res.status(201).json(full)
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || 'Falha ao enviar as imagens.' })
+  }
+})
+
+// DELETE /api/presentation-documents/:id
+router.delete('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const doc = await prisma.presentationDocument.findUnique({
+      where: { id },
+      include: { slides: true }
+    })
+
+    if (!doc) {
+      return res.status(404).json({ error: 'Documento não encontrado.' })
+    }
+
+    for (const slide of doc.slides) {
+      await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
+    }
+
+    await prisma.presentationDocument.delete({ where: { id } })
+    emitConfigUpdated('presentation')
+
+    return res.status(204).send()
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao eliminar o documento.' })
+  }
+})
+
+export default router
+ 
+===== src\routes\questions.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function toApiShape(q: any) {
+  const options = LABELS.map((label, i) => ({
+    label,
+    text: q[`option${label}`] as string | null
+  })).filter((o) => o.text !== null && o.text !== undefined)
+  let correctIndexes: number[] = []
+  try {
+    correctIndexes = q.correctIndexes ? JSON.parse(q.correctIndexes) : []
+  } catch {
+    correctIndexes = []
+  }
+  return {
+    id: q.id,
+    championship: q.championship,
+    text: q.text,
+    imageUrl: q.imageUrl ?? undefined,
+    correctIndexes,
+    // mantém correctIndex singular para compatibilidade com quem ainda lê
+    // só o primeiro índice correto (ex: correção de resposta única)
+    correctIndex: correctIndexes[0] ?? 0,
+    points: q.points,
+    phase: q.phase,
+    options
+  }
+}
+
+function buildOptionsData(options: { label: string; text: string }[]) {
+  const data: Record<string, string | null> = {}
+  for (const label of LABELS) {
+    const found = options.find((o) => o.label === label)
+    data[`option${label}`] = found ? found.text : null
+  }
+  return data
+}
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  const questions = await prisma.question.findMany({
+    where: {
+      championship: championship || undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    orderBy: { id: 'asc' }
+  })
+  res.json(questions.map(toApiShape))
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { championship, text, imageUrl, options, correctIndexes, correctIndex, points, phase } =
+    req.body
+
+  if (
+    !text ||
+    !championship ||
+    !Array.isArray(options) ||
+    options.length < 2 ||
+    options.length > 8
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'championship, text e entre 2 e 8 options são obrigatórios' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  try {
+    const question = await prisma.question.create({
+      data: {
+        championship,
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(options),
+        correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+        points: Number(points) || 10,
+        phase: Number(phase) || 1
+      }
+    })
+    emitConfigUpdated('questions', championship)
+    res.status(201).json(toApiShape(question))
+  } catch (error: any) {
+    console.error('Erro detalhado ao criar pergunta no Prisma:', error)
+    res.status(500).json({ error: error.message || 'Erro interno ao criar pergunta' })
+  }
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { text, imageUrl, options, correctIndexes, correctIndex, points, phase } = req.body
+
+  if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
+    return res.status(400).json({ error: 'options deve ter entre 2 e 8 itens' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  try {
+    const question = await prisma.question.update({
+      where: { id },
+      data: {
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(options),
+        correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+        points: Number(points) || 10,
+        phase: Number(phase) || 1
+      }
+    })
+    emitConfigUpdated('questions', question.championship)
+    res.json(toApiShape(question))
+  } catch (error: any) {
+    console.error('Erro detalhado ao atualizar pergunta:', error)
+    res.status(500).json({ error: error.message || 'Erro interno' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.question.delete({ where: { id } })
+    emitConfigUpdated('questions', existing.championship)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Pergunta não encontrada' })
+  }
+})
+
+export default router
+ 
+===== src\routes\repescagem.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+const router = Router()
+
+function nextPowerOfTwo(n: number): number {
+  let p = 1
+  while (p < n) p *= 2
+  return p
+}
+
+function getClientIp(req: import('express').Request): string {
+  const cf = req.headers['cf-connecting-ip']
+  if (typeof cf === 'string') return cf
+  const xff = req.headers['x-forwarded-for']
+  if (typeof xff === 'string') return xff.split(',')[0].trim()
+  return req.ip ?? 'unknown'
+}
+
+export async function getEligibleTeams(championship: string, phase: number) {
+  const matches = await prisma.matchHistory.findMany({ where: { championship, phase } })
+  const loserIds = new Set<string>()
+  const winnerIds = new Set<string>()
+  for (const m of matches) {
+    if (!m.winnerId) continue
+    winnerIds.add(m.winnerId)
+    const loserId = m.winnerId === m.teamAId ? m.teamBId : m.teamAId
+    loserIds.add(loserId)
+  }
+  for (const w of winnerIds) loserIds.delete(w)
+  return prisma.team.findMany({ where: { id: { in: Array.from(loserIds) } } })
+}
+
+// NOVO — Admin: listar configurações de um campeonato
+router.get('/configs', async (req, res) => {
+  const { championship } = req.query as { championship?: string }
+  const configs = await prisma.repescagemConfig.findMany({
+    where: championship ? { championship } : undefined,
+    orderBy: { createdAt: 'desc' }
+  })
+  res.json(configs)
+})
+
+// NOVO — Admin: criar configuração (não abre votação, só prepara)
+router.post('/config', async (req, res) => {
+  const { championship, phase, maxRepescados, votingDurationSeconds } = req.body
+  if (!championship || !phase || !maxRepescados) {
+    res.status(400).json({ error: 'championship, phase e maxRepescados são obrigatórios' })
+    return
+  }
+  const config = await prisma.repescagemConfig.create({
+    data: {
+      championship,
+      phase,
+      maxRepescados,
+      votingDurationSeconds: votingDurationSeconds || 60,
+      votingOpen: false,
+      started: false
+    }
+  })
+  res.status(201).json(config)
+})
+
+// NOVO — Admin: editar configuração (só antes de ser iniciada pelo Moderador)
+router.put('/config/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  const { maxRepescados, votingDurationSeconds } = req.body
+  const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  if (existing.started) {
+    res
+      .status(400)
+      .json({ error: 'Esta repescagem já foi iniciada pelo Moderador e não pode ser editada.' })
+    return
+  }
+  const config = await prisma.repescagemConfig.update({
+    where: { id },
+    data: { maxRepescados, votingDurationSeconds }
+  })
+  res.json(config)
+})
+
+// NOVO — Admin: apagar configuração não usada
+router.delete('/config/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  if (existing.started) {
+    res.status(400).json({ error: 'Esta repescagem já foi iniciada e não pode ser apagada.' })
+    return
+  }
+  await prisma.repescagemConfig.delete({ where: { id } })
+  res.status(204).send()
+})
+
+// NOVO — usado pelo backend/Moderador: existe uma configuração por iniciar
+// para esta fase deste campeonato?
+router.get('/for-phase', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  if (!championship || !phase) {
+    res.json(null)
+    return
+  }
+  const config = await prisma.repescagemConfig.findFirst({
+    where: { championship, phase: Number(phase) },
+    orderBy: { createdAt: 'desc' }
+  })
+  res.json(config)
+})
+
+// Portal público + Moderador: repescagem atualmente EM VOTAÇÃO (só as já iniciadas)
+router.get('/active', async (_req, res) => {
+  const config = await prisma.repescagemConfig.findFirst({
+    where: { started: true },
+    orderBy: { startedAt: 'desc' }
+  })
+  if (!config) {
+    res.json(null)
+    return
+  }
+  const eligibleTeams = await getEligibleTeams(config.championship, config.phase)
+  const votes = await prisma.repescagemVote.findMany({ where: { configId: config.id } })
+  const tally = eligibleTeams
+    .map((t) => ({
+      teamId: t.id,
+      name: t.name,
+      institution: t.institution,
+      logoUrl: t.logoUrl,
+      votes: votes.filter((v) => v.teamId === t.id).length
+    }))
+    .sort((a, b) => b.votes - a.votes)
+  res.json({ config, tally })
+})
+
+router.get('/has-voted', async (req, res) => {
+  const { configId, voterToken } = req.query as { configId?: string; voterToken?: string }
+  if (!configId || !voterToken) {
+    res.json({ voted: false })
+    return
+  }
+  const existing = await prisma.repescagemVote.findUnique({
+    where: { configId_voterToken: { configId: Number(configId), voterToken } }
+  })
+  res.json({ voted: !!existing })
+})
+
+router.post('/vote', async (req, res) => {
+  const { configId, teamId, voterToken } = req.body
+  if (!voterToken) {
+    res.status(400).json({ error: 'Identificador de dispositivo em falta.' })
+    return
+  }
+  const config = await prisma.repescagemConfig.findUnique({ where: { id: configId } })
+  if (!config || !config.votingOpen) {
+    res.status(400).json({ error: 'Votação não está aberta' })
+    return
+  }
+  try {
+    await prisma.repescagemVote.create({
+      data: { configId, teamId, voterToken, voterIp: getClientIp(req) }
+    })
+    res.status(201).json({ success: true })
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      res.status(409).json({ error: 'Já votaste nesta votação.' })
+      return
+    }
+    console.error(err)
+    res.status(500).json({ error: 'Falha ao registar o voto.' })
+  }
+})
+
+router.post('/:id/generate-bracket', async (req, res) => {
+  const id = Number(req.params.id)
+  const config = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!config) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  const eligibleTeams = await getEligibleTeams(config.championship, config.phase)
+  const votes = await prisma.repescagemVote.findMany({ where: { configId: id } })
+  const ranked = eligibleTeams
+    .map((t) => ({ team: t, votes: votes.filter((v) => v.teamId === t.id).length }))
+    .sort((a, b) => b.votes - a.votes)
+
+  let selected = ranked.slice(0, config.maxRepescados).map((r) => r.team)
+
+  const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
+  await prisma.bracketMatch.deleteMany({ where: { championship: syntheticChampionship } })
+
+  if (selected.length % 2 !== 0 && selected.length > 1) {
+    const decider = selected.slice(-2)
+    selected = selected.slice(0, -2)
+    await prisma.bracketMatch.create({
+      data: {
+        championship: syntheticChampionship,
+        round: 0,
+        slot: 0,
+        groupName: 'Decisão de Vaga',
+        teamAId: decider[0].id,
+        teamBId: decider[1]?.id ?? null
+      }
+    })
+  }
+
+  const slotsNeeded = nextPowerOfTwo(Math.max(selected.length, 2))
+  const round1Count = slotsNeeded / 2
+  const created: { round: number; slot: number; teamAId?: string; teamBId?: string }[] = []
+
+  for (let slot = 0; slot < round1Count; slot++) {
+    const teamA = selected[slot * 2]
+    const teamB = selected[slot * 2 + 1]
+    created.push({ round: 1, slot, teamAId: teamA?.id, teamBId: teamB?.id })
+  }
+
+  const totalRounds = Math.log2(slotsNeeded)
+  for (let round = 2; round <= totalRounds; round++) {
+    const count = slotsNeeded / Math.pow(2, round)
+    for (let slot = 0; slot < count; slot++) {
+      created.push({ round, slot })
+    }
+  }
+
+  await prisma.bracketMatch.createMany({
+    data: created.map((c) => ({
+      championship: syntheticChampionship,
+      round: c.round,
+      slot: c.slot,
+      groupName: 'Repescagem',
+      teamAId: c.teamAId ?? null,
+      teamBId: c.teamBId ?? null
+    }))
+  })
+
+  res.status(201).json({ syntheticChampionship })
+})
+
+router.get('/:id/bracket', async (req, res) => {
+  const id = Number(req.params.id)
+  const config = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!config) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
+  const matches = await prisma.bracketMatch.findMany({
+    where: { championship: syntheticChampionship },
+    orderBy: [{ round: 'asc' }, { slot: 'asc' }]
+  })
+  const teamIds = new Set<string>()
+  for (const m of matches) {
+    if (m.teamAId) teamIds.add(m.teamAId)
+    if (m.teamBId) teamIds.add(m.teamBId)
+  }
+  const teams = await prisma.team.findMany({ where: { id: { in: Array.from(teamIds) } } })
+  const teamMap = new Map(teams.map((t) => [t.id, t]))
+  const shaped = matches.map((m) => ({
+    id: m.id,
+    round: m.round,
+    slot: m.slot,
+    groupName: m.groupName,
+    teamA: m.teamAId
+      ? {
+          id: m.teamAId,
+          name: teamMap.get(m.teamAId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null
+        }
+      : null,
+    teamB: m.teamBId
+      ? {
+          id: m.teamBId,
+          name: teamMap.get(m.teamBId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null
+        }
+      : null,
+    winnerId: m.winnerId
+  }))
+  res.json({ championship: syntheticChampionship, matches: shaped })
+})
+
+router.post('/:id/insert-champion', async (req, res) => {
+  const id = Number(req.params.id)
+  const { targetMatchId } = req.body
+  const config = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!config) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
+  const finalMatch = await prisma.bracketMatch.findFirst({
+    where: { championship: syntheticChampionship },
+    orderBy: { round: 'desc' }
+  })
+  if (!finalMatch?.winnerId) {
+    res.status(400).json({ error: 'O grupo de repescagem ainda não tem uma campeã definida.' })
+    return
+  }
+  const championId = finalMatch.winnerId
+
+  if (targetMatchId) {
+    const target = await prisma.bracketMatch.findUnique({ where: { id: targetMatchId } })
+    if (!target) {
+      res.status(404).json({ error: 'Confronto de destino não encontrado.' })
+      return
+    }
+    await prisma.bracketMatch.update({
+      where: { id: targetMatchId },
+      data: target.teamAId ? { teamBId: championId } : { teamAId: championId }
+    })
+    res.json({ success: true, championId, matchId: targetMatchId })
+    return
+  }
+
+  const nextRound = config.phase + 1
+  const openSlotMatch = await prisma.bracketMatch.findFirst({
+    where: {
+      championship: config.championship,
+      round: nextRound,
+      OR: [
+        { teamAId: { not: null }, teamBId: null },
+        { teamAId: null, teamBId: { not: null } }
+      ]
+    },
+    orderBy: { slot: 'asc' }
+  })
+
+  if (!openSlotMatch) {
+    res.status(400).json({
+      error:
+        'Não encontrei nenhum confronto da próxima ronda com uma equipa apurada à espera de adversário. Indica manualmente o confronto de destino (targetMatchId).'
+    })
+    return
+  }
+
+  await prisma.bracketMatch.update({
+    where: { id: openSlotMatch.id },
+    data: openSlotMatch.teamAId ? { teamBId: championId } : { teamAId: championId }
+  })
+
+  res.json({ success: true, championId, matchId: openSlotMatch.id })
+})
+
+export default router
+ 
+===== src\routes\suspensePhrases.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+router.get('/', async (_req, res) => {
+  const phrases = await prisma.suspensePhrase.findMany({ orderBy: { createdAt: 'asc' } })
+  res.json(phrases)
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { text } = req.body
+  if (!text) {
+    res.status(400).json({ error: 'text é obrigatório' })
+    return
+  }
+  const phrase = await prisma.suspensePhrase.create({ data: { text } })
+  emitConfigUpdated('suspensePhrases')
+  res.status(201).json(phrase)
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.suspensePhrase.delete({ where: { id } })
+    emitConfigUpdated('suspensePhrases')
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Frase não encontrada' })
+  }
+})
+
+export default router
+ 
+===== src\routes\teams.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+router.get('/', async (_req, res) => {
+  const teams = await prisma.team.findMany({ orderBy: { createdAt: 'asc' } })
+  res.json(teams)
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { name, institution, category, logoUrl, group, bracketPosition } = req.body
+  if (!name || !institution || !category) {
+    return res.status(400).json({ error: 'name, institution e category são obrigatórios' })
+  }
+  const team = await prisma.team.create({
+    data: {
+      name,
+      institution,
+      category,
+      logoUrl: logoUrl || null,
+      group: group || null,
+      bracketPosition: bracketPosition ?? null
+    }
+  })
+  emitConfigUpdated('teams', category)
+  res.status(201).json(team)
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { name, institution, category, logoUrl, group, bracketPosition } = req.body
+  try {
+    const team = await prisma.team.update({
+      where: { id },
+      data: {
+        name,
+        institution,
+        category,
+        logoUrl: logoUrl || null,
+        group: group || null,
+        bracketPosition: bracketPosition ?? null
+      }
+    })
+    emitConfigUpdated('teams', category)
+    res.json(team)
+  } catch {
+    res.status(404).json({ error: 'Equipa não encontrada' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.team.findUnique({ where: { id } })
+    await prisma.team.delete({ where: { id } })
+    emitConfigUpdated('teams', existing?.category)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Equipa não encontrada' })
+  }
+})
+
+export default router
+ 
+===== src\routes\tiebreakQuestions.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function toApiShape(q: any) {
+  const options = LABELS.map((label) => ({
+    label,
+    text: q[`option${label}`] as string | null
+  })).filter((o) => o.text !== null && o.text !== undefined)
+  let correctIndexes: number[] = []
+  try {
+    correctIndexes = q.correctIndexes ? JSON.parse(q.correctIndexes) : []
+  } catch {
+    correctIndexes = []
+  }
+  return {
+    id: q.id,
+    championship: q.championship,
+    text: q.text,
+    imageUrl: q.imageUrl ?? undefined,
+    correctIndexes,
+    correctIndex: correctIndexes[0] ?? 0,
+    points: q.points,
+    phase: q.phase,
+    options
+  }
+}
+
+function buildOptionsData(options: { label: string; text: string }[]) {
+  const data: Record<string, string | null> = {}
+  for (const label of LABELS) {
+    const found = options.find((o) => o.label === label)
+    data[`option${label}`] = found ? found.text : null
+  }
+  return data
+}
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  const questions = await prisma.tiebreakQuestion.findMany({
+    where: {
+      championship: championship || undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    orderBy: { id: 'asc' }
+  })
+  res.json(questions.map(toApiShape))
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { championship, text, imageUrl, options, correctIndexes, correctIndex, points, phase } =
+    req.body
+  if (
+    !text ||
+    !championship ||
+    !Array.isArray(options) ||
+    options.length < 2 ||
+    options.length > 8
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'championship, text e entre 2 e 8 options são obrigatórios' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  const question = await prisma.tiebreakQuestion.create({
+    data: {
+      championship,
+      text,
+      imageUrl: imageUrl || null,
+      ...buildOptionsData(options),
+      correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+      points,
+      phase
+    }
+  })
+  emitConfigUpdated('tiebreakQuestions', championship)
+  res.status(201).json(toApiShape(question))
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { text, imageUrl, options, correctIndexes, correctIndex, points, phase } = req.body
+
+  if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
+    return res.status(400).json({ error: 'options deve ter entre 2 e 8 itens' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  try {
+    const question = await prisma.tiebreakQuestion.update({
+      where: { id },
+      data: {
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(options),
+        correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+        points,
+        phase
+      }
+    })
+    emitConfigUpdated('tiebreakQuestions', question.championship)
+    res.json(toApiShape(question))
+  } catch {
+    res.status(404).json({ error: 'Pergunta não encontrada' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.tiebreakQuestion.delete({ where: { id } })
+    emitConfigUpdated('tiebreakQuestions', existing.championship)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Pergunta não encontrada' })
+  }
+})
+
+export default router
+ 
+===== src\routes\adminAuth.ts =====  
+import { Router } from 'express'
+import bcrypt from 'bcryptjs'
+import * as otplibModule from 'otplib'
+import { randomUUID } from 'crypto'
+import QRCode from 'qrcode'
+import { prisma } from '../db'
+
+// Resolução robusta de compatibilidade ESM/CJS para otplib + tsx
+function getAuthenticator(): any {
+  const m = otplibModule as any
+  if (m.authenticator && typeof m.authenticator.generateSecret === 'function') {
+    return m.authenticator
+  }
+  if (m.default?.authenticator && typeof m.default.authenticator.generateSecret === 'function') {
+    return m.default.authenticator
+  }
+  if (m.default && typeof m.default.generateSecret === 'function') {
+    return m.default
+  }
+  if (typeof m.generateSecret === 'function') {
+    return m
+  }
+  if (m.Authenticator) {
+    return new m.Authenticator()
+  }
+  if (m.default?.Authenticator) {
+    return new m.default.Authenticator()
+  }
+  return m
+}
+
+function verifyTOTP(token: string, secret: string): boolean {
+  const auth = getAuthenticator()
+  try {
+    if (typeof auth.verify === 'function') {
+      return auth.verify({ token, secret })
+    }
+  } catch (_) {}
+  if (typeof auth.check === 'function') {
+    return auth.check(token, secret)
+  }
+  return false
+}
+
+const router = Router()
+const SESSION_DAYS = 7
+
+async function getAuth() {
+  return prisma.adminAuth.findUnique({ where: { id: 1 } })
+}
+
+// Primeira configuração — só corre se ainda não existir password configurada.
+router.post('/setup', async (req, res) => {
+  const existing = await getAuth()
+  if (existing) {
+    res.status(400).json({ error: 'Já existe uma password configurada.' })
+    return
+  }
+  const { password } = req.body as { password?: string }
+  if (!password || password.length < 8) {
+    res.status(400).json({ error: 'A password tem de ter pelo menos 8 caracteres.' })
+    return
+  }
+  const passwordHash = await bcrypt.hash(password, 12)
+  const auth = getAuthenticator()
+  const totpSecret = auth.generateSecret()
+  await prisma.adminAuth.create({ data: { id: 1, passwordHash, totpSecret, totpEnabled: false } })
+
+  const keyuri =
+    typeof auth.keyuri === 'function'
+      ? auth.keyuri('Admin', 'Petrochamp', totpSecret)
+      : `otpauth://totp/Petrochamp:Admin?secret=${totpSecret}&issuer=Petrochamp`
+
+  const qrDataUrl = await QRCode.toDataURL(keyuri)
+  res.status(201).json({ qrDataUrl, secret: totpSecret })
+})
+
+// Confirma o primeiro código TOTP e ativa definitivamente o 2FA.
+router.post('/confirm-totp', async (req, res) => {
+  const { token } = req.body as { token?: string }
+  const auth = await getAuth()
+  if (!auth?.totpSecret) {
+    res.status(400).json({ error: 'Configuração não iniciada.' })
+    return
+  }
+  const valid = verifyTOTP(token ?? '', auth.totpSecret)
+  if (!valid) {
+    res.status(400).json({ error: 'Código inválido.' })
+    return
+  }
+  await prisma.adminAuth.update({ where: { id: 1 }, data: { totpEnabled: true } })
+  res.json({ success: true })
+})
+
+router.post('/login', async (req, res) => {
+  const { password, token } = req.body as { password?: string; token?: string }
+  const auth = await getAuth()
+  if (!auth || !auth.totpEnabled) {
+    res.status(400).json({ error: 'Admin ainda não foi configurado.' })
+    return
+  }
+  const passwordOk = await bcrypt.compare(password ?? '', auth.passwordHash)
+  if (!passwordOk) {
+    res.status(401).json({ error: 'Password incorreta.' })
+    return
+  }
+  const totpOk = verifyTOTP(token ?? '', auth.totpSecret!)
+  if (!totpOk) {
+    res.status(401).json({ error: 'Código de autenticação inválido.' })
+    return
+  }
+  const sessionToken = randomUUID()
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000)
+  await prisma.adminSession.create({ data: { token: sessionToken, expiresAt } })
+
+  res.json({ token: sessionToken })
+})
+
+router.get('/status', async (_req, res) => {
+  const auth = await getAuth()
+  res.json({ configured: !!auth?.totpEnabled })
+})
+
+router.post('/logout', async (req, res) => {
+  const { token } = req.body as { token?: string }
+  if (token) await prisma.adminSession.delete({ where: { token } }).catch(() => {})
+  res.json({ success: true })
+})
+
+export default router
+ 
+===== src\routes\bracket.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+
+const router = Router()
+
+// GET /api/bracket/:championship - Obter a estrutura do chaveamento
+router.get('/:championship', async (req, res) => {
+  try {
+    const { championship } = req.params
+    const rawTeams = await prisma.team.findMany({
+      where: {
+        category: championship,
+        group: { not: null }
+      },
+      orderBy: [{ group: 'asc' }, { bracketPosition: 'asc' }]
+    })
+
+    // Eliminar duplicados por ID e por Nome (case-insensitive)
+    const uniqueTeamsMap = new Map<string, (typeof rawTeams)[0]>()
+    for (const t of rawTeams) {
+      const nameKey = t.name.trim().toLowerCase()
+      const exists = Array.from(uniqueTeamsMap.values()).some(
+        (existing) => existing.id === t.id || existing.name.trim().toLowerCase() === nameKey
+      )
+      if (!exists && t.group) {
+        uniqueTeamsMap.set(t.id, t)
+      }
+    }
+    const teams = Array.from(uniqueTeamsMap.values())
+
+    const grouped = new Map<string, typeof teams>()
+    for (const t of teams) {
+      const g = t.group!
+      if (!grouped.has(g)) grouped.set(g, [])
+      grouped.get(g)!.push(t)
+    }
+
+    const round1Matches: unknown[] = []
+    for (const [groupName, groupTeams] of grouped) {
+      for (let i = 0; i < groupTeams.length; i += 2) {
+        const teamA = groupTeams[i]
+        const teamB = groupTeams[i + 1]
+        round1Matches.push({
+          id: `r1-${teamA.id}`,
+          groupName,
+          teamA: { id: teamA.id, name: teamA.name, logoUrl: teamA.logoUrl },
+          teamB: teamB ? { id: teamB.id, name: teamB.name, logoUrl: teamB.logoUrl } : null
+        })
+      }
+    }
+
+    let totalSlots = 1
+    while (totalSlots < Math.max(round1Matches.length * 2, 2)) totalSlots *= 2
+    const totalRounds = Math.log2(totalSlots)
+
+    res.json({ championship, teamCount: teams.length, round1Matches, totalRounds })
+  } catch (error) {
+    console.error('Erro ao obter chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao carregar chaveamento.' })
+  }
+})
+
+// Função auxiliar para eliminar o chaveamento, duplas e limpar grupos das equipas
+async function deleteBracketData(championship?: string) {
+  return await prisma.$transaction(async (tx) => {
+    await tx.presentationScore.deleteMany({})
+
+    if (championship) {
+      await tx.presentationDupla.deleteMany({
+        where: {
+          phase: {
+            championship
+          }
+        }
+      })
+
+      await tx.bracketMatch.deleteMany({
+        where: { championship }
+      })
+
+      // Limpar o grupo e a posição para o chaveamento ficar vazio
+      await tx.team.updateMany({
+        where: { category: championship },
+        data: { group: null, bracketPosition: null }
+      })
+    } else {
+      await tx.presentationDupla.deleteMany({})
+      await tx.bracketMatch.deleteMany({})
+      await tx.team.updateMany({
+        data: { group: null, bracketPosition: null }
+      })
+    }
+  })
+}
+
+// DELETE /api/bracket/:championship
+router.delete('/:championship', async (req, res) => {
+  try {
+    const { championship } = req.params
+    await deleteBracketData(championship)
+
+    emitConfigUpdated('bracket')
+    emitConfigUpdated('presentation')
+    emitConfigUpdated('teams')
+
+    res.json({
+      success: true,
+      message: `Chaveamento e duplas da categoria ${championship} eliminados com sucesso.`
+    })
+  } catch (error) {
+    console.error('Erro ao eliminar chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })
+  }
+})
+
+const handleClearAll = async (_req: any, res: any) => {
+  try {
+    await deleteBracketData()
+
+    emitConfigUpdated('bracket')
+    emitConfigUpdated('presentation')
+    emitConfigUpdated('teams')
+
+    res.json({
+      success: true,
+      message: 'Todo o chaveamento e duplas de apresentação foram eliminados com sucesso.'
+    })
+  } catch (error) {
+    console.error('Erro ao eliminar chaveamento:', error)
+    res.status(500).json({ error: 'Erro ao eliminar chaveamento e duplas de apresentação.' })
+  }
+}
+
+router.post('/clear', handleClearAll)
+router.delete('/', handleClearAll)
+
+export default router
+ 
+===== src\routes\bracketLive.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
+import { emitConfigUpdated } from '../socket/configEvents'
+
+const router = Router()
+
+// evita que duas chamadas a /generate corram em paralelo para a
+// mesma categoria (ex: duplo clique, ou um pedido novo disparado antes do
+// anterior terminar). Sem isto, o deleteMany de um pedido podia correr
+// entre o deleteMany e o createMany de outro, e os dois createMany
+// acabavam por inserir os mesmos confrontos duas vezes (ou mais, se
+// houvesse mais pedidos concorrentes) — foi isto que causou os
+// chaveamentos duplicados infinitamente.
+const generatingChampionships = new Set<string>()
+
+function nextPowerOfTwo(n: number): number {
+  let p = 1
+  while (p < n) p *= 2
+  return p
+}
+
+function roundLabel(round: number, total: number): string {
+  const remaining = total - round
+  if (remaining === 0) return 'Final'
+  if (remaining === 1) return 'Meias-Finais'
+  if (remaining === 2) return 'Quartas de Final'
+  return `Ronda ${round}`
+}
+
+async function ensurePhasesForRounds(championship: string, totalRounds: number): Promise<void> {
+  const existing = await prisma.phase.findMany({
+    where: { championship },
+    orderBy: { order: 'asc' }
+  })
+  for (let round = 1; round <= totalRounds; round++) {
+    const already = existing.find((p) => p.order === round)
+    if (!already) {
+      await prisma.phase.create({
+        data: {
+          championship,
+          order: round,
+          label: roundLabel(round, totalRounds),
+          useQuestions: true,
+          useJudges: false,
+          avoidRepeatQuestions: true
+        }
+      })
+    }
+  }
+}
+
+async function resolveByesRecursively(championship: string, totalRounds: number): Promise<void> {
+  for (let round = 1; round < totalRounds; round++) {
+    const matches = await prisma.bracketMatch.findMany({
+      where: { championship, round, winnerId: null }
+    })
+    for (const m of matches) {
+      const hasA = !!m.teamAId
+      const hasB = !!m.teamBId
+      if (hasA !== hasB) {
+        const winnerId = hasA ? m.teamAId! : m.teamBId!
+        await prisma.bracketMatch.update({ where: { id: m.id }, data: { winnerId } })
+        const nextSlot = Math.floor(m.slot / 2)
+        const nextMatch = await prisma.bracketMatch.findFirst({
+          where: { championship, round: m.round + 1, slot: nextSlot }
+        })
+        if (nextMatch) {
+          const isFirstChild = m.slot % 2 === 0
+          await prisma.bracketMatch.update({
+            where: { id: nextMatch.id },
+            data: isFirstChild ? { teamAId: winnerId } : { teamBId: winnerId }
+          })
+        }
+      }
+    }
+  }
+}
+
+// Cria/atualiza as PresentationDuplas de uma ronda específica, sempre que
+// essa ronda corresponder a uma fase de Apresentação (pura ou + Quiz) e já
+// tiver equipas definidas nos confrontos. Chamada tanto ao gerar o
+// chaveamento (Ronda 1) como sempre que uma equipa avança para uma ronda
+// seguinte (ver recordBracketResult em socket/index.ts) — assim as duplas
+// nunca dessincronizam do chaveamento, seja qual for a ronda escolhida
+// para ser de Apresentação.
+//
+// IMPORTANTE: como os dois jogos que alimentam uma mesma dupla de
+// Apresentação normalmente NÃO terminam ao mesmo tempo, esta função pode
+// ser chamada primeiro só com teamAId preenchido (e teamBId ainda null),
+// e mais tarde outra vez já com teamBId preenchido. Por isso a
+// identidade de uma dupla é sempre o teamAId (que nunca muda depois de
+// definido) — nunca comparamos teamAId+teamBId juntos, para não criar
+// duplicados quando a segunda equipa só chega mais tarde.
+//
+// CORRIGIDO — a causa da duplicação de duplas: o array `existingDuplas`
+// era lido UMA VEZ antes do loop e nunca atualizado depois de criar uma
+// dupla nova dentro do próprio loop. Sempre que havia mais do que um
+// `bracketMatch` com o mesmo teamAId na mesma ronda (exatamente o que a
+// duplicação do /generate produzia), a 1ª ocorrência criava a dupla mas
+// as seguintes não a encontravam no array desatualizado — e criavam-na
+// outra vez. Agora usamos um Map local que é atualizado a cada criação, e
+// além disso o upsert usa a constraint única (phaseId, teamAId) da BD
+// como rede de segurança final, mesmo que outra via de código chame esta
+// função em paralelo.
+export async function syncPresentationDuplasForRound(
+  championship: string,
+  round: number
+): Promise<void> {
+  const phase = await prisma.phase.findFirst({ where: { championship, order: round } })
+  if (!phase || (phase.type !== 'apresentacao' && phase.type !== 'apresentacao_quiz')) return
+
+  const matches = await prisma.bracketMatch.findMany({
+    where: { championship, round },
+    orderBy: { slot: 'asc' }
+  })
+  const existingDuplas = await prisma.presentationDupla.findMany({ where: { phaseId: phase.id } })
+
+  // Map local mantido em sincronia com as criações feitas dentro deste
+  // próprio loop — é isto que faltava antes.
+  const byTeamA = new Map(existingDuplas.map((d) => [d.teamAId, d]))
+
+  let order = existingDuplas.length + 1
+  let changedAny = false
+
+  for (const m of matches) {
+    if (!m.teamAId) continue
+
+    const existing = byTeamA.get(m.teamAId)
+
+    if (!existing) {
+      const created = await prisma.presentationDupla.upsert({
+        where: { phaseId_teamAId: { phaseId: phase.id, teamAId: m.teamAId } },
+        create: {
+          phaseId: phase.id,
+          order: order++,
+          themeA: '',
+          themeB: m.teamBId ? '' : null,
+          teamAId: m.teamAId,
+          teamBId: m.teamBId ?? null
+        },
+        update: {}
+      })
+      byTeamA.set(m.teamAId, created)
+      changedAny = true
+      continue
+    }
+
+    // A dupla já existe (foi criada quando só a equipa A tinha avançado,
+    // ou por uma iteração anterior deste mesmo loop). Se agora a equipa B
+    // já está definida no confronto e a dupla ainda não a tem, atualiza-a
+    // em vez de criar uma duplicada.
+    if (m.teamBId && !existing.teamBId) {
+      const updated = await prisma.presentationDupla.update({
+        where: { id: existing.id },
+        data: { teamBId: m.teamBId, themeB: existing.themeB ?? '' }
+      })
+      byTeamA.set(m.teamAId, updated)
+      changedAny = true
+    }
+  }
+  if (changedAny) emitConfigUpdated('presentation', championship)
+}
+
+router.get('/:championship', async (req, res) => {
+  const { championship } = req.params
+  const matches = await prisma.bracketMatch.findMany({
+    where: { championship },
+    orderBy: [{ round: 'asc' }, { slot: 'asc' }]
+  })
+
+  const teamIds = new Set<string>()
+  for (const m of matches) {
+    if (m.teamAId) teamIds.add(m.teamAId)
+    if (m.teamBId) teamIds.add(m.teamBId)
+  }
+  const teams = await prisma.team.findMany({ where: { id: { in: Array.from(teamIds) } } })
+  const teamMap = new Map(teams.map((t) => [t.id, t]))
+
+  const shaped = matches.map((m) => ({
+    id: m.id,
+    round: m.round,
+    slot: m.slot,
+    groupName: m.groupName,
+    teamA: m.teamAId
+      ? {
+          id: m.teamAId,
+          name: teamMap.get(m.teamAId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null
+        }
+      : null,
+    teamB: m.teamBId
+      ? {
+          id: m.teamBId,
+          name: teamMap.get(m.teamBId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null
+        }
+      : null,
+    winnerId: m.winnerId
+  }))
+
+  res.json({ championship, matches: shaped })
+})
+
+// a causa da duplicação infinita de bracketMatch: o deleteMany e o
+// createMany corriam como duas operações separadas, sem transação. Se o
+// /generate fosse chamado mais do que uma vez em sucessão (duplo clique,
+// nova chamada antes da resposta anterior voltar, etc.), os pedidos
+// entrelaçavam-se — ex: A apaga, B apaga (nada a apagar), A cria, B cria
+// — e cada chamada extra ficava a somar mais um conjunto completo de
+// confrontos em cima dos anteriores, sem nunca limpar os que já lá
+// estavam. Agora:
+//   1. Um "lock" em memória (generatingChampionships) rejeita pedidos
+//      concorrentes para a mesma categoria com 409, em vez de os deixar
+//      correr ao mesmo tempo.
+//   2. O apagar + criar corre dentro de uma prisma.$transaction, que
+//      garante atomicidade mesmo que o lock falhe por algum motivo (ex:
+//      reinício do processo entre pedidos).
+//   3. A constraint @@unique([championship, round, slot]) na BD rejeita
+//      qualquer duplicado que ainda assim escape aos dois pontos acima.
+router.post('/:championship/generate', requireAdmin, async (req, res) => {
+  const { championship } = req.params
+
+  if (generatingChampionships.has(championship)) {
+    res.status(409).json({
+      error: 'Já existe uma geração de chaveamento em curso para esta categoria. Aguarde terminar.'
+    })
+    return
+  }
+  generatingChampionships.add(championship)
+
+  try {
+    const teams = await prisma.team.findMany({
+      where: { category: championship },
+      orderBy: [{ group: 'asc' }, { bracketPosition: 'asc' }]
+    })
+
+    if (teams.length < 2) {
+      res.status(400).json({ error: 'É preciso pelo menos 2 equipas cadastradas nesta categoria.' })
+      return
+    }
+
+    const slotsNeeded = nextPowerOfTwo(teams.length)
+    const round1Count = slotsNeeded / 2
+    const totalRounds = Math.log2(slotsNeeded)
+
+    const created: {
+      round: number
+      slot: number
+      teamAId?: string | null
+      teamBId?: string | null
+      groupName?: string
+    }[] = []
+
+    for (let slot = 0; slot < round1Count; slot++) {
+      const teamA = teams[slot * 2]
+      const teamB = teams[slot * 2 + 1]
+      created.push({
+        round: 1,
+        slot,
+        teamAId: teamA?.id ?? null,
+        teamBId: teamB?.id ?? null,
+        groupName: teamA?.group ?? undefined
+      })
+    }
+
+    for (let round = 2; round <= totalRounds; round++) {
+      const count = slotsNeeded / Math.pow(2, round)
+      for (let slot = 0; slot < count; slot++) {
+        created.push({ round, slot })
+      }
+    }
+
+    // Apagar o chaveamento anterior e criar o novo dentro da mesma
+    // transação: ou as duas operações são aplicadas juntas, ou nenhuma é
+    // — nunca fica um estado a meio onde os antigos já foram apagados mas
+    // os novos ainda não existem (nem o inverso, os dois a coexistir).
+    //
+    // As PresentationDuplas da categoria também são apagadas aqui: como o
+    // chaveamento vai ser todo recriado com IDs novos, as duplas antigas
+    // (que apontam para teamAId de confrontos que deixam de existir da
+    // forma anterior) deixam de fazer sentido e seriam reconstruídas de
+    // qualquer forma pelo syncPresentationDuplasForRound logo a seguir.
+    const phaseIds = (
+      await prisma.phase.findMany({ where: { championship }, select: { id: true } })
+    ).map((p) => p.id)
+
+    await prisma.$transaction([
+      ...(phaseIds.length
+        ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })]
+        : []),
+      prisma.bracketMatch.deleteMany({ where: { championship } }),
+      prisma.bracketMatch.createMany({
+        data: created.map((c) => ({
+          championship,
+          round: c.round,
+          slot: c.slot,
+          teamAId: c.teamAId ?? null,
+          teamBId: c.teamBId ?? null,
+          groupName: c.groupName ?? null
+        }))
+      })
+    ])
+
+    await resolveByesRecursively(championship, totalRounds)
+    await ensurePhasesForRounds(championship, totalRounds)
+
+    // Sincroniza duplas para todas as rondas já preenchidas neste momento
+    // (normalmente só a Ronda 1, a não ser que resolveByesRecursively já
+    // tenha avançado alguma equipa automaticamente por falta de adversário).
+    for (let round = 1; round <= totalRounds; round++) {
+      await syncPresentationDuplasForRound(championship, round)
+    }
+
+    emitConfigUpdated('bracket', championship)
+    res.status(201).json({ success: true, totalRounds })
+  } finally {
+    generatingChampionships.delete(championship)
+  }
+})
+
+// re-sincroniza as duplas de Apresentação de todas as fases já
+// existentes, sem apagar/regerar o chaveamento. Útil sempre que se edita
+// o "type" de uma fase (ex: mudar de "quiz" para "apresentacao_quiz")
+// depois de o chaveamento já ter sido gerado — nesse caso as duplas dessa
+// ronda nunca tinham sido criadas, porque syncPresentationDuplasForRound
+// só corre automaticamente ao gerar o chaveamento e quando uma equipa
+// avança de ronda.
+router.post('/:championship/resync-presentation', requireAdmin, async (req, res) => {
+  const { championship } = req.params
+  const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+  for (const phase of phases) {
+    await syncPresentationDuplasForRound(championship, phase.order)
+  }
+  res.json({ success: true })
+})
+
+router.delete('/:championship', requireAdmin, async (req, res) => {
+  const { championship } = req.params
+  const phaseIds = (
+    await prisma.phase.findMany({ where: { championship }, select: { id: true } })
+  ).map((p) => p.id)
+  await prisma.$transaction([
+    ...(phaseIds.length
+      ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })]
+      : []),
+    prisma.bracketMatch.deleteMany({ where: { championship } })
+  ])
+  emitConfigUpdated('bracket', championship)
+  res.status(204).send()
+})
+
+export default router
+ 
+===== src\routes\championshipHistory.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+const router = Router()
+
+router.get('/', async (req, res) => {
+  const { championship } = req.query as { championship?: string }
+  const entries = await prisma.championshipHistory.findMany({
+    where: championship ? { championship } : undefined,
+    orderBy: { endedAt: 'desc' }
+  })
+  res.json(entries)
+})
+
+router.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.championshipHistory.delete({ where: { id } })
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Registo não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\evaluationCriteria.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+export const evaluationCriteriaRouter = Router()
+
+// GET /api/evaluation-criteria?itemId=xxx
+evaluationCriteriaRouter.get('/', async (req, res) => {
+  const itemId = req.query.itemId as string | undefined
+  if (!itemId) {
+    res.json([])
+    return
+  }
+  const criteria = await prisma.evaluationCriteria.findMany({
+    where: { itemId },
+    orderBy: { order: 'asc' }
+  })
+  res.json(criteria)
+})
+
+evaluationCriteriaRouter.post('/', async (req, res) => {
+  const { itemId, label, maxPoints } = req.body as {
+    itemId?: string
+    label?: string
+    maxPoints?: number
+  }
+  if (!itemId || !label || !label.trim()) {
+    res.status(400).json({ error: 'itemId e label são obrigatórios.' })
+    return
+  }
+  const count = await prisma.evaluationCriteria.count({ where: { itemId } })
+  const created = await prisma.evaluationCriteria.create({
+    data: { itemId, label: label.trim(), maxPoints: Number(maxPoints) || 10, order: count }
+  })
+  res.json(created)
+})
+
+evaluationCriteriaRouter.put('/:id', async (req, res) => {
+  const { label, maxPoints } = req.body as { label?: string; maxPoints?: number }
+  const updated = await prisma.evaluationCriteria.update({
+    where: { id: req.params.id },
+    data: {
+      ...(label !== undefined ? { label } : {}),
+      ...(maxPoints !== undefined ? { maxPoints: Number(maxPoints) } : {})
+    }
+  })
+  res.json(updated)
+})
+
+evaluationCriteriaRouter.delete('/:id', async (req, res) => {
+  await prisma.evaluationCriteria.delete({ where: { id: req.params.id } })
+  res.json({ success: true })
+})
+ 
+===== src\routes\evaluationItems.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function buildOptionsData(mode: string, options: { label: string; text: string }[] | undefined) {
+  const data: Record<string, string | null> = {}
+  for (const label of LABELS) {
+    if (mode !== 'multipla_escolha') {
+      data[`option${label}`] = null
+      continue
+    }
+    const found = options?.find((o) => o.label === label)
+    data[`option${label}`] = found ? found.text : null
+  }
+  return data
+}
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  const items = await prisma.evaluationItem.findMany({
+    where: {
+      championship: championship || undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    include: { jurorAssignments: true },
+    orderBy: { createdAt: 'asc' }
+  })
+  res.json(
+    items.map((i) => ({
+      ...i,
+      correctIndexes:
+        typeof i.correctIndexes === 'string'
+          ? JSON.parse(i.correctIndexes || '[]')
+          : i.correctIndexes || [],
+      jurorIds: i.jurorAssignments.map((a) => a.jurorId),
+      jurorAssignments: undefined
+    }))
+  )
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const {
+    championship,
+    type,
+    mode,
+    text,
+    imageUrl,
+    options,
+    correctIndexes,
+    timeSeconds,
+    maxPoints,
+    phase,
+    scope,
+    jurorIds
+  } = req.body
+
+  if (!championship || !type || !text || !maxPoints || !phase) {
+    return res
+      .status(400)
+      .json({ error: 'championship, type, text, maxPoints e phase são obrigatórios' })
+  }
+  if (mode === 'multipla_escolha') {
+    if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
+      return res
+        .status(400)
+        .json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+    }
+    if (!correctIndexes) {
+      return res.status(400).json({ error: 'Seleciona pelo menos uma resposta correta' })
+    }
+  }
+
+  const serializedCorrectIndexes =
+    mode === 'multipla_escolha'
+      ? typeof correctIndexes === 'string'
+        ? correctIndexes
+        : JSON.stringify(correctIndexes || [])
+      : null
+
+  const item = await prisma.evaluationItem.create({
+    data: {
+      championship,
+      type,
+      mode: mode || 'aberta',
+      text,
+      imageUrl: imageUrl || null,
+      ...buildOptionsData(mode, options),
+      correctIndexes: serializedCorrectIndexes,
+      timeSeconds: timeSeconds ? Number(timeSeconds) : 30,
+      maxPoints: Number(maxPoints),
+      phase: Number(phase),
+      scope: scope || 'single',
+      jurorAssignments:
+        mode === 'aberta' && Array.isArray(jurorIds) && jurorIds.length
+          ? { create: jurorIds.map((jurorId: string) => ({ jurorId })) }
+          : undefined
+    },
+    include: { jurorAssignments: true }
+  })
+
+  emitConfigUpdated('evaluationItems', championship)
+  res.status(201).json({
+    ...item,
+    correctIndexes:
+      typeof item.correctIndexes === 'string'
+        ? JSON.parse(item.correctIndexes || '[]')
+        : item.correctIndexes || [],
+    jurorIds: item.jurorAssignments.map((a) => a.jurorId)
+  })
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const {
+    type,
+    mode,
+    text,
+    imageUrl,
+    options,
+    correctIndexes,
+    timeSeconds,
+    maxPoints,
+    phase,
+    scope,
+    jurorIds
+  } = req.body
+
+  if (
+    mode === 'multipla_escolha' &&
+    (!Array.isArray(options) || options.length < 2 || options.length > 8)
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'Perguntas de múltipla escolha precisam de entre 2 e 8 opções' })
+  }
+
+  try {
+    await prisma.evaluationItemJuror.deleteMany({ where: { itemId: id } })
+
+    const serializedCorrectIndexes =
+      mode === 'multipla_escolha'
+        ? typeof correctIndexes === 'string'
+          ? correctIndexes
+          : JSON.stringify(correctIndexes || [])
+        : null
+
+
+
+        
+
+    const item = await prisma.evaluationItem.update({
+      where: { id },
+      data: {
+        type,
+        mode,
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(mode, options),
+        correctIndexes: serializedCorrectIndexes,
+        timeSeconds: timeSeconds ? Number(timeSeconds) : 30,
+        maxPoints: Number(maxPoints),
+        phase: Number(phase),
+        scope,
+        jurorAssignments:
+          mode === 'aberta' && Array.isArray(jurorIds) && jurorIds.length
+            ? { create: jurorIds.map((jurorId: string) => ({ jurorId })) }
+            : undefined
+      },
+      include: { jurorAssignments: true }
+    })
+
+    emitConfigUpdated('evaluationItems', item.championship)
+    res.json({
+      ...item,
+      correctIndexes:
+        typeof item.correctIndexes === 'string'
+          ? JSON.parse(item.correctIndexes || '[]')
+          : item.correctIndexes || [],
+      jurorIds: item.jurorAssignments.map((a) => a.jurorId)
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(404).json({ error: 'Item não encontrado ou erro na atualização' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.evaluationItem.delete({ where: { id } })
+    emitConfigUpdated('evaluationItems', existing.championship)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Item não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\jurors.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { generateJurorCode } from '../socket/liveState'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+/* ==========================================================================
+   ROTAS DE AUTORIZAÇÕES (Devem vir antes de /:id para evitar sobreposição)
+   ========================================================================== */
+
+router.get('/authorizations', async (req, res) => {
+  try {
+    const { phaseId } = req.query as { phaseId?: string }
+
+    // phaseId tratado como String (CUID), evitando conversão para NaN
+    const auths = await prisma.phaseJurorAuthorization.findMany({
+      where: phaseId ? { phaseId: String(phaseId) } : {}
+    })
+    res.json(auths)
+  } catch (error) {
+    console.error('[GET /authorizations Error]:', error)
+    res.status(500).json({ error: 'Erro ao buscar autorizações dos jurados.' })
+  }
+})
+
+router.post('/authorizations', requireAdmin, async (req, res) => {
+  const { phaseId, jurorId } = req.body
+  if (!phaseId || !jurorId) {
+    res.status(400).json({ error: 'phaseId e jurorId são obrigatórios' })
+    return
+  }
+  try {
+    const auth = await prisma.phaseJurorAuthorization.create({
+      data: {
+        phaseId: String(phaseId),
+        jurorId: String(jurorId)
+      }
+    })
+    emitConfigUpdated('jurors')
+    res.status(201).json(auth)
+  } catch (error) {
+    console.error('[POST /authorizations Error]:', error)
+    res.status(400).json({ error: 'Já autorizado, ou erro ao criar.' })
+  }
+})
+
+router.delete('/authorizations/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  if (!id) {
+    res.status(400).json({ error: 'ID de autorização inválido.' })
+    return
+  }
+
+  try {
+    const parsedId = isNaN(Number(id)) ? id : Number(id)
+    await prisma.phaseJurorAuthorization.delete({
+      where: { id: parsedId as any }
+    })
+    emitConfigUpdated('jurors')
+    res.status(204).send()
+  } catch (error) {
+    console.error('[DELETE /authorizations Error]:', error)
+    res.status(404).json({ error: 'Autorização não encontrada' })
+  }
+})
+
+/* ==========================================================================
+   ROTAS PRINCIPAIS DE JURADOS
+   ========================================================================== */
+
+router.get('/', async (_req, res) => {
+  try {
+    const jurors = await prisma.juror.findMany({ orderBy: { createdAt: 'asc' } })
+    res.json(jurors)
+  } catch (error) {
+    console.error('[GET /jurors Error]:', error)
+    res.status(500).json({ error: 'Erro ao buscar jurados.' })
+  }
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { name } = req.body
+  if (!name) {
+    res.status(400).json({ error: 'name é obrigatório' })
+    return
+  }
+  try {
+    let code = generateJurorCode()
+    for (let i = 0; i < 5; i++) {
+      const exists = await prisma.juror.findUnique({ where: { code } })
+      if (!exists) break
+      code = generateJurorCode()
+    }
+    const juror = await prisma.juror.create({ data: { name, code } })
+    emitConfigUpdated('jurors')
+    res.status(201).json(juror)
+  } catch (error) {
+    console.error('[POST /jurors Error]:', error)
+    res.status(500).json({ error: 'Erro ao criar jurado.' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    await prisma.phaseJurorAuthorization.deleteMany({ where: { jurorId: id } })
+    await prisma.juror.delete({ where: { id } })
+    emitConfigUpdated('jurors')
+    res.status(204).send()
+  } catch (error) {
+    console.error('[DELETE /jurors Error]:', error)
+    res.status(404).json({ error: 'Jurado não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\matchHistory.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+const router = Router()
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query
+  const history = await prisma.matchHistory.findMany({
+    where: {
+      championship: championship ? String(championship) : undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    orderBy: { endedAt: 'desc' }
+  })
+  res.json(history)
+})
+
+router.get('/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  const entry = await prisma.matchHistory.findUnique({ where: { id } })
+  if (!entry) {
+    res.status(404).json({ error: 'Registo não encontrado' })
+    return
+  }
+  res.json(entry)
+})
+
+router.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.matchHistory.delete({ where: { id } })
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Registo não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\moderators.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { generateModeratorCode } from '../socket/liveState'
+
+const router = Router()
+
+const VALID_AREAS = ['quiz', 'apresentacao', 'jurados', 'repescagem']
+
+function sanitizeAreas(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+  return Array.from(new Set(input.filter((a): a is string => VALID_AREAS.includes(a))))
+}
+
+router.get('/', async (_req, res) => {
+  const moderators = await prisma.moderator.findMany({
+    orderBy: { createdAt: 'asc' },
+    include: { areas: true }
+  })
+  res.json(
+    moderators.map((m) => ({
+      id: m.id,
+      name: m.name,
+      code: m.code,
+      role: m.role,
+      areas: m.areas.map((a) => a.area)
+    }))
+  )
+})
+
+router.post('/', async (req, res) => {
+  const { name, role, areas } = req.body as {
+    name?: string
+    role?: 'principal' | 'secundario'
+    areas?: string[]
+  }
+  if (!name) {
+    res.status(400).json({ error: 'name é obrigatório' })
+    return
+  }
+  if (role === 'principal') {
+    const existingPrincipal = await prisma.moderator.findFirst({ where: { role: 'principal' } })
+    if (existingPrincipal) {
+      res.status(400).json({
+        error: 'Já existe um Moderador Principal. Remove-o primeiro ou escolhe Secundário.'
+      })
+      return
+    }
+  }
+  let code = generateModeratorCode()
+  for (let i = 0; i < 5; i++) {
+    const exists = await prisma.moderator.findUnique({ where: { code } })
+    if (!exists) break
+    code = generateModeratorCode()
+  }
+  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas — já tem tudo
+  const moderator = await prisma.moderator.create({
+    data: {
+      name,
+      code,
+      role: role === 'principal' ? 'principal' : 'secundario',
+      areas: { create: cleanAreas.map((area) => ({ area })) }
+    },
+    include: { areas: true }
+  })
+  res.status(201).json({ ...moderator, areas: moderator.areas.map((a) => a.area) })
+})
+
+router.put('/:id', async (req, res) => {
+  const { id } = req.params
+  const { name, role, areas } = req.body as {
+    name?: string
+    role?: 'principal' | 'secundario'
+    areas?: string[]
+  }
+  if (role === 'principal') {
+    const existingPrincipal = await prisma.moderator.findFirst({
+      where: { role: 'principal', id: { not: id } }
+    })
+    if (existingPrincipal) {
+      res.status(400).json({ error: 'Já existe outro Moderador Principal.' })
+      return
+    }
+  }
+  try {
+    const finalRole = role === 'principal' ? 'principal' : 'secundario'
+    const cleanAreas = finalRole === 'principal' ? [] : sanitizeAreas(areas)
+    const moderator = await prisma.moderator.update({
+      where: { id },
+      data: {
+        name,
+        role: finalRole,
+        // Sempre que 'areas' vem no payload, substitui o conjunto inteiro
+        // (delete + recreate) — mais simples que fazer diff.
+        ...(areas !== undefined
+          ? { areas: { deleteMany: {}, create: cleanAreas.map((area) => ({ area })) } }
+          : {})
+      },
+      include: { areas: true }
+    })
+    res.json({ ...moderator, areas: moderator.areas.map((a) => a.area) })
+  } catch {
+    res.status(404).json({ error: 'Moderador não encontrado' })
+  }
+})
+
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params
+  try {
+    await prisma.moderator.delete({ where: { id } }) // onDelete: Cascade limpa as áreas também
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Moderador não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\partners.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+router.get('/', async (_req, res) => {
+  const partners = await prisma.partner.findMany({ orderBy: { order: 'asc' } })
+  res.json(partners)
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { name, logoUrl, order } = req.body
+  if (!name || !logoUrl) {
+    res.status(400).json({ error: 'name e logoUrl são obrigatórios' })
+    return
+  }
+  const partner = await prisma.partner.create({ data: { name, logoUrl, order: order ?? 0 } })
+  emitConfigUpdated('partners')
+  res.status(201).json(partner)
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id)
+  const { name, logoUrl, order } = req.body
+  try {
+    const partner = await prisma.partner.update({ where: { id }, data: { name, logoUrl, order } })
+    emitConfigUpdated('partners')
+    res.json(partner)
+  } catch {
+    res.status(404).json({ error: 'Parceiro não encontrado' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.partner.delete({ where: { id } })
+    emitConfigUpdated('partners')
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Parceiro não encontrado' })
+  }
+})
+
+export default router
+ 
+===== src\routes\phases.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+// GET /api/phases?championship=universitario
+router.get('/', async (req, res) => {
+  try {
+    const { championship } = req.query as { championship?: string }
+
+    const where: any = {}
+    if (championship && championship !== 'undefined' && championship !== 'null') {
+      where.championship = championship
+    }
+
+    const phases = await prisma.phase.findMany({
+      where,
+      orderBy: { order: 'asc' }
+    })
+
+    return res.json(phases)
+  } catch (error: any) {
+    console.error('[Phases GET / Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar as fases.' })
+  }
+})
+
+// POST /api/phases/swap — troca a posição (order) de duas fases.
+router.post('/swap', requireAdmin, async (req, res) => {
+  try {
+    const { firstId, secondId } = req.body as { firstId?: string; secondId?: string }
+    if (!firstId || !secondId) {
+      return res.status(400).json({ error: 'firstId e secondId são obrigatórios.' })
+    }
+
+    const [first, second] = await Promise.all([
+      prisma.phase.findUnique({ where: { id: firstId } }),
+      prisma.phase.findUnique({ where: { id: secondId } })
+    ])
+    if (!first || !second || first.championship !== second.championship) {
+      return res.status(404).json({ error: 'Fases não encontradas ou de campeonatos diferentes.' })
+    }
+
+    const orderA = first.order
+    const orderB = second.order
+    const TEMP_ORDER = -1
+
+    await prisma.phase.update({ where: { id: first.id }, data: { order: TEMP_ORDER } })
+    await prisma.phase.update({ where: { id: second.id }, data: { order: orderA } })
+    await prisma.phase.update({ where: { id: first.id }, data: { order: orderB } })
+
+    const phases = await prisma.phase.findMany({
+      where: { championship: first.championship },
+      orderBy: { order: 'asc' }
+    })
+    return res.json({ success: true, phases })
+  } catch (error: any) {
+    console.error('[Phases POST /swap Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao trocar a ordem das fases.' })
+  }
+})
+
+// POST /api/phases/repair-numbering — corrige buracos na numeração de ordem.
+router.post('/repair-numbering', requireAdmin, async (req, res) => {
+  try {
+    const { championship } = req.body as { championship?: string }
+    if (!championship) {
+      return res.status(400).json({ error: 'championship é obrigatório.' })
+    }
+    const phases = await prisma.phase.findMany({
+      where: { championship },
+      orderBy: { order: 'asc' }
+    })
+    for (let i = 0; i < phases.length; i++) {
+      const desiredOrder = i + 1
+      if (phases[i].order !== desiredOrder) {
+        await prisma.phase.update({ where: { id: phases[i].id }, data: { order: desiredOrder } })
+      }
+    }
+    const updated = await prisma.phase.findMany({
+      where: { championship },
+      orderBy: { order: 'asc' }
+    })
+    return res.json({ success: true, phases: updated })
+  } catch (error: any) {
+    console.error('[Phases POST /repair-numbering Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao reparar numeração.' })
+  }
+})
+
+// GET /api/phases/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'ID da fase inválido ou não fornecido.' })
+    }
+
+    const phase = await prisma.phase.findUnique({ where: { id } })
+
+    if (!phase) {
+      return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+
+    return res.json(phase)
+  } catch (error: any) {
+    console.error('[Phases GET /:id Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao obter a fase.' })
+  }
+})
+
+// POST /api/phases
+router.post('/', requireAdmin, async (req, res) => {
+  try {
+    console.log('[Backend POST /api/phases] Body recebido:', req.body)
+
+    const {
+      name,
+      label,
+      championship,
+      order,
+      type,
+      useQuestions,
+      useJudges,
+      maxQuestions,
+      questionsPerTeam,
+      useInitialScores,
+      initialScoreMaxPoints,
+      presentationMinutes,
+      presentationWeight,
+      quizWeight,
+      noElimination
+    } = req.body || {}
+
+    const phaseLabel =
+      typeof label === 'string' && label.trim()
+        ? label.trim()
+        : typeof name === 'string' && name.trim()
+          ? name.trim()
+          : null
+
+    if (!phaseLabel) {
+      console.warn('[Backend POST /api/phases] Rejeitado: campo "label" ou "name" em falta.')
+      return res.status(400).json({
+        error: 'O nome da fase é obrigatório (envie "label" ou "name").',
+        receivedData: req.body
+      })
+    }
+
+    const championshipValue =
+      championship && championship !== 'undefined' && championship !== 'null' ? championship : null
+
+    let resolvedOrder: number
+    if (order !== undefined && order !== null) {
+      resolvedOrder = Number(order)
+    } else {
+      const maxOrder = await prisma.phase.aggregate({
+        where: { championship: championshipValue ?? undefined },
+        _max: { order: true }
+      })
+      resolvedOrder = (maxOrder._max.order ?? 0) + 1
+    }
+
+    const dataToCreate: any = {
+      label: phaseLabel,
+      championship: championshipValue,
+      order: resolvedOrder
+    }
+
+    if (type !== undefined) dataToCreate.type = type
+    if (useQuestions !== undefined) dataToCreate.useQuestions = Boolean(useQuestions)
+    if (useJudges !== undefined) dataToCreate.useJudges = Boolean(useJudges)
+    if (maxQuestions !== undefined) dataToCreate.maxQuestions = Number(maxQuestions)
+    if (questionsPerTeam !== undefined) dataToCreate.questionsPerTeam = Number(questionsPerTeam)
+    if (useInitialScores !== undefined) dataToCreate.useInitialScores = Boolean(useInitialScores)
+    if (initialScoreMaxPoints !== undefined)
+      dataToCreate.initialScoreMaxPoints = initialScoreMaxPoints
+        ? Number(initialScoreMaxPoints)
+        : null
+    if (presentationMinutes !== undefined)
+      dataToCreate.presentationMinutes = Number(presentationMinutes)
+    if (presentationWeight !== undefined)
+      dataToCreate.presentationWeight = Number(presentationWeight)
+    if (quizWeight !== undefined) dataToCreate.quizWeight = Number(quizWeight)
+    // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam
+    // e a nota é transportada (ponderada) para o Quiz da fase seguinte.
+    if (noElimination !== undefined) dataToCreate.noElimination = Boolean(noElimination)
+
+    const phase = await prisma.phase.create({ data: dataToCreate })
+
+    console.log(
+      '[Backend POST /api/phases] Fase criada com sucesso:',
+      phase.id,
+      'order:',
+      phase.order
+    )
+    return res.status(201).json(phase)
+  } catch (error: any) {
+    console.error('[Phases POST / Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao criar a fase.' })
+  }
+})
+
+// PUT /api/phases/:id
+router.put('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    const {
+      name,
+      label,
+      championship,
+      order,
+      type,
+      useQuestions,
+      useJudges,
+      maxQuestions,
+      questionsPerTeam,
+      useInitialScores,
+      initialScoreMaxPoints,
+      presentationMinutes,
+      presentationWeight,
+      quizWeight,
+      noElimination
+    } = req.body || {}
+
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'ID da fase inválido.' })
+    }
+
+    const existing = await prisma.phase.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+
+    const phaseLabel =
+      (label && typeof label === 'string' && label.trim()) ||
+      (name && typeof name === 'string' && name.trim())
+
+    const dataToUpdate: any = {}
+
+    if (phaseLabel) dataToUpdate.label = phaseLabel
+    if (championship !== undefined) dataToUpdate.championship = championship || null
+    if (order !== undefined) dataToUpdate.order = Number(order)
+    if (type !== undefined) dataToUpdate.type = type
+    if (useQuestions !== undefined) dataToUpdate.useQuestions = Boolean(useQuestions)
+    if (useJudges !== undefined) dataToUpdate.useJudges = Boolean(useJudges)
+    if (maxQuestions !== undefined) dataToUpdate.maxQuestions = Number(maxQuestions)
+    if (questionsPerTeam !== undefined) dataToUpdate.questionsPerTeam = Number(questionsPerTeam)
+    if (useInitialScores !== undefined) dataToUpdate.useInitialScores = Boolean(useInitialScores)
+    if (initialScoreMaxPoints !== undefined)
+      dataToUpdate.initialScoreMaxPoints = initialScoreMaxPoints
+        ? Number(initialScoreMaxPoints)
+        : null
+    if (presentationMinutes !== undefined)
+      dataToUpdate.presentationMinutes = Number(presentationMinutes)
+    if (presentationWeight !== undefined)
+      dataToUpdate.presentationWeight = Number(presentationWeight)
+    if (quizWeight !== undefined) dataToUpdate.quizWeight = Number(quizWeight)
+    // NOVO
+    if (noElimination !== undefined) dataToUpdate.noElimination = Boolean(noElimination)
+
+    const phase = await prisma.phase.update({ where: { id }, data: dataToUpdate })
+
+    return res.json(phase)
+  } catch (error: any) {
+    console.error('[Phases PUT /:id Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao atualizar a fase.' })
+  }
+})
+
+// DELETE /api/phases/:id
+router.delete('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'ID da fase inválido.' })
+    }
+
+    const existing = await prisma.phase.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+
+    await prisma.phase.delete({ where: { id } })
+
+    return res.json({ message: 'Fase eliminada com sucesso.' })
+  } catch (error: any) {
+    console.error('[Phases DELETE /:id Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao eliminar a fase.' })
+  }
+})
+
+export default router
+ 
+===== src\routes\presentation.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+// PresentationDupla não tem relações Prisma definidas para Team/Phase (só
+// teamAId/teamBId/phaseId como texto simples) — por isso, em vez de
+// include, buscamos as equipas à parte e juntamos manualmente.
+async function attachTeams(duplas: Array<{ teamAId: string; teamBId: string | null }>) {
+  const teamIds = new Set<string>()
+  for (const d of duplas) {
+    teamIds.add(d.teamAId)
+    if (d.teamBId) teamIds.add(d.teamBId)
+  }
+  const teams = await prisma.team.findMany({ where: { id: { in: Array.from(teamIds) } } })
+  const teamMap = new Map(teams.map((t) => [t.id, t]))
+  return duplas.map((d) => ({
+    ...d,
+    teamA: teamMap.get(d.teamAId) ?? null,
+    teamB: d.teamBId ? (teamMap.get(d.teamBId) ?? null) : null
+  }))
+}
+
+// GET /api/presentation/duplas?phaseId=...&championship=...
+router.get('/duplas', async (req, res) => {
+  try {
+    const { phaseId, championship } = req.query as { phaseId?: string; championship?: string }
+
+    let duplas: Array<{
+      id: string
+      phaseId: string
+      order: number
+      themeA: string
+      themeB: string | null
+      teamAId: string
+      teamBId: string | null
+    }> = []
+
+    if (phaseId && phaseId !== 'undefined' && phaseId !== 'null') {
+      duplas = await prisma.presentationDupla.findMany({
+        where: { phaseId },
+        orderBy: { order: 'asc' }
+      })
+    } else if (championship && championship !== 'undefined' && championship !== 'null') {
+      const phases = await prisma.phase.findMany({ where: { championship }, select: { id: true } })
+      const phaseIds = phases.map((p) => p.id)
+      duplas = await prisma.presentationDupla.findMany({
+        where: { phaseId: { in: phaseIds } },
+        orderBy: { order: 'asc' }
+      })
+    }
+
+    const shaped = await attachTeams(duplas)
+    return res.json(shaped)
+  } catch (error: any) {
+    console.error('[Presentation Duplas GET Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar as duplas.' })
+  }
+})
+
+// POST /api/presentation/duplas
+router.post('/duplas', requireAdmin, async (_req, res) => {
+  return res.status(400).json({
+    error:
+      'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
+  })
+})
+
+// PATCH /api/presentation/duplas/:id/theme
+router.patch('/duplas/:id/theme', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { team, theme } = req.body as { team?: 'A' | 'B'; theme?: string }
+
+  if (!team || !theme || !['A', 'B'].includes(team)) {
+    return res.status(400).json({ error: 'team ("A" ou "B") e theme são obrigatórios.' })
+  }
+
+  try {
+    const dataUpdate = team === 'A' ? { themeA: theme } : { themeB: theme }
+    const dupla = await prisma.presentationDupla.update({ where: { id }, data: dataUpdate })
+    const [shaped] = await attachTeams([dupla])
+    emitConfigUpdated('presentation')
+    return res.json(shaped)
+  } catch (error) {
+    return res.status(404).json({ error: 'Dupla não encontrada.' })
+  }
+})
+
+// DELETE /api/presentation/duplas/:id
+router.delete('/duplas/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+
+  try {
+    await prisma.presentationDupla.delete({ where: { id } })
+    emitConfigUpdated('presentation')
+    return res.status(204).send()
+  } catch (error) {
+    return res.status(404).json({ error: 'Dupla não encontrada.' })
+  }
+})
+
+// GET /api/presentation/criteria?phaseId=...
+router.get('/criteria', async (req, res) => {
+  try {
+    const { phaseId } = req.query as { phaseId?: string }
+    if (!phaseId) return res.json([])
+
+    const criteria = await prisma.presentationCriteria.findMany({
+      where: { phaseId },
+      orderBy: { id: 'asc' }
+    })
+    return res.json(criteria)
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar os critérios.' })
+  }
+})
+
+// POST /api/presentation/criteria
+router.post('/criteria', requireAdmin, async (req, res) => {
+  try {
+    const { phaseId, label, maxPoints } = req.body
+
+    if (!phaseId || !label || maxPoints === undefined || maxPoints === null) {
+      return res.status(400).json({ error: 'phaseId, label e maxPoints são obrigatórios.' })
+    }
+
+    const points = Number(maxPoints)
+    if (isNaN(points) || points <= 0) {
+      return res
+        .status(400)
+        .json({ error: 'maxPoints deve ser um número válido e maior que zero.' })
+    }
+
+    const criteria = await prisma.presentationCriteria.create({
+      data: { phaseId, label, maxPoints: points }
+    })
+
+    emitConfigUpdated('presentation')
+    return res.status(201).json(criteria)
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao criar o critério.' })
+  }
+})
+
+// DELETE /api/presentation/criteria/:id
+router.delete('/criteria/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+
+  try {
+    await prisma.presentationCriteria.delete({ where: { id } })
+    emitConfigUpdated('presentation')
+    return res.status(204).send()
+  } catch (error) {
+    return res.status(404).json({ error: 'Critério não encontrado.' })
+  }
+})
+
+export default router
+ 
+===== src\routes\presentationDocuments.ts =====  
+import { Router } from 'express'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs/promises'
+import { prisma } from '../db'
+import { requireAdmin } from '../middleware/requireAdmin'
+import { emitConfigUpdated } from '../socket/configEvents'
+
+const router = Router()
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 80 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== 'image/png' && file.mimetype !== 'image/jpeg') {
+      cb(new Error('Só são aceites imagens PNG ou JPEG (exportadas do PowerPoint como imagens).'))
+      return
+    }
+    cb(null, true)
+  }
+})
+
+const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads', 'presentations')
+
+function extractOrder(filename: string, fallbackIndex: number): number {
+  const match = filename.match(/(\d+)(?=\.[^.]*$)/)
+  if (match) return Number(match[1])
+  return 100000 + fallbackIndex
+}
+
+// GET /api/presentation-documents
+router.get('/', async (req, res) => {
+  try {
+    const { phaseId, duplaId, teamId } = req.query as {
+      phaseId?: string
+      duplaId?: string
+      teamId?: string
+    }
+
+    const where: any = {}
+    if (phaseId) where.phaseId = phaseId
+    if (duplaId) where.duplaId = duplaId
+    if (teamId) where.teamId = teamId
+
+    const docs = await prisma.presentationDocument.findMany({
+      where,
+      include: {
+        slides: {
+          orderBy: { order: 'asc' }
+        }
+      }
+    })
+
+    return res.json(docs)
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao carregar os documentos.' })
+  }
+})
+
+// POST /api/presentation-documents
+router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
+  try {
+    const { duplaId, teamId } = req.body as { duplaId?: string; teamId?: string }
+    const files = req.files as Express.Multer.File[] | undefined
+
+    if (!duplaId || !teamId || !files || !files.length) {
+      return res
+        .status(400)
+        .json({ error: 'duplaId, teamId e pelo menos uma imagem são obrigatórios.' })
+    }
+
+    const dupla = await prisma.presentationDupla.findUnique({ where: { id: duplaId } })
+    if (!dupla || (dupla.teamAId !== teamId && dupla.teamBId !== teamId)) {
+      return res.status(400).json({ error: 'Esta equipa não pertence a esta dupla.' })
+    }
+
+    const ordersRaw = req.body.orders as string | string[] | undefined
+    let explicitOrders: number[] | null = null
+    if (ordersRaw) {
+      const arr = Array.isArray(ordersRaw) ? ordersRaw : [ordersRaw]
+      if (arr.length === files.length) {
+        explicitOrders = arr.map(Number)
+      }
+    }
+
+    const indexed = files.map((file, i) => ({
+      file,
+      order: explicitOrders ? explicitOrders[i] : extractOrder(file.originalname, i)
+    }))
+    indexed.sort((a, b) => a.order - b.order)
+
+    const folder = path.join(UPLOADS_ROOT, dupla.phaseId, teamId)
+    await fs.mkdir(folder, { recursive: true })
+
+    const existing = await prisma.presentationDocument.findUnique({
+      where: { duplaId_teamId: { duplaId, teamId } },
+      include: { slides: true }
+    })
+
+    if (existing) {
+      for (const slide of existing.slides) {
+        await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
+      }
+      await prisma.presentationSlide.deleteMany({ where: { documentId: existing.id } })
+    }
+
+    const doc = await prisma.presentationDocument.upsert({
+      where: { duplaId_teamId: { duplaId, teamId } },
+      update: {},
+      create: { phaseId: dupla.phaseId, duplaId, teamId }
+    })
+
+    let order = 1
+    for (const { file } of indexed) {
+      const safeName = `${Date.now()}-${order}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      await fs.writeFile(path.join(folder, safeName), file.buffer)
+      const imageUrl = `/uploads/presentations/${dupla.phaseId}/${teamId}/${safeName}`
+
+      await prisma.presentationSlide.create({
+        data: { documentId: doc.id, order, imageUrl }
+      })
+      order += 1
+    }
+
+    const full = await prisma.presentationDocument.findUnique({
+      where: { id: doc.id },
+      include: { slides: { orderBy: { order: 'asc' } } }
+    })
+
+    emitConfigUpdated('presentation')
+    return res.status(201).json(full)
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || 'Falha ao enviar as imagens.' })
+  }
+})
+
+// DELETE /api/presentation-documents/:id
+router.delete('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const doc = await prisma.presentationDocument.findUnique({
+      where: { id },
+      include: { slides: true }
+    })
+
+    if (!doc) {
+      return res.status(404).json({ error: 'Documento não encontrado.' })
+    }
+
+    for (const slide of doc.slides) {
+      await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
+    }
+
+    await prisma.presentationDocument.delete({ where: { id } })
+    emitConfigUpdated('presentation')
+
+    return res.status(204).send()
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erro ao eliminar o documento.' })
+  }
+})
+
+export default router
+ 
+===== src\routes\questions.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function toApiShape(q: any) {
+  const options = LABELS.map((label, i) => ({
+    label,
+    text: q[`option${label}`] as string | null
+  })).filter((o) => o.text !== null && o.text !== undefined)
+  let correctIndexes: number[] = []
+  try {
+    correctIndexes = q.correctIndexes ? JSON.parse(q.correctIndexes) : []
+  } catch {
+    correctIndexes = []
+  }
+  return {
+    id: q.id,
+    championship: q.championship,
+    text: q.text,
+    imageUrl: q.imageUrl ?? undefined,
+    correctIndexes,
+    // mantém correctIndex singular para compatibilidade com quem ainda lê
+    // só o primeiro índice correto (ex: correção de resposta única)
+    correctIndex: correctIndexes[0] ?? 0,
+    points: q.points,
+    phase: q.phase,
+    options
+  }
+}
+
+function buildOptionsData(options: { label: string; text: string }[]) {
+  const data: Record<string, string | null> = {}
+  for (const label of LABELS) {
+    const found = options.find((o) => o.label === label)
+    data[`option${label}`] = found ? found.text : null
+  }
+  return data
+}
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  const questions = await prisma.question.findMany({
+    where: {
+      championship: championship || undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    orderBy: { id: 'asc' }
+  })
+  res.json(questions.map(toApiShape))
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { championship, text, imageUrl, options, correctIndexes, correctIndex, points, phase } =
+    req.body
+
+  if (
+    !text ||
+    !championship ||
+    !Array.isArray(options) ||
+    options.length < 2 ||
+    options.length > 8
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'championship, text e entre 2 e 8 options são obrigatórios' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  try {
+    const question = await prisma.question.create({
+      data: {
+        championship,
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(options),
+        correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+        points: Number(points) || 10,
+        phase: Number(phase) || 1
+      }
+    })
+    emitConfigUpdated('questions', championship)
+    res.status(201).json(toApiShape(question))
+  } catch (error: any) {
+    console.error('Erro detalhado ao criar pergunta no Prisma:', error)
+    res.status(500).json({ error: error.message || 'Erro interno ao criar pergunta' })
+  }
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { text, imageUrl, options, correctIndexes, correctIndex, points, phase } = req.body
+
+  if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
+    return res.status(400).json({ error: 'options deve ter entre 2 e 8 itens' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  try {
+    const question = await prisma.question.update({
+      where: { id },
+      data: {
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(options),
+        correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+        points: Number(points) || 10,
+        phase: Number(phase) || 1
+      }
+    })
+    emitConfigUpdated('questions', question.championship)
+    res.json(toApiShape(question))
+  } catch (error: any) {
+    console.error('Erro detalhado ao atualizar pergunta:', error)
+    res.status(500).json({ error: error.message || 'Erro interno' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.question.delete({ where: { id } })
+    emitConfigUpdated('questions', existing.championship)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Pergunta não encontrada' })
+  }
+})
+
+export default router
+ 
+===== src\routes\repescagem.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+
+const router = Router()
+
+function nextPowerOfTwo(n: number): number {
+  let p = 1
+  while (p < n) p *= 2
+  return p
+}
+
+function getClientIp(req: import('express').Request): string {
+  const cf = req.headers['cf-connecting-ip']
+  if (typeof cf === 'string') return cf
+  const xff = req.headers['x-forwarded-for']
+  if (typeof xff === 'string') return xff.split(',')[0].trim()
+  return req.ip ?? 'unknown'
+}
+
+export async function getEligibleTeams(championship: string, phase: number) {
+  const matches = await prisma.matchHistory.findMany({ where: { championship, phase } })
+  const loserIds = new Set<string>()
+  const winnerIds = new Set<string>()
+  for (const m of matches) {
+    if (!m.winnerId) continue
+    winnerIds.add(m.winnerId)
+    const loserId = m.winnerId === m.teamAId ? m.teamBId : m.teamAId
+    loserIds.add(loserId)
+  }
+  for (const w of winnerIds) loserIds.delete(w)
+  return prisma.team.findMany({ where: { id: { in: Array.from(loserIds) } } })
+}
+
+// NOVO — Admin: listar configurações de um campeonato
+router.get('/configs', async (req, res) => {
+  const { championship } = req.query as { championship?: string }
+  const configs = await prisma.repescagemConfig.findMany({
+    where: championship ? { championship } : undefined,
+    orderBy: { createdAt: 'desc' }
+  })
+  res.json(configs)
+})
+
+// NOVO — Admin: criar configuração (não abre votação, só prepara)
+router.post('/config', async (req, res) => {
+  const { championship, phase, maxRepescados, votingDurationSeconds } = req.body
+  if (!championship || !phase || !maxRepescados) {
+    res.status(400).json({ error: 'championship, phase e maxRepescados são obrigatórios' })
+    return
+  }
+  const config = await prisma.repescagemConfig.create({
+    data: {
+      championship,
+      phase,
+      maxRepescados,
+      votingDurationSeconds: votingDurationSeconds || 60,
+      votingOpen: false,
+      started: false
+    }
+  })
+  res.status(201).json(config)
+})
+
+// NOVO — Admin: editar configuração (só antes de ser iniciada pelo Moderador)
+router.put('/config/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  const { maxRepescados, votingDurationSeconds } = req.body
+  const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  if (existing.started) {
+    res
+      .status(400)
+      .json({ error: 'Esta repescagem já foi iniciada pelo Moderador e não pode ser editada.' })
+    return
+  }
+  const config = await prisma.repescagemConfig.update({
+    where: { id },
+    data: { maxRepescados, votingDurationSeconds }
+  })
+  res.json(config)
+})
+
+// NOVO — Admin: apagar configuração não usada
+router.delete('/config/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  if (existing.started) {
+    res.status(400).json({ error: 'Esta repescagem já foi iniciada e não pode ser apagada.' })
+    return
+  }
+  await prisma.repescagemConfig.delete({ where: { id } })
+  res.status(204).send()
+})
+
+// NOVO — usado pelo backend/Moderador: existe uma configuração por iniciar
+// para esta fase deste campeonato?
+router.get('/for-phase', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  if (!championship || !phase) {
+    res.json(null)
+    return
+  }
+  const config = await prisma.repescagemConfig.findFirst({
+    where: { championship, phase: Number(phase) },
+    orderBy: { createdAt: 'desc' }
+  })
+  res.json(config)
+})
+
+// Portal público + Moderador: repescagem atualmente EM VOTAÇÃO (só as já iniciadas)
+router.get('/active', async (_req, res) => {
+  const config = await prisma.repescagemConfig.findFirst({
+    where: { started: true },
+    orderBy: { startedAt: 'desc' }
+  })
+  if (!config) {
+    res.json(null)
+    return
+  }
+  const eligibleTeams = await getEligibleTeams(config.championship, config.phase)
+  const votes = await prisma.repescagemVote.findMany({ where: { configId: config.id } })
+  const tally = eligibleTeams
+    .map((t) => ({
+      teamId: t.id,
+      name: t.name,
+      institution: t.institution,
+      logoUrl: t.logoUrl,
+      votes: votes.filter((v) => v.teamId === t.id).length
+    }))
+    .sort((a, b) => b.votes - a.votes)
+  res.json({ config, tally })
+})
+
+router.get('/has-voted', async (req, res) => {
+  const { configId, voterToken } = req.query as { configId?: string; voterToken?: string }
+  if (!configId || !voterToken) {
+    res.json({ voted: false })
+    return
+  }
+  const existing = await prisma.repescagemVote.findUnique({
+    where: { configId_voterToken: { configId: Number(configId), voterToken } }
+  })
+  res.json({ voted: !!existing })
+})
+
+router.post('/vote', async (req, res) => {
+  const { configId, teamId, voterToken } = req.body
+  if (!voterToken) {
+    res.status(400).json({ error: 'Identificador de dispositivo em falta.' })
+    return
+  }
+  const config = await prisma.repescagemConfig.findUnique({ where: { id: configId } })
+  if (!config || !config.votingOpen) {
+    res.status(400).json({ error: 'Votação não está aberta' })
+    return
+  }
+  try {
+    await prisma.repescagemVote.create({
+      data: { configId, teamId, voterToken, voterIp: getClientIp(req) }
+    })
+    res.status(201).json({ success: true })
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      res.status(409).json({ error: 'Já votaste nesta votação.' })
+      return
+    }
+    console.error(err)
+    res.status(500).json({ error: 'Falha ao registar o voto.' })
+  }
+})
+
+router.post('/:id/generate-bracket', async (req, res) => {
+  const id = Number(req.params.id)
+  const config = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!config) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  const eligibleTeams = await getEligibleTeams(config.championship, config.phase)
+  const votes = await prisma.repescagemVote.findMany({ where: { configId: id } })
+  const ranked = eligibleTeams
+    .map((t) => ({ team: t, votes: votes.filter((v) => v.teamId === t.id).length }))
+    .sort((a, b) => b.votes - a.votes)
+
+  let selected = ranked.slice(0, config.maxRepescados).map((r) => r.team)
+
+  const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
+  await prisma.bracketMatch.deleteMany({ where: { championship: syntheticChampionship } })
+
+  if (selected.length % 2 !== 0 && selected.length > 1) {
+    const decider = selected.slice(-2)
+    selected = selected.slice(0, -2)
+    await prisma.bracketMatch.create({
+      data: {
+        championship: syntheticChampionship,
+        round: 0,
+        slot: 0,
+        groupName: 'Decisão de Vaga',
+        teamAId: decider[0].id,
+        teamBId: decider[1]?.id ?? null
+      }
+    })
+  }
+
+  const slotsNeeded = nextPowerOfTwo(Math.max(selected.length, 2))
+  const round1Count = slotsNeeded / 2
+  const created: { round: number; slot: number; teamAId?: string; teamBId?: string }[] = []
+
+  for (let slot = 0; slot < round1Count; slot++) {
+    const teamA = selected[slot * 2]
+    const teamB = selected[slot * 2 + 1]
+    created.push({ round: 1, slot, teamAId: teamA?.id, teamBId: teamB?.id })
+  }
+
+  const totalRounds = Math.log2(slotsNeeded)
+  for (let round = 2; round <= totalRounds; round++) {
+    const count = slotsNeeded / Math.pow(2, round)
+    for (let slot = 0; slot < count; slot++) {
+      created.push({ round, slot })
+    }
+  }
+
+  await prisma.bracketMatch.createMany({
+    data: created.map((c) => ({
+      championship: syntheticChampionship,
+      round: c.round,
+      slot: c.slot,
+      groupName: 'Repescagem',
+      teamAId: c.teamAId ?? null,
+      teamBId: c.teamBId ?? null
+    }))
+  })
+
+  res.status(201).json({ syntheticChampionship })
+})
+
+router.get('/:id/bracket', async (req, res) => {
+  const id = Number(req.params.id)
+  const config = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!config) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
+  const matches = await prisma.bracketMatch.findMany({
+    where: { championship: syntheticChampionship },
+    orderBy: [{ round: 'asc' }, { slot: 'asc' }]
+  })
+  const teamIds = new Set<string>()
+  for (const m of matches) {
+    if (m.teamAId) teamIds.add(m.teamAId)
+    if (m.teamBId) teamIds.add(m.teamBId)
+  }
+  const teams = await prisma.team.findMany({ where: { id: { in: Array.from(teamIds) } } })
+  const teamMap = new Map(teams.map((t) => [t.id, t]))
+  const shaped = matches.map((m) => ({
+    id: m.id,
+    round: m.round,
+    slot: m.slot,
+    groupName: m.groupName,
+    teamA: m.teamAId
+      ? {
+          id: m.teamAId,
+          name: teamMap.get(m.teamAId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null
+        }
+      : null,
+    teamB: m.teamBId
+      ? {
+          id: m.teamBId,
+          name: teamMap.get(m.teamBId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null
+        }
+      : null,
+    winnerId: m.winnerId
+  }))
+  res.json({ championship: syntheticChampionship, matches: shaped })
+})
+
+router.post('/:id/insert-champion', async (req, res) => {
+  const id = Number(req.params.id)
+  const { targetMatchId } = req.body
+  const config = await prisma.repescagemConfig.findUnique({ where: { id } })
+  if (!config) {
+    res.status(404).json({ error: 'Configuração não encontrada' })
+    return
+  }
+  const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
+  const finalMatch = await prisma.bracketMatch.findFirst({
+    where: { championship: syntheticChampionship },
+    orderBy: { round: 'desc' }
+  })
+  if (!finalMatch?.winnerId) {
+    res.status(400).json({ error: 'O grupo de repescagem ainda não tem uma campeã definida.' })
+    return
+  }
+  const championId = finalMatch.winnerId
+
+  if (targetMatchId) {
+    const target = await prisma.bracketMatch.findUnique({ where: { id: targetMatchId } })
+    if (!target) {
+      res.status(404).json({ error: 'Confronto de destino não encontrado.' })
+      return
+    }
+    await prisma.bracketMatch.update({
+      where: { id: targetMatchId },
+      data: target.teamAId ? { teamBId: championId } : { teamAId: championId }
+    })
+    res.json({ success: true, championId, matchId: targetMatchId })
+    return
+  }
+
+  const nextRound = config.phase + 1
+  const openSlotMatch = await prisma.bracketMatch.findFirst({
+    where: {
+      championship: config.championship,
+      round: nextRound,
+      OR: [
+        { teamAId: { not: null }, teamBId: null },
+        { teamAId: null, teamBId: { not: null } }
+      ]
+    },
+    orderBy: { slot: 'asc' }
+  })
+
+  if (!openSlotMatch) {
+    res.status(400).json({
+      error:
+        'Não encontrei nenhum confronto da próxima ronda com uma equipa apurada à espera de adversário. Indica manualmente o confronto de destino (targetMatchId).'
+    })
+    return
+  }
+
+  await prisma.bracketMatch.update({
+    where: { id: openSlotMatch.id },
+    data: openSlotMatch.teamAId ? { teamBId: championId } : { teamAId: championId }
+  })
+
+  res.json({ success: true, championId, matchId: openSlotMatch.id })
+})
+
+export default router
+ 
+===== src\routes\suspensePhrases.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+router.get('/', async (_req, res) => {
+  const phrases = await prisma.suspensePhrase.findMany({ orderBy: { createdAt: 'asc' } })
+  res.json(phrases)
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { text } = req.body
+  if (!text) {
+    res.status(400).json({ error: 'text é obrigatório' })
+    return
+  }
+  const phrase = await prisma.suspensePhrase.create({ data: { text } })
+  emitConfigUpdated('suspensePhrases')
+  res.status(201).json(phrase)
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await prisma.suspensePhrase.delete({ where: { id } })
+    emitConfigUpdated('suspensePhrases')
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Frase não encontrada' })
+  }
+})
+
+export default router
+ 
+===== src\routes\teams.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+router.get('/', async (_req, res) => {
+  const teams = await prisma.team.findMany({ orderBy: { createdAt: 'asc' } })
+  res.json(teams)
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { name, institution, category, logoUrl, group, bracketPosition } = req.body
+  if (!name || !institution || !category) {
+    return res.status(400).json({ error: 'name, institution e category são obrigatórios' })
+  }
+  const team = await prisma.team.create({
+    data: {
+      name,
+      institution,
+      category,
+      logoUrl: logoUrl || null,
+      group: group || null,
+      bracketPosition: bracketPosition ?? null
+    }
+  })
+  emitConfigUpdated('teams', category)
+  res.status(201).json(team)
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { name, institution, category, logoUrl, group, bracketPosition } = req.body
+  try {
+    const team = await prisma.team.update({
+      where: { id },
+      data: {
+        name,
+        institution,
+        category,
+        logoUrl: logoUrl || null,
+        group: group || null,
+        bracketPosition: bracketPosition ?? null
+      }
+    })
+    emitConfigUpdated('teams', category)
+    res.json(team)
+  } catch {
+    res.status(404).json({ error: 'Equipa não encontrada' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.team.findUnique({ where: { id } })
+    await prisma.team.delete({ where: { id } })
+    emitConfigUpdated('teams', existing?.category)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Equipa não encontrada' })
+  }
+})
+
+export default router
+ 
+===== src\routes\tiebreakQuestions.ts =====  
+import { Router } from 'express'
+import { prisma } from '../db'
+import { emitConfigUpdated } from '../socket/configEvents'
+import { requireAdmin } from '../middleware/requireAdmin'
+
+const router = Router()
+
+const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function toApiShape(q: any) {
+  const options = LABELS.map((label) => ({
+    label,
+    text: q[`option${label}`] as string | null
+  })).filter((o) => o.text !== null && o.text !== undefined)
+  let correctIndexes: number[] = []
+  try {
+    correctIndexes = q.correctIndexes ? JSON.parse(q.correctIndexes) : []
+  } catch {
+    correctIndexes = []
+  }
+  return {
+    id: q.id,
+    championship: q.championship,
+    text: q.text,
+    imageUrl: q.imageUrl ?? undefined,
+    correctIndexes,
+    correctIndex: correctIndexes[0] ?? 0,
+    points: q.points,
+    phase: q.phase,
+    options
+  }
+}
+
+function buildOptionsData(options: { label: string; text: string }[]) {
+  const data: Record<string, string | null> = {}
+  for (const label of LABELS) {
+    const found = options.find((o) => o.label === label)
+    data[`option${label}`] = found ? found.text : null
+  }
+  return data
+}
+
+router.get('/', async (req, res) => {
+  const { championship, phase } = req.query as { championship?: string; phase?: string }
+  const questions = await prisma.tiebreakQuestion.findMany({
+    where: {
+      championship: championship || undefined,
+      phase: phase ? Number(phase) : undefined
+    },
+    orderBy: { id: 'asc' }
+  })
+  res.json(questions.map(toApiShape))
+})
+
+router.post('/', requireAdmin, async (req, res) => {
+  const { championship, text, imageUrl, options, correctIndexes, correctIndex, points, phase } =
+    req.body
+  if (
+    !text ||
+    !championship ||
+    !Array.isArray(options) ||
+    options.length < 2 ||
+    options.length > 8
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'championship, text e entre 2 e 8 options são obrigatórios' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  const question = await prisma.tiebreakQuestion.create({
+    data: {
+      championship,
+      text,
+      imageUrl: imageUrl || null,
+      ...buildOptionsData(options),
+      correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+      points,
+      phase
+    }
+  })
+  emitConfigUpdated('tiebreakQuestions', championship)
+  res.status(201).json(toApiShape(question))
+})
+
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  const { text, imageUrl, options, correctIndexes, correctIndex, points, phase } = req.body
+
+  if (!Array.isArray(options) || options.length < 2 || options.length > 8) {
+    return res.status(400).json({ error: 'options deve ter entre 2 e 8 itens' })
+  }
+
+  const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
+    ? correctIndexes
+    : correctIndex !== undefined
+      ? [Number(correctIndex)]
+      : []
+
+  try {
+    const question = await prisma.tiebreakQuestion.update({
+      where: { id },
+      data: {
+        text,
+        imageUrl: imageUrl || null,
+        ...buildOptionsData(options),
+        correctIndexes: JSON.stringify(resolvedCorrectIndexes),
+        points,
+        phase
+      }
+    })
+    emitConfigUpdated('tiebreakQuestions', question.championship)
+    res.json(toApiShape(question))
+  } catch {
+    res.status(404).json({ error: 'Pergunta não encontrada' })
+  }
+})
+
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params
+  try {
+    const existing = await prisma.tiebreakQuestion.delete({ where: { id } })
+    emitConfigUpdated('tiebreakQuestions', existing.championship)
+    res.status(204).send()
+  } catch {
+    res.status(404).json({ error: 'Pergunta não encontrada' })
+  }
+})
+
+export default router
+ 

@@ -29,7 +29,10 @@ function roundLabel(round: number, total: number): string {
 }
 
 async function ensurePhasesForRounds(championship: string, totalRounds: number): Promise<void> {
-  const existing = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+  const existing = await prisma.phase.findMany({
+    where: { championship, deletedAt: null },
+    orderBy: { order: 'asc' }
+  })
   for (let round = 1; round <= totalRounds; round++) {
     const already = existing.find((p) => p.order === round)
     if (!already) {
@@ -49,7 +52,9 @@ async function ensurePhasesForRounds(championship: string, totalRounds: number):
 
 async function resolveByesRecursively(championship: string, totalRounds: number): Promise<void> {
   for (let round = 1; round < totalRounds; round++) {
-    const matches = await prisma.bracketMatch.findMany({ where: { championship, round, winnerId: null } })
+    const matches = await prisma.bracketMatch.findMany({
+      where: { championship, round, winnerId: null }
+    })
     for (const m of matches) {
       const hasA = !!m.teamAId
       const hasB = !!m.teamBId
@@ -72,44 +77,25 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
   }
 }
 
-// Cria/atualiza as PresentationDuplas de uma ronda específica, sempre que
-// essa ronda corresponder a uma fase de Apresentação (pura ou + Quiz) e já
-// tiver equipas definidas nos confrontos. Chamada tanto ao gerar o
-// chaveamento (Ronda 1) como sempre que uma equipa avança para uma ronda
-// seguinte (ver recordBracketResult em socket/index.ts) — assim as duplas
-// nunca dessincronizam do chaveamento, seja qual for a ronda escolhida
-// para ser de Apresentação.
-//
-// IMPORTANTE: como os dois jogos que alimentam uma mesma dupla de
-// Apresentação normalmente NÃO terminam ao mesmo tempo, esta função pode
-// ser chamada primeiro só com teamAId preenchido (e teamBId ainda null),
-// e mais tarde outra vez já com teamBId preenchido. Por isso a
-// identidade de uma dupla é sempre o teamAId (que nunca muda depois de
-// definido) — nunca comparamos teamAId+teamBId juntos, para não criar
-// duplicados quando a segunda equipa só chega mais tarde.
-//
-// CORRIGIDO — a causa da duplicação de duplas: o array `existingDuplas`
-// era lido UMA VEZ antes do loop e nunca atualizado depois de criar uma
-// dupla nova dentro do próprio loop. Sempre que havia mais do que um
-// `bracketMatch` com o mesmo teamAId na mesma ronda (exatamente o que a
-// duplicação do /generate produzia), a 1ª ocorrência criava a dupla mas
-// as seguintes não a encontravam no array desatualizado — e criavam-na
-// outra vez. Agora usamos um Map local que é atualizado a cada criação, e
-// além disso o upsert usa a constraint única (phaseId, teamAId) da BD
-// como rede de segurança final, mesmo que outra via de código chame esta
-// função em paralelo.
-export async function syncPresentationDuplasForRound(championship: string, round: number): Promise<void> {
-  const phase = await prisma.phase.findFirst({ where: { championship, order: round } })
+// Cria/atualiza as PresentationDuplas de uma ronda específica — ver
+// comentário histórico original sobre o Map local anti-duplicação.
+export async function syncPresentationDuplasForRound(
+  championship: string,
+  round: number
+): Promise<void> {
+  const phase = await prisma.phase.findFirst({
+    where: { championship, order: round, deletedAt: null }
+  })
   if (!phase || (phase.type !== 'apresentacao' && phase.type !== 'apresentacao_quiz')) return
 
   const matches = await prisma.bracketMatch.findMany({
     where: { championship, round },
     orderBy: { slot: 'asc' }
   })
-  const existingDuplas = await prisma.presentationDupla.findMany({ where: { phaseId: phase.id } })
+  const existingDuplas = await prisma.presentationDupla.findMany({
+    where: { phaseId: phase.id, deletedAt: null } // NOVO
+  })
 
-  // Map local mantido em sincronia com as criações feitas dentro deste
-  // próprio loop — é isto que faltava antes.
   const byTeamA = new Map(existingDuplas.map((d) => [d.teamAId, d]))
 
   let order = existingDuplas.length + 1
@@ -131,17 +117,13 @@ export async function syncPresentationDuplasForRound(championship: string, round
           teamAId: m.teamAId,
           teamBId: m.teamBId ?? null
         },
-        update: {}
+        update: { deletedAt: null }
       })
       byTeamA.set(m.teamAId, created)
       changedAny = true
       continue
     }
 
-    // A dupla já existe (foi criada quando só a equipa A tinha avançado,
-    // ou por uma iteração anterior deste mesmo loop). Se agora a equipa B
-    // já está definida no confronto e a dupla ainda não a tem, atualiza-a
-    // em vez de criar uma duplicada.
     if (m.teamBId && !existing.teamBId) {
       const updated = await prisma.presentationDupla.update({
         where: { id: existing.id },
@@ -175,10 +157,18 @@ router.get('/:championship', async (req, res) => {
     slot: m.slot,
     groupName: m.groupName,
     teamA: m.teamAId
-      ? { id: m.teamAId, name: teamMap.get(m.teamAId)?.name ?? '?', logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null }
+      ? {
+          id: m.teamAId,
+          name: teamMap.get(m.teamAId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamAId)?.logoUrl ?? null
+        }
       : null,
     teamB: m.teamBId
-      ? { id: m.teamBId, name: teamMap.get(m.teamBId)?.name ?? '?', logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null }
+      ? {
+          id: m.teamBId,
+          name: teamMap.get(m.teamBId)?.name ?? '?',
+          logoUrl: teamMap.get(m.teamBId)?.logoUrl ?? null
+        }
       : null,
     winnerId: m.winnerId
   }))
@@ -186,34 +176,26 @@ router.get('/:championship', async (req, res) => {
   res.json({ championship, matches: shaped })
 })
 
-// a causa da duplicação infinita de bracketMatch: o deleteMany e o
-// createMany corriam como duas operações separadas, sem transação. Se o
-// /generate fosse chamado mais do que uma vez em sucessão (duplo clique,
-// nova chamada antes da resposta anterior voltar, etc.), os pedidos
-// entrelaçavam-se — ex: A apaga, B apaga (nada a apagar), A cria, B cria
-// — e cada chamada extra ficava a somar mais um conjunto completo de
-// confrontos em cima dos anteriores, sem nunca limpar os que já lá
-// estavam. Agora:
-//   1. Um "lock" em memória (generatingChampionships) rejeita pedidos
-//      concorrentes para a mesma categoria com 409, em vez de os deixar
-//      correr ao mesmo tempo.
-//   2. O apagar + criar corre dentro de uma prisma.$transaction, que
-//      garante atomicidade mesmo que o lock falhe por algum motivo (ex:
-//      reinício do processo entre pedidos).
-//   3. A constraint @@unique([championship, round, slot]) na BD rejeita
-//      qualquer duplicado que ainda assim escape aos dois pontos acima.
+// NOTA — /generate continua a apagar bracketMatch e presentationDupla com
+// deleteMany/hard-delete dentro da transação: o chaveamento é sempre
+// recriado do zero a partir das equipas atuais, é dado derivado e não uma
+// entidade que o utilizador apaga manualmente através de um botão
+// "remover" — não precisa de soft delete nem de propagar como "apagado"
+// via sync.
 router.post('/:championship/generate', requireAdmin, async (req, res) => {
   const { championship } = req.params
 
   if (generatingChampionships.has(championship)) {
-    res.status(409).json({ error: 'Já existe uma geração de chaveamento em curso para esta categoria. Aguarde terminar.' })
+    res.status(409).json({
+      error: 'Já existe uma geração de chaveamento em curso para esta categoria. Aguarde terminar.'
+    })
     return
   }
   generatingChampionships.add(championship)
 
   try {
     const teams = await prisma.team.findMany({
-      where: { category: championship },
+      where: { category: championship, deletedAt: null }, // NOVO
       orderBy: [{ group: 'asc' }, { bracketPosition: 'asc' }]
     })
 
@@ -226,12 +208,24 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
     const round1Count = slotsNeeded / 2
     const totalRounds = Math.log2(slotsNeeded)
 
-    const created: { round: number; slot: number; teamAId?: string | null; teamBId?: string | null; groupName?: string }[] = []
+    const created: {
+      round: number
+      slot: number
+      teamAId?: string | null
+      teamBId?: string | null
+      groupName?: string
+    }[] = []
 
     for (let slot = 0; slot < round1Count; slot++) {
       const teamA = teams[slot * 2]
       const teamB = teams[slot * 2 + 1]
-      created.push({ round: 1, slot, teamAId: teamA?.id ?? null, teamBId: teamB?.id ?? null, groupName: teamA?.group ?? undefined })
+      created.push({
+        round: 1,
+        slot,
+        teamAId: teamA?.id ?? null,
+        teamBId: teamB?.id ?? null,
+        groupName: teamA?.group ?? undefined
+      })
     }
 
     for (let round = 2; round <= totalRounds; round++) {
@@ -241,20 +235,17 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
       }
     }
 
-    // Apagar o chaveamento anterior e criar o novo dentro da mesma
-    // transação: ou as duas operações são aplicadas juntas, ou nenhuma é
-    // — nunca fica um estado a meio onde os antigos já foram apagados mas
-    // os novos ainda não existem (nem o inverso, os dois a coexistir).
-    //
-    // As PresentationDuplas da categoria também são apagadas aqui: como o
-    // chaveamento vai ser todo recriado com IDs novos, as duplas antigas
-    // (que apontam para teamAId de confrontos que deixam de existir da
-    // forma anterior) deixam de fazer sentido e seriam reconstruídas de
-    // qualquer forma pelo syncPresentationDuplasForRound logo a seguir.
-    const phaseIds = (await prisma.phase.findMany({ where: { championship }, select: { id: true } })).map((p) => p.id)
+    const phaseIds = (
+      await prisma.phase.findMany({
+        where: { championship, deletedAt: null },
+        select: { id: true }
+      })
+    ).map((p) => p.id)
 
     await prisma.$transaction([
-      ...(phaseIds.length ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })] : []),
+      ...(phaseIds.length
+        ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })]
+        : []),
       prisma.bracketMatch.deleteMany({ where: { championship } }),
       prisma.bracketMatch.createMany({
         data: created.map((c) => ({
@@ -271,9 +262,6 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
     await resolveByesRecursively(championship, totalRounds)
     await ensurePhasesForRounds(championship, totalRounds)
 
-    // Sincroniza duplas para todas as rondas já preenchidas neste momento
-    // (normalmente só a Ronda 1, a não ser que resolveByesRecursively já
-    // tenha avançado alguma equipa automaticamente por falta de adversário).
     for (let round = 1; round <= totalRounds; round++) {
       await syncPresentationDuplasForRound(championship, round)
     }
@@ -285,16 +273,12 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
   }
 })
 
-// re-sincroniza as duplas de Apresentação de todas as fases já
-// existentes, sem apagar/regerar o chaveamento. Útil sempre que se edita
-// o "type" de uma fase (ex: mudar de "quiz" para "apresentacao_quiz")
-// depois de o chaveamento já ter sido gerado — nesse caso as duplas dessa
-// ronda nunca tinham sido criadas, porque syncPresentationDuplasForRound
-// só corre automaticamente ao gerar o chaveamento e quando uma equipa
-// avança de ronda.
 router.post('/:championship/resync-presentation', requireAdmin, async (req, res) => {
   const { championship } = req.params
-  const phases = await prisma.phase.findMany({ where: { championship }, orderBy: { order: 'asc' } })
+  const phases = await prisma.phase.findMany({
+    where: { championship, deletedAt: null },
+    orderBy: { order: 'asc' }
+  })
   for (const phase of phases) {
     await syncPresentationDuplasForRound(championship, phase.order)
   }
@@ -303,9 +287,16 @@ router.post('/:championship/resync-presentation', requireAdmin, async (req, res)
 
 router.delete('/:championship', requireAdmin, async (req, res) => {
   const { championship } = req.params
-  const phaseIds = (await prisma.phase.findMany({ where: { championship }, select: { id: true } })).map((p) => p.id)
+  const phaseIds = (
+    await prisma.phase.findMany({
+      where: { championship, deletedAt: null },
+      select: { id: true }
+    })
+  ).map((p) => p.id)
   await prisma.$transaction([
-    ...(phaseIds.length ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })] : []),
+    ...(phaseIds.length
+      ? [prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })]
+      : []),
     prisma.bracketMatch.deleteMany({ where: { championship } })
   ])
   emitConfigUpdated('bracket', championship)

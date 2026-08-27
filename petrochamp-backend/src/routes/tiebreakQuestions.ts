@@ -8,9 +8,10 @@ const router = Router()
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
 function toApiShape(q: any) {
-  const options = LABELS
-    .map((label) => ({ label, text: q[`option${label}`] as string | null }))
-    .filter((o) => o.text !== null && o.text !== undefined)
+  const options = LABELS.map((label) => ({
+    label,
+    text: q[`option${label}`] as string | null
+  })).filter((o) => o.text !== null && o.text !== undefined)
   let correctIndexes: number[] = []
   try {
     correctIndexes = q.correctIndexes ? JSON.parse(q.correctIndexes) : []
@@ -44,7 +45,8 @@ router.get('/', async (req, res) => {
   const questions = await prisma.tiebreakQuestion.findMany({
     where: {
       championship: championship || undefined,
-      phase: phase ? Number(phase) : undefined
+      phase: phase ? Number(phase) : undefined,
+      deletedAt: null // NOVO
     },
     orderBy: { id: 'asc' }
   })
@@ -52,9 +54,18 @@ router.get('/', async (req, res) => {
 })
 
 router.post('/', requireAdmin, async (req, res) => {
-  const { championship, text, imageUrl, options, correctIndexes, correctIndex, points, phase } = req.body
-  if (!text || !championship || !Array.isArray(options) || options.length < 2 || options.length > 8) {
-    return res.status(400).json({ error: 'championship, text e entre 2 e 8 options são obrigatórios' })
+  const { championship, text, imageUrl, options, correctIndexes, correctIndex, points, phase } =
+    req.body
+  if (
+    !text ||
+    !championship ||
+    !Array.isArray(options) ||
+    options.length < 2 ||
+    options.length > 8
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'championship, text e entre 2 e 8 options são obrigatórios' })
   }
 
   const resolvedCorrectIndexes: number[] = Array.isArray(correctIndexes)
@@ -111,10 +122,14 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {
-    const existing = await prisma.tiebreakQuestion.delete({ where: { id } })
+    const existing = await prisma.tiebreakQuestion.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    })
     emitConfigUpdated('tiebreakQuestions', existing.championship)
     res.status(204).send()
   } catch {

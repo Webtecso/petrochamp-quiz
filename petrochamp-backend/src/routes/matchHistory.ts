@@ -8,7 +8,8 @@ router.get('/', async (req, res) => {
   const history = await prisma.matchHistory.findMany({
     where: {
       championship: championship ? String(championship) : undefined,
-      phase: phase ? Number(phase) : undefined
+      phase: phase ? Number(phase) : undefined,
+      deletedAt: null // NOVO
     },
     orderBy: { endedAt: 'desc' }
   })
@@ -18,17 +19,18 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const id = Number(req.params.id)
   const entry = await prisma.matchHistory.findUnique({ where: { id } })
-  if (!entry) {
+  if (!entry || entry.deletedAt) {
     res.status(404).json({ error: 'Registo não encontrado' })
     return
   }
   res.json(entry)
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', async (req, res) => {
   const id = Number(req.params.id)
   try {
-    await prisma.matchHistory.delete({ where: { id } })
+    await prisma.matchHistory.update({ where: { id }, data: { deletedAt: new Date() } })
     res.status(204).send()
   } catch {
     res.status(404).json({ error: 'Registo não encontrado' })

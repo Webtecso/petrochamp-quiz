@@ -284,6 +284,11 @@
   let criteriaCache = {}
   let currentPhaseRecord = null
 
+  // NOVO — controlo de debounce para envio de notas de apresentação ao
+  // servidor, por critério. Ver notas mais abaixo em updatePresentationScore.
+  const presentationScoreDebounce = {}
+  const PRESENTATION_SCORE_DEBOUNCE_MS = 400
+
   function showError(msg) {
     const el = document.getElementById('registerError')
     el.textContent = msg
@@ -353,6 +358,16 @@
     return currentPhaseRecord?.type === 'apresentacao' || currentPhaseRecord?.type === 'apresentacao_quiz'
   }
 
+  // NOVO — evita reconstruir a área de notas de apresentação enquanto o
+  // jurado está a meio de escrever num desses campos. Sem isto, qualquer
+  // state:sync a chegar do servidor (broadcast periódico do timer, outra
+  // ação de outro jurado, etc.) reconstruía o innerHTML todo e perdia o
+  // foco/valor que o jurado ainda estava a digitar antes de confirmar.
+  function isEditingPresentationScore() {
+    const active = document.activeElement
+    return !!active && active.classList?.contains('pres-score-input')
+  }
+
   async function render() {
     if (jurorId === null || !state) return
 
@@ -361,7 +376,9 @@
 
     if (isPresentationPhase()) {
       document.getElementById('presentationCard').classList.remove('hidden')
-      await renderPresentation()
+      if (!isEditingPresentationScore()) {
+        await renderPresentation()
+      }
     } else if (state.teamA && state.teamB) {
       document.getElementById('quizCard').classList.remove('hidden')
       document.getElementById('phaseLabel').textContent = `Fase ${state.phase}`
@@ -496,6 +513,8 @@
 
     const alreadySubmitted = flow.jurorsSubmitted.includes(jurorId)
 
+    // CORRIGIDO — c.id é um cuid (string), NÃO um número. O
+    // data-criteria-id guarda esse valor tal como está.
     scoreAreaEl.innerHTML = criteria
       .map((c) => {
         const entry = flow.criteriaScores.find((e) => e.jurorId === jurorId && e.criteriaId === c.id)
@@ -515,15 +534,33 @@
       })
       .join('')
 
+    // CORRIGIDO — bug principal estava aqui: `Number(e.target.dataset.criteriaId)`
+    // convertia o cuid (ex: "clxyz123abc") para NaN, porque criteriaId
+    // NUNCA foi um número — é sempre uma string cuid gerada pelo Prisma
+    // (ver schema.prisma: PresentationCriteria.id String @default(cuid())).
+    // Isso fazia o servidor guardar a nota sob criteriaId: NaN, que depois
+    // nunca correspondia ao c.id real (string) ao tentar mostrar o valor
+    // de volta — por isso o campo aparecia sempre a "voltar a zero", mesmo
+    // a nota tendo sido gravada corretamente no servidor sob a chave errada.
+    //
+    // Também trocado de 'onchange' para 'oninput' com debounce, para dar
+    // feedback mais rápido e consistente com o resto da app (o valor
+    // digitado fica imediatamente visível, e só é enviado ao servidor
+    // depois de uma pequena pausa sem nova tecla).
     scoreAreaEl.querySelectorAll('.pres-score-input').forEach((input) => {
-      input.onchange = (e) => {
-        const criteriaId = Number(e.target.dataset.criteriaId)
+      input.oninput = (e) => {
+        const criteriaId = e.target.dataset.criteriaId // string — NUNCA usar Number() aqui
         const max = Number(e.target.dataset.max)
         let score = Number(e.target.value)
         if (Number.isNaN(score)) score = 0
         score = Math.max(0, Math.min(max, score))
-        e.target.value = score
-        socket.emit('juror:setPresentationScore', { jurorId, criteriaId, score })
+
+        const key = `${jurorId}::${criteriaId}`
+        if (presentationScoreDebounce[key]) clearTimeout(presentationScoreDebounce[key])
+        presentationScoreDebounce[key] = setTimeout(() => {
+          socket.emit('juror:setPresentationScore', { jurorId, criteriaId, score })
+          delete presentationScoreDebounce[key]
+        }, PRESENTATION_SCORE_DEBOUNCE_MS)
       }
     })
 

@@ -6,7 +6,10 @@ import { requireAdmin } from '../middleware/requireAdmin'
 const router = Router()
 
 router.get('/', async (_req, res) => {
-  const partners = await prisma.partner.findMany({ orderBy: { order: 'asc' } })
+  const partners = await prisma.partner.findMany({
+    where: { deletedAt: null }, // NOVO
+    orderBy: { order: 'asc' }
+  })
   res.json(partners)
 })
 
@@ -33,10 +36,11 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id)
   try {
-    await prisma.partner.delete({ where: { id } })
+    await prisma.partner.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('partners')
     res.status(204).send()
   } catch {

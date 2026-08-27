@@ -16,7 +16,10 @@ router.get('/authorizations', async (req, res) => {
 
     // phaseId tratado como String (CUID), evitando conversão para NaN
     const auths = await prisma.phaseJurorAuthorization.findMany({
-      where: phaseId ? { phaseId: String(phaseId) } : {}
+      where: {
+        ...(phaseId ? { phaseId: String(phaseId) } : {}),
+        deletedAt: null // NOVO
+      }
     })
     res.json(auths)
   } catch (error) {
@@ -46,6 +49,7 @@ router.post('/authorizations', requireAdmin, async (req, res) => {
   }
 })
 
+// CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/authorizations/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   if (!id) {
@@ -55,8 +59,9 @@ router.delete('/authorizations/:id', requireAdmin, async (req, res) => {
 
   try {
     const parsedId = isNaN(Number(id)) ? id : Number(id)
-    await prisma.phaseJurorAuthorization.delete({
-      where: { id: parsedId as any }
+    await prisma.phaseJurorAuthorization.update({
+      where: { id: parsedId as any },
+      data: { deletedAt: new Date() }
     })
     emitConfigUpdated('jurors')
     res.status(204).send()
@@ -72,7 +77,10 @@ router.delete('/authorizations/:id', requireAdmin, async (req, res) => {
 
 router.get('/', async (_req, res) => {
   try {
-    const jurors = await prisma.juror.findMany({ orderBy: { createdAt: 'asc' } })
+    const jurors = await prisma.juror.findMany({
+      where: { deletedAt: null }, // NOVO
+      orderBy: { createdAt: 'asc' }
+    })
     res.json(jurors)
   } catch (error) {
     console.error('[GET /jurors Error]:', error)
@@ -102,11 +110,19 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 })
 
+// CORRIGIDO — este é o botão "remover" que estava a apresentar o bug: o
+// jurado desaparecia só de um lado (o que fez o DELETE) porque o
+// syncService nunca via a linha apagada fisicamente. Agora tanto o jurado
+// como as suas autorizações passam a soft delete, e o syncService apanha
+// e propaga a mudança no próximo ciclo.
 router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {
-    await prisma.phaseJurorAuthorization.deleteMany({ where: { jurorId: id } })
-    await prisma.juror.delete({ where: { id } })
+    await prisma.phaseJurorAuthorization.updateMany({
+      where: { jurorId: id },
+      data: { deletedAt: new Date() }
+    })
+    await prisma.juror.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('jurors')
     res.status(204).send()
   } catch (error) {

@@ -45,10 +45,7 @@ router.get('/pull', async (req, res) => {
 
     for (const table of SYNC_TABLES) {
       const delegate = (
-        prisma as unknown as Record<
-          SyncTable,
-          { findMany: (args: unknown) => Promise<unknown[]> }
-        >
+        prisma as unknown as Record<SyncTable, { findMany: (args: unknown) => Promise<unknown[]> }>
       )[table]
 
       result[table] = await delegate.findMany({

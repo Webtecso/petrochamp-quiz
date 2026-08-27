@@ -50,12 +50,15 @@ process.on('uncaughtException', (err) => {
   console.error('[uncaughtException] Erro não tratado — o backend continua a correr:', err)
 })
 process.on('unhandledRejection', (err) => {
-  console.error('[unhandledRejection] Rejeição de Promise não tratada — o backend continua a correr:', err)
+  console.error(
+    '[unhandledRejection] Rejeição de Promise não tratada — o backend continua a correr:',
+    err
+  )
 })
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 app.use('/portal', express.static(path.join(__dirname, '..', 'public', 'portal')))
 app.use(express.static(path.join(__dirname, '..', '..', 'out', 'renderer')))
@@ -100,28 +103,29 @@ app.use('/api/network-info', networkInfoRouter)
 app.use('/api/sync', syncRouter)
 app.use('/api/sync', syncTriggerRouter)
 
-// NOTA: middleware de erro final. Apanha qualquer erro que chegue até
-// aqui vindo de dentro de uma rota (ex: uma exception lançada num
-// handler async sem try/catch) e devolve uma resposta 500 controlada em
-// vez de deixar o Express (ou o processo) rebentar de forma descontrolada.
-// Tem de ser o ÚLTIMO app.use(), depois de todas as rotas.
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[Erro não tratado numa rota]', err)
-  if (!res.headersSent) {
-    res.status(500).json({ error: 'Erro interno do servidor.' })
-  }
-})
-
-const httpServer = createServer(app)
-const io = new Server(httpServer, {
-  cors: { origin: '*' }
-})
-
+// Rota interna para atualização do URL público via tunnel
 app.post('/api/internal/public-url', (req, res) => {
   const { url } = req.body as { url?: string }
   liveState.publicVotingUrl = url ?? null
   io.emit('state:sync', liveState)
   res.json({ success: true })
+})
+
+// NOTA: middleware de erro final. Apanha qualquer erro que chegue até
+// aqui vindo de dentro de uma rota e devolve uma resposta 500 controlada.
+// Tem de ser o ÚLTIMO app.use() de rotas Express.
+app.use(
+  (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('[Erro não tratado numa rota]', err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Erro interno do servidor.' })
+    }
+  }
+)
+
+const httpServer = createServer(app)
+const io = new Server(httpServer, {
+  cors: { origin: '*' }
 })
 
 registerSocketHandlers(io)
@@ -131,10 +135,14 @@ startPublicTunnel(() => {
   io.emit('state:sync', liveState)
 })
 
-process.on('SIGINT', () => {
+// Tratamento centralizado para encerramento gracioso
+const handleShutdown = () => {
   stopPublicTunnel()
   process.exit(0)
-})
+}
+
+process.on('SIGINT', handleShutdown)
+process.on('SIGTERM', handleShutdown)
 
 const PORT = process.env.PORT || 4000
 
@@ -143,11 +151,7 @@ loadPersistedState().then(() => {
     console.log(`Petrochamp backend a correr em http://localhost:${PORT}`)
   })
 
-  // Sincronização periódica em segundo plano, para captar alterações
-  // feitas no Admin remoto (Cloud) enquanto a app local está aberta, sem
-  // precisar de reiniciar. Corre a cada 3 minutos; falha em silêncio se
-  // não houver internet. runSync() já emite os 'config:updated'
-  // necessários por tabela — aqui só tratamos do 'state:sync' geral.
+  // Sincronização periódica em segundo plano (3 minutos)
   const SYNC_INTERVAL_MS = 3 * 60 * 1000
   setInterval(() => {
     runSync()

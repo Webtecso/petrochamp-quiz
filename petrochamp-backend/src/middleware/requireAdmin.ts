@@ -12,7 +12,9 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   if (!token) {
     console.warn(`[requireAdmin] Token formato inválido em ${req.method} ${req.originalUrl}`)
-    return res.status(401).json({ error: 'Acesso não autorizado. Sessão de administrador inválida.' })
+    return res
+      .status(401)
+      .json({ error: 'Acesso não autorizado. Sessão de administrador inválida.' })
   }
 
   next()

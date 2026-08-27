@@ -109,7 +109,9 @@ function launch(): void {
     }
 
     restartCount += 1
-    console.log(`[tunnel] A tentar reiniciar o túnel em ${RESTART_DELAY_MS / 1000}s (tentativa ${restartCount}/${MAX_AUTO_RESTARTS})...`)
+    console.log(
+      `[tunnel] A tentar reiniciar o túnel em ${RESTART_DELAY_MS / 1000}s (tentativa ${restartCount}/${MAX_AUTO_RESTARTS})...`
+    )
     setStatus('starting')
     setTimeout(() => {
       if (!manuallyStopped) launch()
