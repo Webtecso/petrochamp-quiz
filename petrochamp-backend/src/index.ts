@@ -37,7 +37,11 @@ import { registerSocketHandlers } from './socket'
 import { initConfigEvents } from './socket/configEvents'
 import { loadPersistedState, liveState } from './socket/liveState'
 import { startPublicTunnel, stopPublicTunnel } from './services/tunnel'
-import { runSync } from './services/syncService'
+// CORRIGIDO — syncService.ts passou a exportar a classe SyncService em vez
+// da função runSync(). O import antigo compilava (TypeScript não apanha
+// isto sem strict de exports em runtime dinâmico), mas rebentava sempre
+// que o setInterval periódico chamava runSync(), porque deixou de existir.
+import { SyncService } from './services/syncService'
 
 // NOTA: rede de segurança a nível de processo. Antes, um erro não
 // tratado em qualquer rota ou callback (ex: o crash do otplib em
@@ -154,12 +158,18 @@ loadPersistedState().then(() => {
   // Sincronização periódica em segundo plano (3 minutos)
   const SYNC_INTERVAL_MS = 3 * 60 * 1000
   setInterval(() => {
-    runSync()
+    // CORRIGIDO — usa SyncService.syncAll() em vez da função runSync()
+    // antiga (ver nota no import acima). Sem CLOUD_API_URL configurado,
+    // salta silenciosamente em vez de tentar sincronizar.
+    const cloudApiUrl = process.env.CLOUD_API_URL
+    if (!cloudApiUrl) return
+
+    const syncService = new SyncService(cloudApiUrl)
+    syncService
+      .syncAll()
       .then((result) => {
-        if (result.ran) {
-          console.log('Sincronização periódica com o Cloud concluída.', result)
-          io.emit('state:sync', liveState)
-        }
+        console.log('Sincronização periódica com o Cloud concluída.', result)
+        io.emit('state:sync', liveState)
       })
       .catch((err) => {
         console.log('Sincronização periódica falhou (a continuar offline):', err?.message ?? err)
