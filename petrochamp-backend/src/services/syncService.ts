@@ -38,6 +38,17 @@ const SYNC_ORDER = [
 
 type SyncModel = (typeof SYNC_ORDER)[number]
 
+// CORRIGIDO — sem isto, o axios usa por omissão maxContentLength/
+// maxBodyLength de ~2000 bytes em algumas versões, ou 100mb noutras
+// conforme a versão instalada — para não depender disso, forçamos
+// explicitamente Infinity nas duas chamadas (push e pull), já que o
+// payload de sincronização pode facilmente ultrapassar vários MB quando
+// há imagens em base64 em qualquer uma das tabelas sincronizadas.
+const AXIOS_NO_SIZE_LIMIT = {
+  maxBodyLength: Infinity,
+  maxContentLength: Infinity
+}
+
 export class SyncService {
   private cloudUrl: string
 
@@ -94,7 +105,11 @@ export class SyncService {
       return {}
     }
 
-    const response = await axios.post(`${this.cloudUrl}/api/sync/push`, { tables })
+    const response = await axios.post(
+      `${this.cloudUrl}/api/sync/push`,
+      { tables },
+      AXIOS_NO_SIZE_LIMIT
+    )
     return (response.data?.applied as Record<string, number>) ?? {}
   }
 
@@ -102,7 +117,8 @@ export class SyncService {
   // a GET /api/sync/pull?since=X, e aplica cada tabela localmente.
   private async pullAll(lastSync: Date): Promise<Record<string, number>> {
     const response = await axios.get(`${this.cloudUrl}/api/sync/pull`, {
-      params: { since: lastSync.toISOString() }
+      params: { since: lastSync.toISOString() },
+      ...AXIOS_NO_SIZE_LIMIT
     })
 
     const remoteTables = (response.data?.tables as Record<string, unknown[]>) ?? {}

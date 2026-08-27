@@ -62,7 +62,14 @@ process.on('unhandledRejection', (err) => {
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: '10mb' }))
+// CORRIGIDO — 10mb para 15mb. Perguntas/critérios/equipas com imagem
+// guardam a imagem como base64 diretamente no campo (ver upload.ts), o
+// que facilmente ultrapassa vários MB no JSON do pedido inteiro (POST/PATCH
+// de uma pergunta com imagem). O limite antigo (mesmo a 10mb) ainda podia
+// ser insuficiente para payloads com múltiplas imagens de uma vez (ex:
+// sincronização), e o valor por omissão do Express (100kb) já tinha
+// causado um PayloadTooLargeError confirmado nos logs.
+app.use(express.json({ limit: '15mb' }))
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 app.use('/portal', express.static(path.join(__dirname, '..', 'public', 'portal')))
 app.use(express.static(path.join(__dirname, '..', '..', 'out', 'renderer')))

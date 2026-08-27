@@ -19,7 +19,7 @@ async function attachTeams(duplas: Array<{ teamAId: string; teamBId: string | nu
   return duplas.map((d) => ({
     ...d,
     teamA: teamMap.get(d.teamAId) ?? null,
-    teamB: d.teamBId ? (teamMap.get(d.teamBId) ?? null) : null
+    teamB: d.teamBId ? teamMap.get(d.teamBId) ?? null : null
   }))
 }
 
@@ -28,29 +28,18 @@ router.get('/duplas', async (req, res) => {
   try {
     const { phaseId, championship } = req.query as { phaseId?: string; championship?: string }
 
-    let duplas: Array<{
-      id: string
-      phaseId: string
-      order: number
-      themeA: string
-      themeB: string | null
-      teamAId: string
-      teamBId: string | null
-    }> = []
+    let duplas: Array<{ id: string; phaseId: string; order: number; themeA: string; themeB: string | null; teamAId: string; teamBId: string | null }> = []
 
     if (phaseId && phaseId !== 'undefined' && phaseId !== 'null') {
       duplas = await prisma.presentationDupla.findMany({
-        where: { phaseId, deletedAt: null }, // NOVO
+        where: { phaseId, deletedAt: null }, // CORRIGIDO — filtra apagados
         orderBy: { order: 'asc' }
       })
     } else if (championship && championship !== 'undefined' && championship !== 'null') {
-      const phases = await prisma.phase.findMany({
-        where: { championship, deletedAt: null },
-        select: { id: true }
-      })
+      const phases = await prisma.phase.findMany({ where: { championship }, select: { id: true } })
       const phaseIds = phases.map((p) => p.id)
       duplas = await prisma.presentationDupla.findMany({
-        where: { phaseId: { in: phaseIds }, deletedAt: null }, // NOVO
+        where: { phaseId: { in: phaseIds }, deletedAt: null }, // CORRIGIDO — filtra apagados
         orderBy: { order: 'asc' }
       })
     }
@@ -66,8 +55,7 @@ router.get('/duplas', async (req, res) => {
 // POST /api/presentation/duplas
 router.post('/duplas', requireAdmin, async (_req, res) => {
   return res.status(400).json({
-    error:
-      'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
+    error: 'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
   })
 })
 
@@ -92,7 +80,14 @@ router.patch('/duplas/:id/theme', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/presentation/duplas/:id
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO — antes usava prisma.presentationDupla.delete() (apagamento
+// FÍSICO). O sistema de sincronização com o Cloud só consegue comunicar
+// remoções através do campo deletedAt (soft delete) — um registo
+// verdadeiramente apagado deixa de existir localmente, por isso nunca é
+// "enviado" ao Cloud como apagado. No próximo ciclo de sync, o Cloud
+// (que continua com o registo antigo, nunca avisado) via que o local já
+// não o tem e recriava-o automaticamente — exatamente o bug "apaga e
+// depois volta a aparecer".
 router.delete('/duplas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
 
@@ -112,7 +107,7 @@ router.get('/criteria', async (req, res) => {
     if (!phaseId) return res.json([])
 
     const criteria = await prisma.presentationCriteria.findMany({
-      where: { phaseId, deletedAt: null }, // NOVO
+      where: { phaseId, deletedAt: null }, // CORRIGIDO — filtra apagados
       orderBy: { id: 'asc' }
     })
     return res.json(criteria)
@@ -132,9 +127,7 @@ router.post('/criteria', requireAdmin, async (req, res) => {
 
     const points = Number(maxPoints)
     if (isNaN(points) || points <= 0) {
-      return res
-        .status(400)
-        .json({ error: 'maxPoints deve ser um número válido e maior que zero.' })
+      return res.status(400).json({ error: 'maxPoints deve ser um número válido e maior que zero.' })
     }
 
     const criteria = await prisma.presentationCriteria.create({
@@ -149,7 +142,9 @@ router.post('/criteria', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/presentation/criteria/:id
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO — mesmo motivo do DELETE /duplas acima: apagamento físico
+// impedia o sync de comunicar a remoção ao Cloud, fazendo o critério
+// reaparecer no próximo ciclo de sincronização.
 router.delete('/criteria/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
 
