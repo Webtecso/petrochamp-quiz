@@ -53,7 +53,35 @@ const presentationPhases = computed(() =>
   phasesStore.phases.filter((p) => p.type === 'apresentacao' || p.type === 'apresentacao_quiz')
 )
 
+// A fase atualmente selecionada, para decidir se mostramos a secção de
+// criação manual de duplas (só faz sentido em Apresentação sem
+// eliminação — ver nota em routes/presentation.ts POST /duplas).
+const selectedPhase = computed(() =>
+  phasesStore.phases.find((p) => p.id === selectedPhaseId.value) ?? null
+)
+
+const canCreateManualDuplas = computed(
+  () => selectedPhase.value?.type === 'apresentacao' && selectedPhase.value?.noElimination === true
+)
+
 const totalCriteriaPoints = computed(() => criteria.value.reduce((sum, c) => sum + c.maxPoints, 0))
+
+// CORRIGIDO — antes filtrava só as equipas já usadas nesta fase (como
+// Equipa A), mas não filtrava por categoria/campeonato. Isso fazia com
+// que, ao selecionar por exemplo "Ensino Médio" no dropdown de cima,
+// aparecessem no formulário também equipas de "Universitário" e
+// "Exibição" — dados de campeonatos diferentes misturados no mesmo
+// dropdown. Agora só entram equipas cuja `category` é igual ao
+// `selectedChampionship` atualmente escolhido, exatamente como o
+// fluxo automático (bracketLive.ts generate) já filtra por
+// `category: championship` ao gerar o chaveamento — mantém os dois
+// caminhos (manual e automático) consistentes entre si.
+const teamsWithoutDupla = computed(() => {
+  const usedAsA = new Set(duplas.value.map((d) => d.teamAId))
+  return teamsStore.teams.filter(
+    (t) => t.category === selectedChampionship.value && !usedAsA.has(t.id)
+  )
+})
 
 async function loadPhases(): Promise<void> {
   await phasesStore.fetchPhases(selectedChampionship.value)
@@ -138,6 +166,50 @@ async function saveTheme(duplaId: string, team: 'A' | 'B'): Promise<void> {
     body: JSON.stringify({ team, theme })
   })
   delete editingTheme.value[key]
+  await loadAll()
+}
+
+// Estado e ação para criação manual de duplas, só usado quando
+// canCreateManualDuplas === true (fase Apresentação sem eliminação).
+const newDuplaTeamAId = ref('')
+const newDuplaTeamBId = ref('')
+const newDuplaThemeA = ref('')
+const newDuplaThemeB = ref('')
+const creatingDupla = ref(false)
+
+async function addManualDupla(): Promise<void> {
+  if (!selectedPhaseId.value || !newDuplaTeamAId.value) return
+  errorMsg.value = ''
+  creatingDupla.value = true
+  try {
+    const res = await adminFetch('/api/presentation/duplas', {
+      method: 'POST',
+      body: JSON.stringify({
+        phaseId: selectedPhaseId.value,
+        teamAId: newDuplaTeamAId.value,
+        teamBId: newDuplaTeamBId.value || null,
+        themeA: newDuplaThemeA.value,
+        themeB: newDuplaTeamBId.value ? newDuplaThemeB.value : null
+      })
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || 'Falha ao criar a dupla.')
+    }
+    newDuplaTeamAId.value = ''
+    newDuplaTeamBId.value = ''
+    newDuplaThemeA.value = ''
+    newDuplaThemeB.value = ''
+    await loadAll()
+  } catch (e) {
+    errorMsg.value = e instanceof Error && e.message ? e.message : 'Falha ao criar a dupla.'
+  } finally {
+    creatingDupla.value = false
+  }
+}
+
+async function removeDupla(id: string): Promise<void> {
+  await adminFetch(`/api/presentation/duplas/${id}`, { method: 'DELETE' })
   await loadAll()
 }
 
@@ -282,21 +354,102 @@ async function removeDocument(id: string): Promise<void> {
 
     <p v-if="errorMsg" class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{{ errorMsg }}</p>
 
+    <!--
+      Secção de criação manual de duplas. Só aparece quando a fase
+      selecionada é do tipo "apresentacao" com noElimination === true,
+      porque só essas fases ficam fora da geração automática via
+      chaveamento (ver comentário em routes/presentation.ts POST /duplas).
+      Nas restantes fases (apresentacao_quiz, ou apresentacao ligada a
+      bracket), esta secção fica escondida e nada muda em relação ao
+      comportamento anterior. Os dropdowns já herdam o filtro por
+      categoria via teamsWithoutDupla (ver correção acima).
+    -->
+    <div v-if="selectedPhaseId && canCreateManualDuplas" class="bg-white rounded-2xl shadow p-6">
+      <h2 class="font-semibold text-petro-primary mb-1">Criar Dupla Manualmente</h2>
+      <p class="text-xs text-gray-400 mb-4">
+        Esta fase é "Apresentação sem eliminação" — não está ligada a um Chaveamento, por isso as duplas têm de
+        ser criadas aqui manualmente. Só aparecem equipas da categoria "{{ championshipOptions.find(o => o.value === selectedChampionship)?.label }}". A Equipa B é opcional (deixa em branco para uma apresentação individual).
+      </p>
+
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-[10px] text-gray-400 block mb-1">Equipa A</label>
+          <select v-model="newDuplaTeamAId" class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full">
+            <option value="" disabled>Selecionar equipa...</option>
+            <option v-for="t in teamsWithoutDupla" :key="t.id" :value="t.id">{{ t.name }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] text-gray-400 block mb-1">Equipa B (opcional)</label>
+          <select v-model="newDuplaTeamBId" class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full">
+            <option value="">— Nenhuma —</option>
+            <option
+              v-for="t in teamsWithoutDupla.filter((x) => x.id !== newDuplaTeamAId)"
+              :key="t.id"
+              :value="t.id"
+            >
+              {{ t.name }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <input
+          v-model="newDuplaThemeA"
+          type="text"
+          placeholder="Tema da Equipa A (opcional)"
+          class="border border-gray-200 rounded-lg px-3 py-2 text-sm"
+        />
+        <input
+          v-if="newDuplaTeamBId"
+          v-model="newDuplaThemeB"
+          type="text"
+          placeholder="Tema da Equipa B (opcional)"
+          class="border border-gray-200 rounded-lg px-3 py-2 text-sm"
+        />
+      </div>
+
+      <button
+        class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        :disabled="!newDuplaTeamAId || creatingDupla"
+        @click="addManualDupla"
+      >
+        {{ creatingDupla ? 'A criar...' : 'Adicionar Dupla' }}
+      </button>
+    </div>
+
     <div v-if="selectedPhaseId" class="bg-white rounded-2xl shadow p-6">
       <h2 class="font-semibold text-petro-primary mb-2">Duplas, Temas e Documentos</h2>
       <p class="text-xs text-gray-400 mb-4">
-        As duplas são geradas automaticamente ao criares o Chaveamento em Admin → Chaveamento. Aqui só editas o
-        tema de cada equipa, e carregas os slides/critérios.
+        <template v-if="canCreateManualDuplas">
+          Duplas criadas manualmente acima. Aqui editas o tema de cada equipa, carregas os slides/critérios, ou
+          removes uma dupla.
+        </template>
+        <template v-else>
+          As duplas são geradas automaticamente ao criares o Chaveamento em Admin → Chaveamento. Aqui só editas o
+          tema de cada equipa, e carregas os slides/critérios.
+        </template>
       </p>
 
       <div v-if="!duplas.length" class="text-xs text-gray-400">
-        Nenhuma dupla ainda — gera o Chaveamento em Admin → Chaveamento para esta fase ficar preenchida
-        automaticamente.
+        <template v-if="canCreateManualDuplas">Nenhuma dupla ainda — usa o formulário acima para criar.</template>
+        <template v-else>
+          Nenhuma dupla ainda — gera o Chaveamento em Admin → Chaveamento para esta fase ficar preenchida
+          automaticamente.
+        </template>
       </div>
 
       <div v-for="d in duplas" :key="d.id" class="border-b border-gray-50 py-3 last:border-0">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-semibold">Dupla #{{ d.order }}</span>
+          <button
+            v-if="canCreateManualDuplas"
+            class="text-[10px] text-red-400 underline"
+            @click="removeDupla(d.id)"
+          >
+            Remover Dupla
+          </button>
         </div>
 
         <!-- Equipa A -->

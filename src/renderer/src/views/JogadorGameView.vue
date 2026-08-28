@@ -52,12 +52,16 @@ function optionClass(label: string): string {
 </script>
 
 <template>
-  <div class="min-h-screen bg-petro-bg flex flex-col px-4 py-6 gap-4">
+  <!-- AUMENTADO — px-4 py-6 gap-4 fixos trocados por clamp() em vw/vh,
+       para o padding/gap gerais da tela acompanharem o tamanho real
+       do dispositivo (telemóvel pequeno vs tablet grande). -->
+  <div class="min-h-screen bg-petro-bg flex flex-col px-[clamp(1rem,4vw,2.5rem)] py-[clamp(1.2rem,3vh,2.5rem)] gap-[clamp(0.75rem,2vh,1.5rem)]">
     <div class="flex justify-center">
       <LogoMark size="sm" />
     </div>
 
-    <header class="flex items-center justify-between text-xs text-gray-400">
+    <!-- AUMENTADO — text-xs fixo trocado por clamp(). -->
+    <header class="flex items-center justify-between text-[clamp(0.7rem,2.2vw,0.95rem)] text-gray-400">
       <span>{{ teamName }} <span class="text-gray-300">vs {{ opponentName }}</span></span>
       <span class="flex items-center gap-1">
         <span class="w-2 h-2 rounded-full bg-green-500"></span> Online
@@ -65,7 +69,8 @@ function optionClass(label: string): string {
     </header>
 
     <div v-if="!myQuestion" class="flex-1 flex flex-col items-center justify-center gap-3 text-center">
-      <p class="text-gray-400 text-sm">A aguardar o moderador iniciar a pergunta...</p>
+      <!-- AUMENTADO — text-sm fixo trocado por clamp(). -->
+      <p class="text-[clamp(0.85rem,2.6vw,1.15rem)] text-gray-400">A aguardar o moderador iniciar a pergunta...</p>
     </div>
 
     <template v-else>
@@ -73,42 +78,52 @@ function optionClass(label: string): string {
         <TimerRing :seconds="store.timeLeft" />
       </div>
 
+      <!-- AUMENTADO — text-xs, px-3 py-1 e o texto de espera (text-[11px])
+           fixos trocados por clamp(). -->
       <div class="text-center flex flex-col items-center gap-1">
-        <span v-if="!myAnswer" class="bg-petro-primary/10 text-petro-primary text-xs font-semibold px-3 py-1 rounded-full">
+        <span
+          v-if="!myAnswer"
+          class="bg-petro-primary/10 text-petro-primary font-semibold rounded-full text-[clamp(0.7rem,2.2vw,0.95rem)] px-[clamp(0.7rem,2vw,1.1rem)] py-[clamp(0.25rem,0.8vh,0.5rem)]"
+        >
           Responde já
         </span>
         <template v-else>
           <span
-            class="text-xs font-semibold px-3 py-1 rounded-full"
+            class="font-semibold rounded-full text-[clamp(0.7rem,2.2vw,0.95rem)] px-[clamp(0.7rem,2vw,1.1rem)] py-[clamp(0.25rem,0.8vh,0.5rem)]"
             :class="myCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'"
           >
             {{ myCorrect ? 'Acertaste! ✓' : 'Não foi desta vez ✕' }}
           </span>
-          <span v-if="!opponentAnswer" class="text-[11px] text-gray-400">
+          <span v-if="!opponentAnswer" class="text-[clamp(0.65rem,2vw,0.85rem)] text-gray-400">
             Aguardando resposta de {{ opponentName }}...
           </span>
         </template>
       </div>
 
+      <!-- AUMENTADO — max-h-40 fixo trocado por clamp() em vh, para a
+           imagem crescer em tablets/ecrãs maiores. -->
       <img
         v-if="myQuestion.imageUrl"
         :src="myQuestion.imageUrl"
         alt="Imagem da pergunta"
-        class="w-full max-h-40 object-cover rounded-xl"
+        class="w-full max-h-[clamp(10rem,28vh,20rem)] object-cover rounded-xl"
       />
 
-      <h2 class="text-base font-semibold text-center">{{ myQuestion.text }}</h2>
+      <!-- AUMENTADO — text-base fixo trocado por clamp(). -->
+      <h2 class="text-[clamp(1.05rem,3.4vw,1.6rem)] font-semibold text-center">{{ myQuestion.text }}</h2>
 
-      <div class="flex flex-col gap-3">
+      <!-- AUMENTADO — gap-3, px-4 py-3 e o círculo da letra (w-7 h-7,
+           text-xs) fixos trocados por clamp(). -->
+      <div class="flex flex-col gap-[clamp(0.6rem,1.8vh,1rem)]">
         <button
           v-for="opt in myQuestion.options"
           :key="opt.label"
-          class="flex items-center gap-3 border rounded-xl px-4 py-3 text-left transition-all duration-200"
+          class="flex items-center gap-3 border rounded-xl text-left transition-all duration-200 px-[clamp(1rem,3vw,1.5rem)] py-[clamp(0.7rem,2vh,1.1rem)] text-[clamp(0.95rem,2.8vw,1.3rem)]"
           :class="optionClass(opt.label)"
           :disabled="!!myAnswer"
           @click="selectOption(opt.label)"
         >
-          <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-petro-primary/10 text-petro-primary">
+          <span class="rounded-full flex items-center justify-center font-bold shrink-0 bg-petro-primary/10 text-petro-primary w-[clamp(1.75rem,5.5vw,2.5rem)] h-[clamp(1.75rem,5.5vw,2.5rem)] text-[clamp(0.75rem,2.2vw,1rem)]">
             {{ opt.label }}
           </span>
           {{ opt.text }}
@@ -116,15 +131,17 @@ function optionClass(label: string): string {
       </div>
     </template>
 
-    <div class="mt-auto pt-4 flex items-center justify-center gap-6 text-center">
+    <!-- AUMENTADO — text-xs e o placar (font-bold, sem tamanho definido
+         antes, herdava o base) trocados por clamp(). -->
+    <div class="mt-auto pt-4 flex items-center justify-center gap-[clamp(1.2rem,5vw,2.5rem)] text-center">
       <div>
-        <div class="text-xs text-gray-400">{{ teamName }}</div>
-        <div class="font-bold text-petro-primary">{{ myTeam === 'A' ? store.teamAScore : store.teamBScore }}</div>
+        <div class="text-[clamp(0.7rem,2.2vw,0.95rem)] text-gray-400">{{ teamName }}</div>
+        <div class="font-bold text-petro-primary text-[clamp(1.1rem,3.4vw,1.7rem)]">{{ myTeam === 'A' ? store.teamAScore : store.teamBScore }}</div>
       </div>
-      <div class="text-gray-300 text-xs">VS</div>
+      <div class="text-gray-300 text-[clamp(0.7rem,2.2vw,0.95rem)]">VS</div>
       <div>
-        <div class="text-xs text-gray-400">{{ opponentName }}</div>
-        <div class="font-bold text-gray-400">{{ myTeam === 'A' ? store.teamBScore : store.teamAScore }}</div>
+        <div class="text-[clamp(0.7rem,2.2vw,0.95rem)] text-gray-400">{{ opponentName }}</div>
+        <div class="font-bold text-gray-400 text-[clamp(1.1rem,3.4vw,1.7rem)]">{{ myTeam === 'A' ? store.teamBScore : store.teamAScore }}</div>
       </div>
     </div>
   </div>

@@ -1,9 +1,27 @@
 import { app, shell, BrowserWindow, screen, session } from 'electron'
 import { join } from 'path'
+import { existsSync, copyFileSync, mkdirSync, appendFileSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
 import http from 'http'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+
+// NOVO — log persistente em ficheiro. Numa app empacotada (subsistema
+// Windows GUI), o stdout/console.log do processo principal não aparece em
+// lado nenhum visível — mesmo correndo o .exe a partir de um terminal.
+// Sem isto, um problema no arranque do backend em produção é invisível.
+// O ficheiro fica em %APPDATA%\petrochamp-quiz\logs\main.log.
+function logToFile(message: string): void {
+  try {
+    const logsDir = join(app.getPath('userData'), 'logs')
+    mkdirSync(logsDir, { recursive: true })
+    const line = `[${new Date().toISOString()}] ${message}\n`
+    appendFileSync(join(logsDir, 'main.log'), line, 'utf8')
+  } catch {
+    // Se nem o log conseguir escrever, não há nada a fazer — não deixamos
+    // isto rebentar a app.
+  }
+}
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
@@ -21,33 +39,102 @@ if (!gotSingleInstanceLock) {
 
   let backendProcess: ChildProcess | null = null
 
+  // NOVO — garante que existe uma base de dados gravável em userData antes
+  // de arrancar o backend em produção. A pasta de instalação (resources/)
+  // não é local seguro para gravar (fica só de leitura em muitos setups, e
+  // é apagada/substituída em cada atualização). userData é a pasta correta
+  // e persistente por utilizador (ex: %APPDATA%\petrochamp-quiz).
+  function ensureProdDatabase(): string {
+    const userDataDir = app.getPath('userData')
+    const dbPath = join(userDataDir, 'petrochamp.db')
+
+    if (!existsSync(dbPath)) {
+      const seedPath = join(process.resourcesPath, 'petrochamp-backend', 'seed.db')
+      if (existsSync(seedPath)) {
+        mkdirSync(userDataDir, { recursive: true })
+        copyFileSync(seedPath, dbPath)
+        console.log('Base de dados inicial copiada para:', dbPath)
+        logToFile(`Base de dados inicial copiada para: ${dbPath}`)
+      } else {
+        console.warn('Aviso: seed.db não encontrado em resources. O backend vai criar a base de dados do zero.')
+        logToFile(`Aviso: seed.db não encontrado em resources (esperado em: ${seedPath}). O backend vai criar a base de dados do zero.`)
+      }
+    } else {
+      logToFile(`Base de dados já existia em: ${dbPath}`)
+    }
+
+    return dbPath
+  }
+
   function startLocalBackend(): void {
     if (backendProcess) return
-    const backendPath = join(app.getAppPath(), 'petrochamp-backend')
-    console.log('A arrancar backend local em:', backendPath)
 
-    backendProcess = spawn('npm', ['run', 'dev'], {
-      cwd: backendPath,
-      shell: true,
-      stdio: 'pipe'
-    })
+    logToFile(`startLocalBackend chamado. is.dev=${is.dev}`)
+
+    if (is.dev) {
+      const backendPath = join(app.getAppPath(), 'petrochamp-backend')
+      console.log('A arrancar backend local (dev) em:', backendPath)
+      logToFile(`A arrancar backend local (dev) em: ${backendPath}`)
+
+      backendProcess = spawn('npm', ['run', 'dev'], {
+        cwd: backendPath,
+        shell: true,
+        stdio: 'pipe'
+      })
+    } else {
+      // PRODUÇÃO — corre o backend já compilado (dist/index.js) com o
+      // próprio binário do Electron em modo "run as node", em vez de
+      // depender de `npm`/`tsx` que não fazem parte do pacote final e de
+      // depender de o utilizador ter Node.js instalado na máquina.
+      const backendPath = join(process.resourcesPath, 'petrochamp-backend')
+      const entryPoint = join(backendPath, 'dist', 'index.js')
+      const dbPath = ensureProdDatabase()
+
+      console.log('A arrancar backend local (produção) em:', backendPath)
+      logToFile(`A arrancar backend local (produção). backendPath=${backendPath} entryPoint=${entryPoint} entryPointExiste=${existsSync(entryPoint)} dbPath=${dbPath}`)
+
+      backendProcess = spawn(process.execPath, [entryPoint], {
+        cwd: backendPath,
+        shell: false,
+        stdio: 'pipe',
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          DATABASE_URL: `file:${dbPath}`,
+          UPLOADS_DIR: join(app.getPath('userData'), 'uploads'),
+          PORT: '4000'
+        }
+      })
+    }
 
     if (backendProcess.stdout) {
       backendProcess.stdout.on('data', (data: Buffer) => {
         const text = data.toString('utf8').trim()
-        if (text) console.log(`[Backend] ${text}`)
+        if (text) {
+          console.log(`[Backend] ${text}`)
+          logToFile(`[Backend] ${text}`)
+        }
       })
     }
 
     if (backendProcess.stderr) {
       backendProcess.stderr.on('data', (data: Buffer) => {
         const text = data.toString('utf8').trim()
-        if (text) console.error(`[Backend Error] ${text}`)
+        if (text) {
+          console.error(`[Backend Error] ${text}`)
+          logToFile(`[Backend Error] ${text}`)
+        }
       })
     }
 
+    backendProcess.on('error', (err) => {
+      console.error('Falha ao arrancar o processo do backend:', err)
+      logToFile(`Falha ao arrancar o processo do backend: ${err}`)
+    })
+
     backendProcess.on('exit', (code) => {
       console.log('Backend local terminou, código:', code)
+      logToFile(`Backend local terminou, código: ${code}`)
       backendProcess = null
     })
   }
@@ -191,21 +278,16 @@ if (!gotSingleInstanceLock) {
       callback(permission === 'media')
     })
 
+    logToFile('=== App a arrancar ===')
     startLocalBackend()
     try {
-      // ALTERADO — timeout aumentado de 20s para 40s: na primeira vez que
-      // o tsx compila tudo, o backend pode demorar mais que 20s a arrancar,
-      // fazendo o waitForBackend desistir antes de hora.
       await waitForBackend('http://localhost:4000/health', 40000)
       console.log('Backend local pronto.')
-      // ALTERADO — triggerSyncInBackground() só corre aqui dentro, depois
-      // de confirmado que o backend respondeu. Antes corria sempre, mesmo
-      // quando o waitForBackend falhava por timeout — nesse caso a
-      // sincronização tentava ligar-se a um backend que ainda nem estava
-      // de pé, e falhava sempre com "connection refused".
+      logToFile('Backend local pronto (respondeu a /health).')
       triggerSyncInBackground()
     } catch (error) {
       console.error('Não foi possível confirmar o arranque do backend local:', error)
+      logToFile(`Não foi possível confirmar o arranque do backend local: ${error}`)
       console.log('Sincronização saltada nesta sessão — tenta novamente na próxima abertura da app.')
     }
 

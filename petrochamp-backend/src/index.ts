@@ -70,7 +70,20 @@ app.use(cors())
 // sincronização), e o valor por omissão do Express (100kb) já tinha
 // causado um PayloadTooLargeError confirmado nos logs.
 app.use(express.json({ limit: '15mb' }))
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
+
+// ALTERADO — em produção (empacotado), __dirname fica dentro da pasta de
+// instalação (resources/petrochamp-backend/dist), que não é local seguro
+// nem persistente para guardar ficheiros: pode não ter permissão de
+// escrita, e é substituída a cada atualização da app. UPLOADS_DIR é
+// definida pelo processo principal do Electron (src/main/index.ts),
+// apontando para app.getPath('userData'), que é gravável e sobrevive a
+// atualizações. Em dev, UPLOADS_DIR não existe, por isso cai no caminho
+// antigo (petrochamp-backend/uploads), mantendo o comportamento atual.
+const UPLOADS_BASE = process.env.UPLOADS_DIR
+  ? process.env.UPLOADS_DIR
+  : path.join(__dirname, '..', 'uploads')
+app.use('/uploads', express.static(UPLOADS_BASE))
+
 app.use('/portal', express.static(path.join(__dirname, '..', 'public', 'portal')))
 app.use(express.static(path.join(__dirname, '..', '..', 'out', 'renderer')))
 

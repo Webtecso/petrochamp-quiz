@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: com.webtec.petrochampquiz
 productName: petrochamp-quiz
 directories:
   buildResources: build
@@ -9,6 +9,18 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!petrochamp-backend/**'
+extraResources:
+  - from: petrochamp-backend/dist
+    to: petrochamp-backend/dist
+  - from: petrochamp-backend/node_modules
+    to: petrochamp-backend/node_modules
+  - from: petrochamp-backend/prisma
+    to: petrochamp-backend/prisma
+  - from: petrochamp-backend/package.json
+    to: petrochamp-backend/package.json
+  - from: petrochamp-backend/prisma/seed.db
+    to: petrochamp-backend/seed.db
 asarUnpack:
   - resources/**
 win:
@@ -18,6 +30,7 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  perMachine: false
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

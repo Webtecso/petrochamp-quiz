@@ -77,6 +77,42 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
   }
 }
 
+// NOVO — tradução central de Phase.order -> BracketMatch.round, espelho
+// exato da lógica em stores/phases.ts (phaseOrderToBracketRound) do
+// lado do servidor. Necessária porque isRoundComplete() em
+// socket/index.ts recebia liveState.phase (Phase.order) diretamente
+// como se fosse o round do chaveamento — o que só é correto enquanto
+// não existir nenhuma fase "apresentacao" com noElimination: true no
+// meio da sequência (essas fases não geram BracketMatch nenhum, ver
+// ensurePhasesForRounds acima e syncPresentationDuplasForRound abaixo).
+// Sem esta tradução, isRoundComplete contava confrontos pendentes num
+// round inexistente, devolvendo sempre 0 pendentes -> disparava a
+// sequência de fim de ronda cedo demais.
+//
+// No universitario (sem nenhuma fase apresentacao+noElimination), esta
+// função devolve sempre o mesmo valor que phaseOrder — função
+// identidade, nada muda lá.
+export async function getBracketRoundForPhaseOrder(
+  championship: string,
+  phaseOrder: number
+): Promise<number> {
+  const phases = await prisma.phase.findMany({
+    where: { championship, deletedAt: null },
+    orderBy: { order: 'asc' }
+  })
+  let round = 0
+  for (const p of phases) {
+    const isOutsideBracket = p.type === 'apresentacao' && Boolean(p.noElimination)
+    if (!isOutsideBracket) round += 1
+    if (p.order === phaseOrder) {
+      return isOutsideBracket ? round + 1 : round
+    }
+  }
+  // Fallback — fase não encontrada (dados a meio de sync, etc.):
+  // assume identidade para não partir o caso simples de 1-para-1.
+  return round || phaseOrder
+}
+
 // Cria/atualiza as PresentationDuplas de uma ronda específica — ver
 // comentário histórico original sobre o Map local anti-duplicação.
 export async function syncPresentationDuplasForRound(
@@ -176,12 +212,6 @@ router.get('/:championship', async (req, res) => {
   res.json({ championship, matches: shaped })
 })
 
-// NOTA — /generate continua a apagar bracketMatch e presentationDupla com
-// deleteMany/hard-delete dentro da transação: o chaveamento é sempre
-// recriado do zero a partir das equipas atuais, é dado derivado e não uma
-// entidade que o utilizador apaga manualmente através de um botão
-// "remover" — não precisa de soft delete nem de propagar como "apagado"
-// via sync.
 router.post('/:championship/generate', requireAdmin, async (req, res) => {
   const { championship } = req.params
 
@@ -195,7 +225,7 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
 
   try {
     const teams = await prisma.team.findMany({
-      where: { category: championship, deletedAt: null }, // NOVO
+      where: { category: championship, deletedAt: null },
       orderBy: [{ group: 'asc' }, { bracketPosition: 'asc' }]
     })
 

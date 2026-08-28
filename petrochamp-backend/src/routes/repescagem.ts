@@ -65,8 +65,9 @@ router.post('/config', async (req, res) => {
 })
 
 // NOVO — Admin: editar configuração (só antes de ser iniciada pelo Moderador)
+// CORRIGIDO — id é cuid() (string) no schema, não Int.
 router.put('/config/:id', async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   const { maxRepescados, votingDurationSeconds } = req.body
   const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
   if (!existing || existing.deletedAt) {
@@ -87,9 +88,9 @@ router.put('/config/:id', async (req, res) => {
 })
 
 // NOVO — Admin: apagar configuração não usada
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO — soft delete (ver nota em questions.ts) + id como string
 router.delete('/config/:id', async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
   if (!existing || existing.deletedAt) {
     res.status(404).json({ error: 'Configuração não encontrada' })
@@ -148,8 +149,9 @@ router.get('/has-voted', async (req, res) => {
     res.json({ voted: false })
     return
   }
+  // CORRIGIDO — configId é cuid() (string), sem Number(...)
   const existing = await prisma.repescagemVote.findUnique({
-    where: { configId_voterToken: { configId: Number(configId), voterToken } }
+    where: { configId_voterToken: { configId, voterToken } }
   })
   res.json({ voted: !!existing })
 })
@@ -181,7 +183,7 @@ router.post('/vote', async (req, res) => {
 })
 
 router.post('/:id/generate-bracket', async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   const config = await prisma.repescagemConfig.findUnique({ where: { id } })
   if (!config) {
     res.status(404).json({ error: 'Configuração não encontrada' })
@@ -210,7 +212,7 @@ router.post('/:id/generate-bracket', async (req, res) => {
         round: 0,
         slot: 0,
         groupName: 'Decisão de Vaga',
-        teamAId: decider[0].id,
+        teamAId: decider[0]?.id,
         teamBId: decider[1]?.id ?? null
       }
     })
@@ -249,7 +251,7 @@ router.post('/:id/generate-bracket', async (req, res) => {
 })
 
 router.get('/:id/bracket', async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   const config = await prisma.repescagemConfig.findUnique({ where: { id } })
   if (!config) {
     res.status(404).json({ error: 'Configuração não encontrada' })
@@ -292,8 +294,8 @@ router.get('/:id/bracket', async (req, res) => {
 })
 
 router.post('/:id/insert-champion', async (req, res) => {
-  const id = Number(req.params.id)
-  const { targetMatchId } = req.body
+  const id = req.params.id
+  const { targetMatchId } = req.body as { targetMatchId?: string }
   const config = await prisma.repescagemConfig.findUnique({ where: { id } })
   if (!config) {
     res.status(404).json({ error: 'Configuração não encontrada' })

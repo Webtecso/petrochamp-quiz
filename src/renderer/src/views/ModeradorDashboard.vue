@@ -7,6 +7,7 @@ import { useTiebreakQuestionsStore } from '../stores/tiebreakQuestions'
 import { useModeStore } from '../stores/mode'
 import { usePhasesStore } from '../stores/phases'
 import { startConfigSync } from '../services/configSync'
+import { buildEvaluationItemOptions } from '../data/evaluationItems'
 import LogoMark from '../components/LogoMark.vue'
 import TeamScoreCard from '../components/TeamScoreCard.vue'
 import QuestionPanel from '../components/QuestionPanel.vue'
@@ -79,19 +80,19 @@ const currentAnalyticItem = computed(() => {
 
 const activeDisplay = computed(() => {
   if (currentQuestion.value) {
-    return { text: currentQuestion.value.text, options: currentQuestion.value.options, correctIndex: currentQuestion.value.correctIndex, imageUrl: currentQuestion.value.imageUrl }
+    return {
+      text: currentQuestion.value.text,
+      options: currentQuestion.value.options,
+      correctIndex: currentQuestion.value.correctIndex,
+      imageUrl: currentQuestion.value.imageUrl
+    }
   }
   if (currentAnalyticItem.value) {
     const it = currentAnalyticItem.value
     return {
       text: it.text,
-      options: [
-        { label: 'A', text: it.optionA ?? '' },
-        { label: 'B', text: it.optionB ?? '' },
-        { label: 'C', text: it.optionC ?? '' },
-        { label: 'D', text: it.optionD ?? '' }
-      ].filter((o) => o.text),
-      correctIndex: it.correctIndex ?? 0,
+      options: buildEvaluationItemOptions(it),
+      correctIndex: Array.isArray(it.correctIndexes) ? it.correctIndexes[0] : undefined,
       imageUrl: it.imageUrl ?? null
     }
   }
@@ -107,7 +108,7 @@ const phaseConfig = computed(() => phasesStore.configFor(store.phase))
 const currentPhaseFull = computed(() => phasesStore.phases.find((p) => Number(p.order) === Number(store.phase)))
 
 function redirectIfPresentationPhase(): boolean {
-  if (store.teamA && store.teamB) return false // Já estamos na sub-fase de quiz, não voltar
+  if (store.teamA && store.teamB) return false
   const type = currentPhaseFull.value?.type
   if (type === 'apresentacao' || type === 'apresentacao_quiz') {
     router.replace('/moderador/apresentacao')

@@ -53,10 +53,109 @@ router.get('/duplas', async (req, res) => {
 })
 
 // POST /api/presentation/duplas
-router.post('/duplas', requireAdmin, async (_req, res) => {
-  return res.status(400).json({
-    error: 'As duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar). Não é possível criar manualmente.'
-  })
+// ALTERADO — permite criação manual só em fases "apresentacao" com
+// noElimination: true. Nas restantes fases (ligadas a chaveamento), as
+// duplas continuam a vir exclusivamente de syncPresentationDuplasForRound()
+// em bracketLive.ts — este endpoint bloqueia esse caso com 400.
+//
+// CORRIGIDO — usava prisma.presentationDupla.create(), que falha com
+// P2002 (unique constraint) sempre que já existir uma linha
+// soft-deleted com o mesmo (phaseId, teamAId) — o @@unique do schema
+// não distingue linhas "apagadas" (deletedAt preenchido) de ativas,
+// por isso o create() batia contra esse registo antigo. A mesma
+// situação já era tratada em syncPresentationDuplasForRound()
+// (bracketLive.ts) com upsert + update: { deletedAt: null } — aplicado
+// aqui também, para reativar/atualizar uma dupla apagada em vez de
+// rebentar com erro 500.
+//
+// Também valida que as equipas escolhidas pertencem à mesma categoria
+// (Team.category) do campeonato da fase — mantém o comportamento manual
+// consistente com o automático, que já filtra por category no
+// bracketLive.ts generate.
+router.post('/duplas', requireAdmin, async (req, res) => {
+  try {
+    const { phaseId, teamAId, teamBId, themeA, themeB } = req.body as {
+      phaseId?: string
+      teamAId?: string
+      teamBId?: string | null
+      themeA?: string
+      themeB?: string | null
+    }
+
+    if (!phaseId || !teamAId) {
+      return res.status(400).json({ error: 'phaseId e teamAId são obrigatórios.' })
+    }
+
+    const phase = await prisma.phase.findUnique({ where: { id: phaseId } })
+    if (!phase || phase.deletedAt) {
+      return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+    if (phase.type !== 'apresentacao' || !phase.noElimination) {
+      return res.status(400).json({
+        error:
+          'As duplas só podem ser criadas manualmente em fases do tipo Apresentação sem eliminação. Nas restantes fases, as duplas são geradas automaticamente a partir do Chaveamento (Admin → Chaveamento → Gerar).'
+      })
+    }
+    if (teamBId && teamBId === teamAId) {
+      return res.status(400).json({ error: 'As duas equipas da dupla têm de ser diferentes.' })
+    }
+
+    const teamIdsToCheck = [teamAId, ...(teamBId ? [teamBId] : [])]
+    const teams = await prisma.team.findMany({ where: { id: { in: teamIdsToCheck }, deletedAt: null } })
+    if (teams.length !== teamIdsToCheck.length) {
+      return res.status(404).json({ error: 'Uma das equipas selecionadas não foi encontrada.' })
+    }
+    const wrongCategory = teams.find((t) => t.category !== phase.championship)
+    if (wrongCategory) {
+      return res.status(400).json({
+        error: `A equipa "${wrongCategory.name}" pertence a outra categoria e não pode ser usada nesta fase (${phase.championship}).`
+      })
+    }
+
+    // Verifica se já existe uma dupla ATIVA (não apagada) com esta
+    // Equipa A nesta fase — só aí bloqueamos com 409. Uma dupla
+    // soft-deleted com o mesmo par não conta como "já existe" para o
+    // utilizador, mas ainda ocupa a linha na base de dados — por isso
+    // é tratada no upsert abaixo, não aqui.
+    const existingActive = await prisma.presentationDupla.findFirst({
+      where: { phaseId, teamAId, deletedAt: null }
+    })
+    if (existingActive) {
+      return res.status(409).json({ error: 'Esta equipa já está numa dupla desta fase (como Equipa A).' })
+    }
+
+    const maxOrder = await prisma.presentationDupla.aggregate({
+      where: { phaseId, deletedAt: null },
+      _max: { order: true }
+    })
+    const nextOrder = (maxOrder._max.order ?? 0) + 1
+
+    const dupla = await prisma.presentationDupla.upsert({
+      where: { phaseId_teamAId: { phaseId, teamAId } },
+      create: {
+        phaseId,
+        order: nextOrder,
+        themeA: themeA?.trim() ?? '',
+        themeB: teamBId ? (themeB?.trim() ?? '') : null,
+        teamAId,
+        teamBId: teamBId ?? null
+      },
+      update: {
+        order: nextOrder,
+        themeA: themeA?.trim() ?? '',
+        themeB: teamBId ? (themeB?.trim() ?? '') : null,
+        teamBId: teamBId ?? null,
+        deletedAt: null
+      }
+    })
+
+    const [shaped] = await attachTeams([dupla])
+    emitConfigUpdated('presentation')
+    return res.status(201).json(shaped)
+  } catch (error: any) {
+    console.error('[Presentation Duplas POST Error]:', error)
+    return res.status(500).json({ error: error?.message || 'Erro ao criar a dupla.' })
+  }
 })
 
 // PATCH /api/presentation/duplas/:id/theme

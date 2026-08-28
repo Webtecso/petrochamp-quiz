@@ -31,12 +31,14 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="min-h-screen flex flex-col items-center justify-center gap-6 text-white px-10"
+    class="min-h-screen flex flex-col items-center justify-center gap-[clamp(1.5rem,3vh,3rem)] text-white px-10"
     :class="transparent ? 'bg-petro-dark/85' : 'bg-petro-dark'"
   >
-    <img :src="organizerLogo" :alt="ORGANIZER_NAME" class="w-40 h-40 object-contain" />
-    <div class="text-4xl font-black tracking-widest">{{ ORGANIZER_NAME }}</div>
-    <p class="text-sm text-white/70 text-center max-w-md min-h-[3rem]">
+    <!-- AUMENTADO — w-40 h-40 (160px fixos) trocado por clamp() em vw/vh. -->
+    <img :src="organizerLogo" :alt="ORGANIZER_NAME" class="object-contain w-[clamp(11rem,20vw,24rem)] h-[clamp(11rem,20vw,24rem)]" />
+    <!-- AUMENTADO — text-4xl fixo trocado por clamp() em vw. -->
+    <div class="font-black tracking-widest text-[clamp(2rem,5vw,5.5rem)]">{{ ORGANIZER_NAME }}</div>
+    <p class="text-[clamp(1rem,1.6vw,1.75rem)] text-white/70 text-center max-w-3xl min-h-[3rem]">
       {{ displayedText }}<span class="animate-pulse">|</span>
     </p>
   </div>

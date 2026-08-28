@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
   try {
     const { championship } = req.query as { championship?: string }
 
-    const where: any = { deletedAt: null } // NOVO
+    const where: any = { deletedAt: null }
     if (championship && championship !== 'undefined' && championship !== 'null') {
       where.championship = championship
     }
@@ -35,16 +35,10 @@ router.post('/swap', requireAdmin, async (req, res) => {
     }
 
     const [first, second] = await Promise.all([
-      prisma.phase.findUnique({ where: { id: firstId } }),
-      prisma.phase.findUnique({ where: { id: secondId } })
+      prisma.phase.findFirst({ where: { id: firstId, deletedAt: null } }),
+      prisma.phase.findFirst({ where: { id: secondId, deletedAt: null } })
     ])
-    if (
-      !first ||
-      !second ||
-      first.deletedAt ||
-      second.deletedAt ||
-      first.championship !== second.championship
-    ) {
+    if (!first || !second || first.championship !== second.championship) {
       return res.status(404).json({ error: 'Fases não encontradas ou de campeonatos diferentes.' })
     }
 
@@ -104,9 +98,9 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID da fase inválido ou não fornecido.' })
     }
 
-    const phase = await prisma.phase.findUnique({ where: { id } })
+    const phase = await prisma.phase.findFirst({ where: { id, deletedAt: null } })
 
-    if (!phase || phase.deletedAt) {
+    if (!phase) {
       return res.status(404).json({ error: 'Fase não encontrada.' })
     }
 
@@ -233,8 +227,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'ID da fase inválido.' })
     }
 
-    const existing = await prisma.phase.findUnique({ where: { id } })
-    if (!existing || existing.deletedAt) {
+    const existing = await prisma.phase.findFirst({ where: { id, deletedAt: null } })
+    if (!existing) {
       return res.status(404).json({ error: 'Fase não encontrada.' })
     }
 
@@ -273,19 +267,54 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
+// NOVO — conta quanto conteúdo (perguntas normais, perguntas analíticas,
+// perguntas de desempate) ainda aponta para o número (order) desta fase,
+// neste campeonato. Usado pelo DELETE abaixo para impedir apagar uma fase
+// e deixar esse conteúdo órfão — foi exatamente isto que causou o bug em
+// que as perguntas do Quiz "desapareciam": a Phase com order:4 foi
+// apagada, mas as Question com phase:4 continuaram na BD, presas a um
+// número que já não correspondia a nenhuma fase viva.
+async function countAssociatedContent(championship: string | null, order: number) {
+  const where = { championship: championship ?? undefined, phase: order, deletedAt: null }
+  const [questions, evaluationItems, tiebreakQuestions] = await Promise.all([
+    prisma.question.count({ where }),
+    prisma.evaluationItem.count({ where }),
+    prisma.tiebreakQuestion.count({ where })
+  ])
+  return { questions, evaluationItems, tiebreakQuestions, total: questions + evaluationItems + tiebreakQuestions }
+}
+
 // DELETE /api/phases/:id
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// ATUALIZADO — antes de apagar (soft delete), verifica se ainda há
+// Question/EvaluationItem/TiebreakQuestion associadas ao número desta
+// fase neste campeonato. Se houver, bloqueia com 409 e diz quantas,
+// evitando que fiquem órfãs (presas a um número de fase que deixa de
+// existir). Passa ?force=true (ou { force: true } no body) para apagar
+// mesmo assim — útil para fases de teste sem conteúdo real que o
+// utilizador queira mesmo remover apesar do aviso.
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params
+    const force = req.query.force === 'true' || req.body?.force === true
 
     if (!id || id === 'undefined' || id === 'null') {
       return res.status(400).json({ error: 'ID da fase inválido.' })
     }
 
-    const existing = await prisma.phase.findUnique({ where: { id } })
-    if (!existing || existing.deletedAt) {
+    const existing = await prisma.phase.findFirst({ where: { id, deletedAt: null } })
+    if (!existing) {
       return res.status(404).json({ error: 'Fase não encontrada.' })
+    }
+
+    if (!force) {
+      const counts = await countAssociatedContent(existing.championship, existing.order)
+      if (counts.total > 0) {
+        return res.status(409).json({
+          error: `Esta fase ainda tem conteúdo associado (${counts.questions} pergunta(s) de quiz, ${counts.evaluationItems} pergunta(s) analítica(s), ${counts.tiebreakQuestions} pergunta(s) de desempate) ligado ao número da fase (${existing.order}). Apagar a fase agora deixaria esse conteúdo órfão — ele deixaria de aparecer, mas continuaria na base de dados. Move esse conteúdo para outra fase primeiro, ou confirma que queres apagar mesmo assim.`,
+          counts,
+          requiresForce: true
+        })
+      }
     }
 
     await prisma.phase.update({ where: { id }, data: { deletedAt: new Date() } })

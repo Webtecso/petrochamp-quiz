@@ -1,3 +1,8 @@
+export interface EvaluationItemOption {
+  label: string
+  text: string
+}
+
 export interface EvaluationItem {
   id: string
   championship?: string
@@ -9,12 +14,26 @@ export interface EvaluationItem {
   optionB?: string | null
   optionC?: string | null
   optionD?: string | null
-  correctIndex?: number | null
+  optionE?: string | null
+  optionF?: string | null
+  optionG?: string | null
+  optionH?: string | null
+  correctIndexes?: number[]
   timeSeconds?: number | null
   maxPoints: number
   phase: number
   scope: 'single' | 'all'
   jurorIds?: string[]
+}
+
+const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const
+
+export function buildEvaluationItemOptions(item: EvaluationItem): EvaluationItemOption[] {
+  if (item.mode !== 'multipla_escolha') return []
+  return OPTION_LABELS.map((label) => ({
+    label,
+    text: (item[`option${label}` as keyof EvaluationItem] as string | null) ?? ''
+  })).filter((o) => o.text !== '')
 }
 
 export const evaluationItems: EvaluationItem[] = [

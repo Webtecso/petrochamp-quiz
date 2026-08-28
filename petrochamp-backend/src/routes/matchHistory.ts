@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
 })
 
 router.get('/:id', async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   const entry = await prisma.matchHistory.findUnique({ where: { id } })
   if (!entry || entry.deletedAt) {
     res.status(404).json({ error: 'Registo não encontrado' })
@@ -26,9 +26,9 @@ router.get('/:id', async (req, res) => {
   res.json(entry)
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO — soft delete (ver nota em questions.ts) + id como string
 router.delete('/:id', async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   try {
     await prisma.matchHistory.update({ where: { id }, data: { deletedAt: new Date() } })
     res.status(204).send()

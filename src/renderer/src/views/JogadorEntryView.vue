@@ -78,65 +78,92 @@ function submitManual(): void {
 </script>
 
 <template>
-  <div class="min-h-screen bg-petro-bg flex flex-col items-center justify-center px-6 gap-6">
+  <!-- AUMENTADO — px-6 gap-6 fixos trocados por clamp() em vw/vh. -->
+  <div class="min-h-screen bg-petro-bg flex flex-col items-center justify-center px-[clamp(1.2rem,5vw,3rem)] gap-[clamp(1.2rem,3vh,2.5rem)]">
     <LogoMark size="lg" />
 
-    <div v-if="mode === 'nome'" class="w-full max-w-sm bg-white rounded-2xl shadow p-6 flex flex-col gap-4">
-      <label class="text-xs font-semibold text-gray-500">O teu nome</label>
+    <!-- AUMENTADO — max-w-sm, p-6, gap-4, text-xs e px-4 py-3 fixos
+         trocados por clamp(), para o cartão crescer em tablets sem
+         ficar minúsculo em telemóveis pequenos. -->
+    <div
+      v-if="mode === 'nome'"
+      class="w-full bg-white rounded-2xl shadow flex flex-col max-w-[clamp(20rem,90vw,28rem)] p-[clamp(1.2rem,4vw,2rem)] gap-[clamp(0.75rem,2vh,1.25rem)]"
+    >
+      <label class="font-semibold text-gray-500 text-[clamp(0.7rem,2.2vw,0.95rem)]">O teu nome</label>
       <input
         v-model="playerName"
         type="text"
         placeholder="Ex: Ana"
-        class="w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-petro-primary"
+        class="w-full border border-gray-200 rounded-lg focus:outline-none focus:border-petro-primary px-[clamp(0.9rem,2.8vw,1.3rem)] py-[clamp(0.7rem,2vh,1rem)] text-[clamp(0.9rem,2.6vw,1.15rem)]"
         @keyup.enter="confirmName"
       />
-      <p v-if="error" class="text-red-500 text-xs text-center">{{ error }}</p>
-      <button class="bg-petro-primary text-white rounded-lg py-3 font-semibold" @click="confirmName">Continuar</button>
-    </div>
-
-    <div v-else-if="mode === 'menu'" class="w-full max-w-sm flex flex-col gap-4">
-      <p class="text-sm text-gray-400 text-center">Como queres entrar na partida?</p>
-      <button class="bg-white rounded-2xl shadow p-6 flex flex-col items-center gap-2" @click="mode = 'qr'">
-        <div class="text-3xl">📷</div>
-        <div class="font-semibold">Ler QR Code</div>
-      </button>
-      <button class="bg-white rounded-2xl shadow p-6 flex flex-col items-center gap-2" @click="mode = 'manual'">
-        <div class="text-3xl">⌨️</div>
-        <div class="font-semibold">Inserir Código Manualmente</div>
+      <p v-if="error" class="text-red-500 text-center text-[clamp(0.7rem,2.2vw,0.95rem)]">{{ error }}</p>
+      <button
+        class="bg-petro-primary text-white rounded-lg font-semibold py-[clamp(0.7rem,2vh,1rem)] text-[clamp(0.95rem,2.8vw,1.2rem)]"
+        @click="confirmName"
+      >
+        Continuar
       </button>
     </div>
 
-    <div v-else-if="mode === 'qr'" class="w-full max-w-sm flex flex-col gap-4 items-center">
+    <div v-else-if="mode === 'menu'" class="w-full flex flex-col max-w-[clamp(20rem,90vw,28rem)] gap-[clamp(0.75rem,2vh,1.25rem)]">
+      <p class="text-gray-400 text-center text-[clamp(0.85rem,2.6vw,1.1rem)]">Como queres entrar na partida?</p>
+      <!-- AUMENTADO — p-6, gap-2, text-3xl (emoji) e font-semibold sem
+           tamanho fixo, agora todos em clamp(). -->
+      <button
+        class="bg-white rounded-2xl shadow flex flex-col items-center gap-2 p-[clamp(1.2rem,4vw,2rem)]"
+        @click="mode = 'qr'"
+      >
+        <div class="text-[clamp(2rem,7vw,3.5rem)]">📷</div>
+        <div class="font-semibold text-[clamp(0.95rem,2.8vw,1.25rem)]">Ler QR Code</div>
+      </button>
+      <button
+        class="bg-white rounded-2xl shadow flex flex-col items-center gap-2 p-[clamp(1.2rem,4vw,2rem)]"
+        @click="mode = 'manual'"
+      >
+        <div class="text-[clamp(2rem,7vw,3.5rem)]">⌨️</div>
+        <div class="font-semibold text-[clamp(0.95rem,2.8vw,1.25rem)]">Inserir Código Manualmente</div>
+      </button>
+    </div>
+
+    <div v-else-if="mode === 'qr'" class="w-full flex flex-col items-center max-w-[clamp(20rem,90vw,28rem)] gap-[clamp(0.75rem,2vh,1.25rem)]">
       <QrScanner @scanned="onScanned" />
-      <p v-if="error" class="text-red-500 text-xs text-center">{{ error }}</p>
-      <p v-if="joining" class="text-xs text-gray-400">A ligar...</p>
-      <button class="text-xs text-gray-400 underline" @click="mode = 'menu'">← Voltar</button>
+      <p v-if="error" class="text-red-500 text-center text-[clamp(0.7rem,2.2vw,0.95rem)]">{{ error }}</p>
+      <p v-if="joining" class="text-gray-400 text-[clamp(0.7rem,2.2vw,0.95rem)]">A ligar...</p>
+      <button class="text-gray-400 underline text-[clamp(0.7rem,2.2vw,0.95rem)]" @click="mode = 'menu'">← Voltar</button>
     </div>
 
-    <div v-else class="w-full max-w-sm bg-white rounded-2xl shadow p-6 flex flex-col gap-4">
+    <div
+      v-else
+      class="w-full bg-white rounded-2xl shadow flex flex-col max-w-[clamp(20rem,90vw,28rem)] p-[clamp(1.2rem,4vw,2rem)] gap-[clamp(0.75rem,2vh,1.25rem)]"
+    >
       <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">Endereço (IP:porta)</label>
+        <label class="font-semibold text-gray-500 block mb-1 text-[clamp(0.7rem,2.2vw,0.95rem)]">Endereço (IP:porta)</label>
         <input
           v-model="manualAddress"
           type="text"
           placeholder="192.168.1.42:4000"
-          class="w-full border border-gray-200 rounded-lg px-4 py-3 text-center focus:outline-none focus:border-petro-primary"
+          class="w-full border border-gray-200 rounded-lg text-center focus:outline-none focus:border-petro-primary px-[clamp(0.9rem,2.8vw,1.3rem)] py-[clamp(0.7rem,2vh,1rem)] text-[clamp(0.9rem,2.6vw,1.15rem)]"
         />
       </div>
       <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">Código da Equipa</label>
+        <label class="font-semibold text-gray-500 block mb-1 text-[clamp(0.7rem,2.2vw,0.95rem)]">Código da Equipa</label>
         <input
           v-model="manualCode"
           type="text"
           placeholder="A7X9K2"
-          class="w-full border border-gray-200 rounded-lg px-4 py-3 text-center tracking-widest font-semibold uppercase focus:outline-none focus:border-petro-primary"
+          class="w-full border border-gray-200 rounded-lg text-center tracking-widest font-semibold uppercase focus:outline-none focus:border-petro-primary px-[clamp(0.9rem,2.8vw,1.3rem)] py-[clamp(0.7rem,2vh,1rem)] text-[clamp(0.9rem,2.6vw,1.15rem)]"
         />
       </div>
-      <p v-if="error" class="text-red-500 text-xs text-center">{{ error }}</p>
-      <button class="bg-petro-primary text-white rounded-lg py-3 font-semibold" :disabled="joining" @click="submitManual">
+      <p v-if="error" class="text-red-500 text-center text-[clamp(0.7rem,2.2vw,0.95rem)]">{{ error }}</p>
+      <button
+        class="bg-petro-primary text-white rounded-lg font-semibold py-[clamp(0.7rem,2vh,1rem)] text-[clamp(0.95rem,2.8vw,1.2rem)]"
+        :disabled="joining"
+        @click="submitManual"
+      >
         {{ joining ? 'A ligar...' : 'Entrar na Partida' }}
       </button>
-      <button class="text-xs text-gray-400 underline" @click="mode = 'menu'">← Voltar</button>
+      <button class="text-gray-400 underline text-[clamp(0.7rem,2.2vw,0.95rem)]" @click="mode = 'menu'">← Voltar</button>
     </div>
   </div>
 </template>

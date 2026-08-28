@@ -54,10 +54,17 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <!-- AUMENTADO — max-w-xs fixo trocado por clamp() em vw, para a área
+       da câmara crescer em tablets/ecrãs maiores. Textos também em clamp(). -->
   <div class="flex flex-col items-center gap-3">
-    <p v-if="error" class="text-red-500 text-xs text-center">{{ error }}</p>
-    <video ref="videoRef" class="w-full max-w-xs rounded-xl bg-black" muted playsinline></video>
+    <p v-if="error" class="text-red-500 text-center text-[clamp(0.75rem,2.4vw,1rem)]">{{ error }}</p>
+    <video
+      ref="videoRef"
+      class="w-full rounded-xl bg-black max-w-[clamp(16rem,80vw,26rem)]"
+      muted
+      playsinline
+    ></video>
     <canvas ref="canvasRef" class="hidden"></canvas>
-    <p class="text-xs text-gray-400 text-center">Aponta a câmara para o QR Code do moderador</p>
+    <p class="text-gray-400 text-center text-[clamp(0.75rem,2.4vw,1rem)]">Aponta a câmara para o QR Code do moderador</p>
   </div>
 </template>

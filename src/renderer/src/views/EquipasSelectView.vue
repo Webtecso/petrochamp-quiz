@@ -48,9 +48,21 @@ onMounted(async () => {
 const hasBracket = computed(() => liveBracketStore.matches.length > 0)
 const isLastPhaseFlow = computed(() => store.phase >= phasesStore.totalPhases)
 
-// NOVO — confrontos pendentes filtrados pela ronda/fase atual. Ver a nota
-// no liveBracket.ts (pendingMatchesForRound) para o motivo da correção.
-const pendingMatchesThisRound = computed(() => liveBracketStore.pendingMatchesForRound(store.phase))
+// CORRIGIDO — antes usava store.phase diretamente como round do
+// chaveamento (liveBracketStore.pendingMatchesForRound(store.phase)).
+// Isso só é correto quando Phase.order coincide sempre com
+// BracketMatch.round. Assim que existe uma fase "apresentacao" com
+// noElimination: true na sequência (que não gera nenhuma ronda de
+// bracket — ver bracketLive.ts), store.phase avança à frente do round
+// real, e pendingMatchesForRound(store.phase) passava a procurar um
+// round inexistente — devolvendo sempre lista vazia, mesmo com
+// confrontos por jogar no round real. Agora traduz-se sempre
+// Phase.order -> BracketMatch.round através de
+// phasesStore.phaseOrderToBracketRound antes de filtrar os confrontos.
+// No universitario (sem nenhuma fase apresentacao+noElimination), esta
+// tradução é a identidade — nada muda lá.
+const currentBracketRound = computed(() => phasesStore.phaseOrderToBracketRound(store.phase))
+const pendingMatchesThisRound = computed(() => liveBracketStore.pendingMatchesForRound(currentBracketRound.value))
 
 function goToEquipas(): void {
   if (store.phaseFlow.stage === 'quizIntro') {
@@ -125,8 +137,19 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
     v-if="store.phaseFlow.stage !== 'idle'"
     class="flex-1 flex flex-col items-center justify-center px-10 py-12 gap-6 text-center max-w-md mx-auto"
   >
+    <template v-if="store.phaseFlow.stage === 'battleEnded'">
+      <h1 class="text-2xl font-bold text-petro-primary">A batalha terminou!</h1>
+      <p class="text-sm text-gray-500">O ecrã "A batalha terminou" está a ser mostrado na Projeção.</p>
+      <button
+        class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold"
+        @click="store.continueAfterBattleEnded()"
+      >
+        Ir para o Ranking
+      </button>
+    </template>
+
     <!-- Repescagem Template -->
-    <template v-if="store.phaseFlow.stage === 'repescagem'">
+    <template v-else-if="store.phaseFlow.stage === 'repescagem'">
       <h1 class="text-2xl font-bold text-amber-700">Repescagem — Fase {{ store.phase }}</h1>
       <p v-if="repescagemError" class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-sm">
         {{ repescagemError }}

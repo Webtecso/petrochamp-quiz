@@ -50,8 +50,10 @@ interface PhaseTransitionState {
 interface PhaseFlowState {
   stage:
     | 'idle'
+    | 'battleEnded'
     | 'repescagem'
     | 'ranking'
+    | 'presentationRanking'
     | 'partnersPending'
     | 'partners'
     | 'webtec'
@@ -159,6 +161,11 @@ interface LiveState {
   initialScoreEntries: InitialScoreEntry[]
   initialScoresConfirmed: boolean
   presentationFlow: PresentationFlowState
+  // NOVO — notas de apresentação da fase 'apresentacao_quiz' (uma
+  // entrada por equipa, só a média das notas dos jurados, sem pesos
+  // aplicados ainda). O backend já enviava isto no state:sync; faltava
+  // na tipagem do store, por isso nunca era usado no frontend.
+  presentationPhaseScores: RankingEntry[]
   presentationRoundReady: boolean
   analyticEvaluation: AnalyticEvaluationState
   currentItemSource: 'question' | 'analytic' | null
@@ -206,9 +213,6 @@ function defaultAnalyticEvaluation(): AnalyticEvaluationState {
   }
 }
 
-// NOVO — controlo de debounce para envio de notas ao servidor. Guardados
-// fora do state do Pinia (não precisam de ser reativos nem persistidos)
-// para evitar re-render desnecessário a cada tecla.
 const presentationScoreDebounce: Record<string, ReturnType<typeof setTimeout>> = {}
 const analyticScoreDebounce: Record<string, ReturnType<typeof setTimeout>> = {}
 const PRESENTATION_SCORE_DEBOUNCE_MS = 400
@@ -260,6 +264,7 @@ export const useCampeonatoStore = defineStore('campeonato', {
     initialScoreEntries: [],
     initialScoresConfirmed: false,
     presentationFlow: defaultPresentationFlow(),
+    presentationPhaseScores: [],
     presentationRoundReady: false,
     analyticEvaluation: defaultAnalyticEvaluation(),
     currentItemSource: null,
@@ -336,6 +341,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     finishMatch() {
       getSocket().emit('moderator:finishMatch')
     },
+    continueAfterBattleEnded() {
+      getSocket().emit('moderator:continueAfterBattleEnded')
+    },
     continueAfterRepescagem() {
       getSocket().emit('moderator:continueAfterRepescagem')
     },
@@ -399,21 +407,6 @@ export const useCampeonatoStore = defineStore('campeonato', {
     finishPresentation() {
       getSocket().emit('moderator:finishPresentation')
     },
-    // CORRIGIDO — antes emitia diretamente ao socket a cada chamada, ou
-    // seja, a cada tecla digitada no input de nota (a JuradosView.vue
-    // chama isto em @input). Cada emit despoleta um broadcast() no
-    // backend que reenvia o liveState inteiro a todos os clientes
-    // ligados — com vários jurados a escrever ao mesmo tempo, isto
-    // gerava uma rajada de round-trips completos, dando a sensação de
-    // lentidão e de "a nota não fica gravada" quando um broadcast
-    // atrasado sobrepunha o valor mostrado no ecrã.
-    //
-    // Agora: 1) atualiza otimisticamente o array local
-    // presentationFlow.criteriaScores (o valor aparece no ecrã de
-    // imediato, sem esperar pelo servidor); 2) só emite ao servidor
-    // depois de um pequeno intervalo sem nova alteração para a MESMA
-    // combinação jurado+critério. O próximo state:sync do servidor
-    // confirma (ou corrige) este valor otimista.
     setPresentationScore(jurorId: string, criteriaId: number, score: number) {
       const existing = this.presentationFlow.criteriaScores.find(
         (e) => e.jurorId === jurorId && e.criteriaId === criteriaId
@@ -446,8 +439,6 @@ export const useCampeonatoStore = defineStore('campeonato', {
     prevPresentationPage() {
       getSocket().emit('moderator:presentationPrevPage')
     },
-    // CORRIGIDO — mesmo tratamento de debounce + atualização otimista
-    // local para as notas por critério de Perguntas Analíticas.
     setAnalyticCriteriaScore(jurorId: string, criteriaId: string, team: 'A' | 'B', score: number) {
       const existing = this.analyticEvaluation.criteriaScores.find(
         (e) => e.jurorId === jurorId && e.criteriaId === criteriaId && e.team === team

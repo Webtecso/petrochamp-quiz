@@ -15,9 +15,9 @@ router.get('/', async (req, res) => {
   res.json(entries)
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO — soft delete (ver nota em questions.ts) + id como string
 router.delete('/:id', async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   try {
     await prisma.championshipHistory.update({ where: { id }, data: { deletedAt: new Date() } })
     res.status(204).send()

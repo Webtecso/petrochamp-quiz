@@ -278,6 +278,12 @@
   let multipleChoiceItems = []
   let openItems = []
   let selectedItemId = null
+  // NOVO — evita refazer o fetch da lista de perguntas analíticas e
+  // reconstruir o <select> a cada render() (que corre a cada segundo via
+  // state:sync, enquanto o timer está a correr). A lista não muda a meio
+  // de uma partida, por isso só faz sentido voltar a pedir ao servidor
+  // quando a fase muda.
+  let quizItemsFetchedForPhase = null
 
   // ---- Modo Apresentação ----
   let phasesCache = {}
@@ -400,20 +406,45 @@
 
   // ==================== MODO BATALHA (Quiz) ====================
 
+  // CORRIGIDO — bug principal: selectedItemId era reposto à força para a
+  // primeira pergunta analítica em TODO fetchQuizItems, que corria a cada
+  // render() (ou seja, a cada segundo via state:sync). Isso impedia:
+  //   1. Avaliar qualquer pergunta que não a primeira — o dropdown
+  //      revertia sozinho antes do jurado conseguir preencher/submeter.
+  //   2. Depois de submeter a primeira (que ficava desativada), o jurado
+  //      ficava preso nela, sem conseguir sequer chegar às restantes.
+  //
+  // Agora: o fetch ao servidor e a reconstrução do <select> só acontecem
+  // quando a fase muda (quizItemsFetchedForPhase !== phase); e
+  // selectedItemId só é reposto por omissão se ainda não houver nenhuma
+  // seleção válida (nula, ou a apontar para um item que já não existe) —
+  // nunca se o jurado já tiver escolhido outra pergunta válida.
   async function fetchQuizItems(phase) {
-    const res = await fetch(`${backendUrl}/api/evaluation-items?phase=${phase}`)
-    evaluationItems = await res.json()
-    multipleChoiceItems = evaluationItems.filter((i) => i.mode === 'multipla_escolha')
-    openItems = evaluationItems.filter((i) => i.mode !== 'multipla_escolha')
+    if (quizItemsFetchedForPhase !== phase) {
+      const res = await fetch(`${backendUrl}/api/evaluation-items?phase=${phase}`)
+      evaluationItems = await res.json()
+      multipleChoiceItems = evaluationItems.filter((i) => i.mode === 'multipla_escolha')
+      openItems = evaluationItems.filter((i) => i.mode !== 'multipla_escolha')
+      quizItemsFetchedForPhase = phase
+
+      const select = document.getElementById('itemSelect')
+      select.innerHTML = openItems
+        .map((i) => `<option value="${i.id}">Analítica · ${i.maxPoints} pts</option>`)
+        .join('')
+      select.onchange = (e) => {
+        selectedItemId = e.target.value
+        renderQuizScores()
+      }
+    }
+
+    const stillValid = selectedItemId && openItems.some((i) => i.id === selectedItemId)
+    if (!stillValid) {
+      selectedItemId = openItems.length ? openItems[0].id : null
+    }
 
     const select = document.getElementById('itemSelect')
-    select.innerHTML = openItems
-      .map((i) => `<option value="${i.id}">Analítica · ${i.maxPoints} pts</option>`)
-      .join('')
-    if (openItems.length) selectedItemId = openItems[0].id
-    select.onchange = (e) => {
-      selectedItemId = e.target.value
-      renderQuizScores()
+    if (select.value !== selectedItemId) {
+      select.value = selectedItemId ?? ''
     }
   }
 
@@ -422,7 +453,17 @@
     return item.jurorIds.includes(jurorId)
   }
 
+  // NOVO — mesmo princípio do isEditingPresentationScore: não reconstrói
+  // os campos de nota do Quiz enquanto o jurado tem o foco neles, para
+  // não perder o valor a meio de escrever quando chega um state:sync.
+  function isEditingQuizScore() {
+    const active = document.activeElement
+    return !!active && (active.id === 'scoreA' || active.id === 'scoreB')
+  }
+
   function renderQuizScores() {
+    if (isEditingQuizScore()) return
+
     const item = openItems.find((i) => i.id === selectedItemId)
     const mcArea = document.getElementById('mcItemsArea')
     if (mcArea) {

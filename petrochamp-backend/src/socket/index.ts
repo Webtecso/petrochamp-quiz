@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import type { Server, Socket } from 'socket.io'
 import { prisma } from '../db'
 import { getEligibleTeams } from '../routes/repescagem'
-import { syncPresentationDuplasForRound } from '../routes/bracketLive'
+import { syncPresentationDuplasForRound, getBracketRoundForPhaseOrder } from '../routes/bracketLive'
 import {
   liveState,
   resetMatch,
@@ -186,7 +186,11 @@ async function buildPool(): Promise<PoolItem[]> {
       where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
     }),
     prisma.evaluationItem.findMany({
-      where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+      where: {
+        phase: liveState.phase,
+        championship: liveState.championship ?? undefined,
+        type: 'analitica'
+      }
     }),
     getQuestionTimeSeconds()
   ])
@@ -221,7 +225,11 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
         where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
       }),
       prisma.evaluationItem.findMany({
-        where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+        where: {
+          phase: liveState.phase,
+          championship: liveState.championship ?? undefined,
+          type: 'analitica'
+        }
       }),
       getQuestionTimeSeconds()
     ])
@@ -374,56 +382,6 @@ async function pickSuspensePhrase(): Promise<string> {
     : 'Preparem-se — a próxima fase está prestes a começar...'
 }
 
-// ---------------------------------------------------------------------
-// CORRIGIDO — reintroduzido depois de ter sido perdido numa edição
-// posterior do ficheiro. Antes, toda esta lógica estava só dentro de
-// 'juror:submitPresentationEvaluation', condicionada a
-// 'flow.stage === concluded' NO MOMENTO EXATO da submissão. Isso causava
-// o botão "Avançar" a não aparecer, em especial na ÚLTIMA apresentação
-// da fase, em dois cenários:
-//
-// 1) Se o último jurado submetesse a avaliação ENQUANTO a apresentação
-//    ainda estava em 'presenting' (antes do moderador clicar em
-//    "Finalizar Apresentação"), a condição falhava, e como
-//    'moderator:finishPresentation' nunca voltava a verificar isto,
-//    'allJurorsSubmitted' ficava para sempre 'false'.
-//
-// 2) 'expectedJurorCount' vem de uma contagem estática na BD (jurados
-//    autorizados na fase, ou todos os jurados cadastrados) e não do
-//    número de jurados REALMENTE ligados (liveState.jurors). Se um
-//    jurado nunca se ligar, ou se desligar (ou for removido) antes de
-//    submeter, 'jurorsSubmitted.length' nunca alcançava
-//    'expectedJurorCount'.
-//
-// Esta função central é chamada em todos os pontos onde o conjunto de
-// jurados ligados ou de submissões pode mudar: fim de
-// finishPresentation, fim de submitPresentationEvaluation, remoção de
-// jurado, e desconexão de jurado (normal ou local).
-//
-// ATUALIZADO — o loop que grava presentationScore na BD ficava exposto a
-// uma exceção não apanhada sempre que flow.criteriaScores continha uma
-// entrada com criteriaId nulo/inválido (podia acontecer se algum payload
-// malformado tivesse entrado antes da guarda adicionada em
-// juror:setPresentationScore, ou se tivesse sobrevivido num LiveSession
-// persistido de uma sessão anterior a essa correção). Essa exceção
-// interrompia a função a meio, e como o broadcast() do chamador vem
-// sempre a seguir, o frontend nunca era notificado — o botão "Avançar"
-// só aparecia muito mais tarde, quando a sincronização periódica (a cada
-// 3 min) por acaso disparava outro state:sync. Agora: entradas sem
-// criteriaId são filtradas antes de entrarem no cálculo/gravação, e cada
-// upsert corre isolado num try/catch, para uma falha pontual num único
-// registo nunca mais travar toda a função.
-//
-// NOVO — a função passou a receber 'broadcast' como parâmetro e a
-// chamá-lo IMEDIATAMENTE a seguir a marcar 'flow.allJurorsSubmitted =
-// true', antes de gravar as notas na BD e calcular ranking/pesos. Isto
-// resolve o "colar": o frontend recebe o state:sync com
-// allJurorsSubmitted: true quase instantaneamente (o botão "Avançar" já
-// pode aparecer aí), e a atualização final (ranking, pesos) chega no
-// broadcast() seguinte, feito pelo chamador, sem bloquear a UI. As
-// gravações de presentationScore passaram também de um for...await
-// sequencial para Promise.all, para não somar a latência de cada upsert.
-// ---------------------------------------------------------------------
 async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   const flow = liveState.presentationFlow
   if (flow.stage !== 'concluded' || !flow.teamId) return
@@ -439,10 +397,8 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   if (flow.jurorsSubmitted.length < target) return
 
   flow.allJurorsSubmitted = true
-  broadcast() // NOVO — o botão "Avançar" já pode aparecer aqui, sem esperar pelo resto.
+  broadcast()
 
-  // filtra entradas com criteriaId ausente/inválido antes de as usar em
-  // qualquer cálculo ou gravação (ver nota acima).
   const validCriteriaScores = flow.criteriaScores.filter((e) => !!e.criteriaId)
 
   const totalsByJuror = new Map<string, number>()
@@ -452,10 +408,6 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   const totals = Array.from(totalsByJuror.values())
   const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0
 
-  // NOVO — gravações paralelizadas com Promise.all em vez de
-  // sequenciais (for...await), cada uma isolada no seu próprio
-  // catch para uma falha pontual num único registo nunca travar as
-  // restantes.
   await Promise.all(
     validCriteriaScores.map((entry) =>
       prisma.presentationScore
@@ -557,10 +509,75 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
       if (phaseConfig.type === 'apresentacao') {
         liveState.presentationRoundReady = true
       } else if (phaseConfig.type === 'apresentacao_quiz') {
-        liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
+        liveState.phaseFlow = { stage: 'presentationRanking', suspensePhrase: null }
       }
     }
   }
+}
+
+async function applyEvaluationConfirmation(itemId: string): Promise<void> {
+  if (liveState.jurorSubmittedItemIds.includes(itemId)) return
+
+  if (liveState.expectedJurorCount > 0) {
+    if (liveState.jurors.length < liveState.expectedJurorCount) return
+    const missing = liveState.jurors.some(
+      (j) => !liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === itemId)
+    )
+    if (missing) return
+  }
+
+  const relevant = liveState.jurorEntries.filter((e) => e.itemId === itemId)
+  const totalA = relevant.reduce((sum, e) => sum + e.scoreA, 0)
+  const totalB = relevant.reduce((sum, e) => sum + e.scoreB, 0)
+  liveState.teamAScore += totalA
+  liveState.teamBScore += totalB
+  liveState.jurorSubmittedItemIds.push(itemId)
+
+  const wasActiveDraw =
+    liveState.currentItemSource === 'analytic' &&
+    liveState.currentAnalyticItemId === itemId &&
+    liveState.awaitingJuryEvaluation
+
+  if (wasActiveDraw) {
+    liveState.teamAAnsweredCount += 1
+    liveState.teamBAnsweredCount += 1
+    liveState.awaitingJuryEvaluation = false
+    liveState.currentItemSource = null
+    liveState.currentAnalyticItemId = null
+    liveState.currentItemMode = null
+
+    if (await roundQuestionsComplete()) {
+      liveState.currentQuestionId = null
+    } else {
+      const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
+      await drawNextItem(nextTeam)
+    }
+  }
+}
+
+async function checkAutoConfirmOpenItem(broadcast: () => void): Promise<void> {
+  if (!liveState.awaitingJuryEvaluation) return
+  if (liveState.currentItemSource !== 'analytic' || !liveState.currentAnalyticItemId) return
+
+  const itemId = liveState.currentAnalyticItemId
+  if (liveState.jurorSubmittedItemIds.includes(itemId)) return
+
+  const connectedCount = liveState.jurors.length
+  const target =
+    connectedCount > 0
+      ? Math.min(liveState.expectedJurorCount || connectedCount, connectedCount)
+      : liveState.expectedJurorCount
+
+  if (target <= 0) return
+
+  const submittedCount = liveState.jurors.filter((j) =>
+    liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === itemId)
+  ).length
+
+  if (submittedCount < target) return
+
+  await applyEvaluationConfirmation(itemId)
+  broadcast()
 }
 
 export function registerSocketHandlers(io: Server): void {
@@ -594,6 +611,23 @@ export function registerSocketHandlers(io: Server): void {
         changed = true
       }
       if (changed) broadcast()
+
+      // CORRIGIDO — quando o tempo acaba e awaitingJuryEvaluation passa a
+      // true aqui em cima, é possível que os jurados já tenham enviado a
+      // nota ANTES do fim do tempo (juror:setScore chama
+      // checkAutoConfirmOpenItem, mas nessa altura awaitingJuryEvaluation
+      // ainda era false, então a checagem saía sem confirmar nada). Sem
+      // este chamada extra, essa nota ficava presa em jurorEntries para
+      // sempre — nunca era promovida a jurorSubmittedItemIds, e o jurado
+      // via o botão "Confirmar Pontuação" a dizer "enviado" sem nada
+      // realmente avançar. Ao chamar checkAutoConfirmOpenItem aqui, assim
+      // que awaitingJuryEvaluation se torna true, o sistema volta a
+      // verificar se todos os jurados esperados já responderam e, se sim,
+      // confirma imediatamente — sem esperar por um novo juror:setScore
+      // que pode nunca vir (o jurado já enviou a nota dele).
+      if (liveState.awaitingJuryEvaluation) {
+        checkAutoConfirmOpenItem(broadcast)
+      }
     }, 1000)
   }
 
@@ -652,17 +686,6 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    // ATUALIZADO — quando uma ação é bloqueada (Principal ou área em
-    // falta), agora responde ao "ack" (callback) do próprio evento, se o
-    // frontend tiver passado um, com { success: false, error: '...' } em
-    // vez de simplesmente ignorar o pedido em silêncio. Antes, um clique
-    // bloqueado parecia "colar" — o utilizador não tinha nenhuma pista de
-    // que a ação tinha sido rejeitada, só via nada acontecer. Isto
-    // funciona para QUALQUER evento na lista, mesmo os que hoje não
-    // declaram um parâmetro de callback no seu próprio handler — o
-    // socket.io entrega sempre a função de ack (se o emit() do cliente
-    // tiver passado uma) como o último argumento bruto do evento, e o
-    // middleware consegue aceder a ela diretamente aqui.
     socket.use(([eventName, ...args], next) => {
       const maybeCallback = args[args.length - 1]
       const respondBlocked = (message: string): void => {
@@ -935,6 +958,16 @@ export function registerSocketHandlers(io: Server): void {
       liveState.isRunning = false
       liveState.awaitingJuryEvaluation = true
       broadcast()
+      // CORRIGIDO — mesmo raciocínio do timer principal: se os jurados já
+      // tinham enviado a nota antes do moderador clicar em "Encerrar
+      // Pergunta Aberta", essa nota ficava presa em jurorEntries e nunca
+      // era promovida a jurorSubmittedItemIds, porque a única chamada a
+      // checkAutoConfirmOpenItem acontecia dentro do handler
+      // juror:setScore — e nessa altura awaitingJuryEvaluation ainda
+      // era false. Agora, assim que awaitingJuryEvaluation passa a true
+      // aqui, verificamos imediatamente se a avaliação já pode ser
+      // confirmada.
+      checkAutoConfirmOpenItem(broadcast)
     })
 
     socket.on('moderator:startTiebreak', async () => {
@@ -1116,7 +1149,8 @@ export function registerSocketHandlers(io: Server): void {
           if (!liveState.eliminatedTeamIds.includes(loserId)) {
             liveState.eliminatedTeamIds.push(loserId)
           }
-          shouldStartSequence = await isRoundComplete(liveState.championship, liveState.phase)
+          const bracketRound = await getBracketRoundForPhaseOrder(liveState.championship, liveState.phase)
+          shouldStartSequence = await isRoundComplete(liveState.championship, bracketRound)
         }
       }
 
@@ -1297,7 +1331,8 @@ export function registerSocketHandlers(io: Server): void {
     })
 
     socket.on('moderator:confirmQuizIntro', async () => {
-      if (liveState.phaseFlow.stage !== 'quizIntro') return
+      if (liveState.phaseFlow.stage !== 'quizIntro' && liveState.phaseFlow.stage !== 'presentationRanking')
+        return
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.bracketVisible = true
       await refreshExpectedJurorCount()
@@ -1637,11 +1672,6 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    // CORRIGIDO — agora async e chama checkAllJurorsSubmitted(broadcast)
-    // depois de marcar 'concluded', para cobrir o caso em que todos os
-    // jurados já tinham submetido a avaliação ANTES do moderador clicar
-    // em "Finalizar" (o que antes deixava 'allJurorsSubmitted' preso em
-    // 'false' para sempre, e o botão "Avançar" nunca aparecia).
     socket.on('moderator:finishPresentation', async () => {
       if (liveState.presentationFlow.stage !== 'presenting') return
       if (liveState.presentationFlow.timeLeft > 0) return
@@ -1668,17 +1698,6 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    // ATUALIZADO — payload.criteriaId inválido (ausente, vazio, ou
-    // qualquer coisa "falsy") é agora rejeitado logo aqui, silenciosamente
-    // do ponto de vista do jurado (não quebra a UI dele, só não regista a
-    // nota). Sem isto, uma entrada envenenada entrava em
-    // presentationFlow.criteriaScores e mais tarde fazia o
-    // prisma.presentationScore.upsert() dentro de checkAllJurorsSubmitted()
-    // rebentar com "Argument criteriaId must not be null" — uma exceção
-    // não apanhada que impedia o broadcast() seguinte de correr, fazendo
-    // o botão "Avançar" no painel do Moderador demorar muito a aparecer
-    // (só quando a sincronização periódica de 3 em 3 min por acaso
-    // disparava outro state:sync).
     socket.on(
       'juror:setPresentationScore',
       (payload: { jurorId: string; criteriaId: string; score: number }) => {
@@ -1697,10 +1716,6 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    // CORRIGIDO — só regista a submissão do jurado; toda a lógica de
-    // "já submeteram todos?" e o cálculo/gravação da nota foi movida para
-    // checkAllJurorsSubmitted(broadcast), reutilizada também em
-    // finishPresentation.
     socket.on('juror:submitPresentationEvaluation', async (payload: { jurorId: string }) => {
       const flow = liveState.presentationFlow
       if (flow.stage === 'idle' || !flow.teamId) return
@@ -1830,9 +1845,6 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    // CORRIGIDO — remover um jurado pode ser precisamente o que faltava
-    // para desbloquear o "Avançar" (ex: jurado que ficou preso sem
-    // conseguir submeter). Reavalia de imediato.
     socket.on('moderator:removeJuror', async (payload: { jurorId: string }) => {
       liveState.jurors = liveState.jurors.filter((j) => j.id !== payload.jurorId)
       liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== payload.jurorId)
@@ -1842,7 +1854,7 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on(
       'juror:setScore',
-      (payload: { jurorId: string; itemId: string; scoreA: number; scoreB: number }) => {
+      async (payload: { jurorId: string; itemId: string; scoreA: number; scoreB: number }) => {
         const existing = liveState.jurorEntries.find(
           (e) => e.jurorId === payload.jurorId && e.itemId === payload.itemId
         )
@@ -1853,48 +1865,12 @@ export function registerSocketHandlers(io: Server): void {
           liveState.jurorEntries.push({ ...payload })
         }
         broadcast()
+        await checkAutoConfirmOpenItem(broadcast)
       }
     )
 
     socket.on('moderator:confirmEvaluation', async (payload: { itemId: string }) => {
-      if (liveState.jurorSubmittedItemIds.includes(payload.itemId)) return
-
-      if (liveState.expectedJurorCount > 0) {
-        if (liveState.jurors.length < liveState.expectedJurorCount) return
-        const missing = liveState.jurors.some(
-          (j) =>
-            !liveState.jurorEntries.some((e) => e.jurorId === j.id && e.itemId === payload.itemId)
-        )
-        if (missing) return
-      }
-
-      const relevant = liveState.jurorEntries.filter((e) => e.itemId === payload.itemId)
-      const totalA = relevant.reduce((sum, e) => sum + e.scoreA, 0)
-      const totalB = relevant.reduce((sum, e) => sum + e.scoreB, 0)
-      liveState.teamAScore += totalA
-      liveState.teamBScore += totalB
-      liveState.jurorSubmittedItemIds.push(payload.itemId)
-
-      const wasActiveDraw =
-        liveState.currentItemSource === 'analytic' &&
-        liveState.currentAnalyticItemId === payload.itemId &&
-        liveState.awaitingJuryEvaluation
-
-      if (wasActiveDraw) {
-        liveState.teamAAnsweredCount += 1
-        liveState.teamBAnsweredCount += 1
-        liveState.awaitingJuryEvaluation = false
-        liveState.currentItemSource = null
-        liveState.currentAnalyticItemId = null
-        liveState.currentItemMode = null
-
-        if (await roundQuestionsComplete()) {
-          liveState.currentQuestionId = null
-        } else {
-          const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
-          await drawNextItem(nextTeam)
-        }
-      }
+      await applyEvaluationConfirmation(payload.itemId)
       broadcast()
     })
 

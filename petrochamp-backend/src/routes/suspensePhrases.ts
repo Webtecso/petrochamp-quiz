@@ -24,9 +24,9 @@ router.post('/', requireAdmin, async (req, res) => {
   res.status(201).json(phrase)
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO — soft delete (ver nota em questions.ts) + id como string
 router.delete('/:id', requireAdmin, async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   try {
     await prisma.suspensePhrase.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('suspensePhrases')

@@ -7,7 +7,7 @@ const router = Router()
 
 router.get('/', async (_req, res) => {
   const partners = await prisma.partner.findMany({
-    where: { deletedAt: null }, // NOVO
+    where: { deletedAt: null },
     orderBy: { order: 'asc' }
   })
   res.json(partners)
@@ -25,7 +25,9 @@ router.post('/', requireAdmin, async (req, res) => {
 })
 
 router.put('/:id', requireAdmin, async (req, res) => {
-  const id = Number(req.params.id)
+  // CORRIGIDO — id é cuid() (string) no schema, não Int. O Number(...)
+  // convertia "ck8x..." em NaN, e o Prisma rejeitava o tipo em compilação.
+  const id = req.params.id
   const { name, logoUrl, order } = req.body
   try {
     const partner = await prisma.partner.update({ where: { id }, data: { name, logoUrl, order } })
@@ -38,7 +40,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
 // CORRIGIDO — soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.params.id
   try {
     await prisma.partner.update({ where: { id }, data: { deletedAt: new Date() } })
     emitConfigUpdated('partners')

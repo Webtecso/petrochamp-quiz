@@ -18,9 +18,9 @@ export interface Phase {
   presentationMinutes?: number | null
   presentationWeight?: number | null
   quizWeight?: number | null
-  // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam,
-  // e a nota fica guardada para ser somada (com presentationWeight/
-  // quizWeight) à nota do Quiz da fase seguinte.
+  // Fase de Apresentação sem eliminação: todas as equipas avançam, e a
+  // nota fica guardada para ser somada (com presentationWeight/quizWeight)
+  // à nota do Quiz da fase seguinte.
   noElimination?: boolean
 }
 
@@ -76,6 +76,42 @@ export const usePhasesStore = defineStore('phases', {
           quizWeight: null,
           noElimination: false
         }
+      }
+    },
+    // NOVO — traduz Phase.order (numeração das fases do campeonato,
+    // visível ao utilizador) para BracketMatch.round (a ronda real do
+    // chaveamento, gerada em bracketLive.ts). São o mesmo número só
+    // enquanto todas as fases geram uma ronda de chaveamento própria
+    // (ex: apresentacao_quiz no universitario). Assim que existe uma
+    // fase "apresentacao" com noElimination: true no meio da sequência
+    // (que não gera nenhum BracketMatch — ver bracketLive.ts e
+    // socket/index.ts), Phase.order fica à frente do round real em 1
+    // (ou mais, se houver várias fases assim) — este getter compensa
+    // esse desvio contando, entre as fases ordenadas por `order` até
+    // (e incluindo) a fase pedida, quantas delas correspondem
+    // efetivamente a uma ronda de bracket.
+    //
+    // No universitario (sem nenhuma fase apresentacao+noElimination),
+    // isto devolve sempre o mesmo valor que `order` — função identidade,
+    // nada muda lá.
+    phaseOrderToBracketRound: (state) => {
+      return (order: number | string): number => {
+        const targetOrder = Number(order)
+        const sorted = [...state.phases].sort((a, b) => a.order - b.order)
+        let round = 0
+        let matchedRound: number | null = null
+        for (const p of sorted) {
+          const isOutsideBracket = p.type === 'apresentacao' && Boolean(p.noElimination)
+          if (!isOutsideBracket) round += 1
+          if (Number(p.order) === targetOrder) {
+            matchedRound = isOutsideBracket ? round + 1 : round
+            break
+          }
+        }
+        // Fallback: se a fase não foi encontrada na lista (ainda a
+        // carregar, ou dados inconsistentes), assume-se a identidade
+        // para não partir nada no caso simples de 1-para-1.
+        return matchedRound ?? targetOrder
       }
     }
   },

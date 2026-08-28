@@ -135,14 +135,24 @@ function advanceNext(): void {
   store.advanceToNextPresentation()
 }
 
+// CORRIGIDO — antes, no ramo "só apresentação" (isCompositePhase === false),
+// esta função chamava store.confirmPresentationRanking() e navegava para
+// '/moderador/ranking'. Mas RankingView.vue é só uma tabela de ranking —
+// não tem nenhum botão nem lógica para os estágios seguintes do phaseFlow
+// ('ranking' → 'partners' → 'webtec' → 'organizer' → 'suspense' →
+// avançar fase). Essa lógica está toda em EquipasSelectView.vue (rota
+// /moderador/equipas), que já era usada corretamente no ramo composto
+// (apresentacao_quiz). O moderador ficava preso no ranking, sem qualquer
+// forma de avançar de fase, exatamente como no ramo composto ele já ia
+// (corretamente) para /moderador/equipas. Agora os dois ramos navegam
+// para o mesmo sítio, que trata todos os estágios do phaseFlow.
 function goNext(): void {
   if (isCompositePhase.value) {
     store.confirmQuizIntro()
-    router.push('/moderador/equipas')
   } else {
     store.confirmPresentationRanking()
-    router.push('/moderador/ranking')
   }
+  router.push('/moderador/equipas')
 }
 </script>
 
@@ -280,7 +290,7 @@ function goNext(): void {
           <button
             v-if="store.presentationRoundReady"
             class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold self-center"
-            @click="store.confirmPresentationRanking()"
+            @click="goNext"
           >
             Ir para o Ranking
           </button>

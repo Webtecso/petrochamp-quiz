@@ -22,6 +22,7 @@ import PartnerCarousel from '../components/PartnerCarousel.vue'
 import WebtecPresentation from '../components/WebtecPresentation.vue'
 import EventOrganizerPresentation from '../components/EventOrganizerPresentation.vue'
 import PhaseRankingBoard from '../components/PhaseRankingBoard.vue'
+import PresentationRankingBoard from '../components/PresentationRankingBoard.vue'
 import projectionBg from '../assets/projecao-bg.jpg'
 
 const store = useCampeonatoStore()
@@ -68,6 +69,7 @@ watch(
   async (newVal) => {
     if (!newVal) return
     await quizContent.fetchQuestions(newVal)
+    await quizContent.fetchEvaluationItems(newVal) // NOVO — antes só recarregava perguntas normais e de desempate ao trocar de campeonato; itens analíticos ficavam presos ao campeonato anterior.
     await quizContent.fetchTiebreakQuestions(newVal) // NOVO
     await phasesStore.fetchPhases(newVal)
   }
@@ -114,7 +116,72 @@ const bracket = computed(() => {
 })
 
 const phaseQuestions = computed(() => quizContent.questionsForPhase(store.phase))
-const currentQuestion = computed(() => phaseQuestions.value.find((q) => q.id === store.currentQuestionId))
+// NOVO — pool de itens analíticos da fase atual, paralelo a
+// 'phaseQuestions'. Sem isto não havia nenhuma forma de encontrar o
+// item ativo quando o sorteio caía num item analítico em vez de uma
+// pergunta normal.
+const phaseEvaluationItems = computed(() => quizContent.itemsForPhase(store.phase))
+
+const currentQuizQuestion = computed(() => phaseQuestions.value.find((q) => q.id === store.currentQuestionId))
+// NOVO — item analítico atualmente sorteado, localizado por
+// store.currentAnalyticItemId (espelha liveState.currentAnalyticItemId
+// do backend).
+const currentAnalyticItem = computed(() =>
+  phaseEvaluationItems.value.find((i) => i.id === store.currentAnalyticItemId)
+)
+
+// CORRIGIDO — antes 'currentQuestion' só olhava para
+// store.currentQuestionId, que o backend deixa a 'null' sempre que o
+// item sorteado é analítico (currentItemSource === 'analytic'). Como
+// resultado, sempre que calhava uma Pergunta Analítica, o ecrã de
+// batalha ficava totalmente vazio (sem texto, sem opções, sem imagem)
+// — currentQuestion.value era sempre 'undefined' nesse caso. Agora
+// escolhemos a fonte certa consoante store.currentItemSource, e todo o
+// resto do ecrã (texto, imagem, opções de resposta) passa a funcionar
+// igual para os dois tipos de item, porque ambos alimentam o mesmo
+// computed.
+const currentQuestion = computed(() => {
+  if (store.currentItemSource === 'analytic') return currentAnalyticItem.value
+  return currentQuizQuestion.value
+})
+
+// CORRIGIDO — EvaluationItem usa 'correctIndex' singular (não um array
+// 'correctIndexes' como se assumiu antes), igual a QuizQuestion. Basta
+// ler diretamente.
+const currentQuestionCorrectIndex = computed(() => {
+  const q = currentQuestion.value as { correctIndex?: number | null } | undefined
+  return typeof q?.correctIndex === 'number' ? q.correctIndex : -1
+})
+
+// NOVO — EvaluationItem não tem um campo 'options' (array) como
+// QuizQuestion; guarda cada opção em campos separados
+// (optionA/B/C/D), e só faz sentido construir a lista quando
+// mode === 'multipla_escolha' — em modo 'aberta' não há opções, a
+// resposta é avaliada manualmente pelos jurados (fluxo já existente via
+// store.awaitingJuryEvaluation). Este computed devolve:
+// - o array de opções da pergunta normal (QuizQuestion.options), OU
+// - as opções montadas do item analítico em 'multipla_escolha', OU
+// - null quando não há opções para mostrar (item analítico 'aberta').
+const currentQuestionOptions = computed((): string[] | null => {
+  if (store.currentItemSource === 'analytic') {
+    const item = currentAnalyticItem.value
+    if (!item || item.mode !== 'multipla_escolha') return null
+    return [item.optionA, item.optionB, item.optionC, item.optionD].filter(
+      (o): o is string => !!o
+    )
+  }
+  const q = currentQuestion.value as { options?: string[] } | undefined
+  return q?.options ?? null
+})
+
+// NOVO — sinaliza uma pergunta analítica aberta ativa (sem opções, à
+// espera de avaliação dos jurados), para o template mostrar uma
+// mensagem adequada em vez de tentar renderizar <AnswerOptions> sem
+// opções nenhumas.
+const isOpenAnalyticQuestion = computed(
+  () => store.currentItemSource === 'analytic' && currentAnalyticItem.value?.mode === 'aberta'
+)
+
 const currentPhaseFull = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
 
 const isPresentationPhaseNow = computed(
@@ -130,15 +197,27 @@ const teamAName = computed(() => store.teamA?.name ?? 'EQUIPA A')
 const teamALogo = computed(() => store.teamA?.logoUrl ?? null)
 const teamBName = computed(() => store.teamB?.name ?? 'EQUIPA B')
 const teamBLogo = computed(() => store.teamB?.logoUrl ?? null)
-const questionImage = computed(() => currentQuestion.value?.imageUrl ?? null)
+// Passa agora a funcionar também para itens analíticos, já que
+// 'currentQuestion' cobre os dois tipos.
+const questionImage = computed(() => (currentQuestion.value as { imageUrl?: string | null } | undefined)?.imageUrl ?? null)
 
-// NOVO — pergunta de desempate ativa, espelha currentQuestion mas usa
+// Pergunta de desempate ativa, espelha currentQuestion mas usa
 // store.tiebreak.currentQuestionId e a lista carregada de TiebreakQuestion.
 const currentTiebreakQuestion = computed(() =>
   quizContent.tiebreakQuestionsForPhase(store.phase).find((q) => q.id === store.tiebreak.currentQuestionId)
 )
 const tiebreakQuestionImage = computed(() => currentTiebreakQuestion.value?.imageUrl ?? null)
 
+// CORRIGIDO — caminhos relativos (ex: 'uploads/xxx.jpg') resolviam
+// apenas para '/uploads/xxx.jpg', que o browser interpretava contra a
+// própria origem da Projeção (Vite, porta 5173) — onde esse ficheiro
+// não existe. Ele só existe no backend (porta 4000, onde
+// express.static('/uploads', ...) está montado). Por isso NENHUMA
+// imagem de pergunta, de desempate, ou logo de equipa aparecia, mesmo
+// com o caminho gravado corretamente na base de dados — só as slides
+// de apresentação em modo documento funcionavam, porque já prefixavam
+// com getBackendUrl() à parte. Agora formatImageUrl faz o mesmo para
+// todos os casos relativos.
 function formatImageUrl(url: string | null | undefined): string {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('file://')) {
@@ -147,7 +226,8 @@ function formatImageUrl(url: string | null | undefined): string {
   if (/^[a-zA-Z]:[\\/]/.test(url)) {
     return `file:///${url.replace(/\\/g, '/')}`
   }
-  return url.startsWith('/') ? url : `/${url}`
+  const path = url.startsWith('/') ? url : `/${url}`
+  return `${getBackendUrl()}${path}`
 }
 
 const slideCount = computed(() => Math.max(1, store.presentationFlow.slides?.length ?? 0))
@@ -198,13 +278,6 @@ const roundJustEnded = computed(() => {
       :style="{ backgroundImage: `url(${projectionBg})` }"
     ></div>
 
-    <!--
-      AJUSTADO — a caixa da edição passou de `top-6 right-6` (canto superior
-      direito) para `top-6 left-1/2 -translate-x-1/2` (centro superior), a
-      pedido do utilizador. O -translate-x-1/2 é necessário porque left-1/2
-      por si só só alinha a margem esquerda da caixa ao centro do ecrã, não
-      a caixa inteira.
-    -->
     <div v-if="store.editionName" class="fixed top-6 left-1/2 -translate-x-1/2 z-40 edition-badge">
       <div class="bg-petro-primary/90 text-white px-5 py-2 rounded-full shadow-lg backdrop-blur-sm">
         <span class="font-bold tracking-widest uppercase" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">{{ store.editionName }}</span>
@@ -269,6 +342,29 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
+    <!--
+      4.5 Batalha terminou (fim da última pergunta do Quiz de um round).
+      NOVO — o backend passou a mostrar este estado (phaseFlow.stage ===
+      'battleEnded') antes de avançar para ranking/repescagem/parceiros,
+      e só avança quando o moderador confirmar
+      (moderator:continueAfterBattleEnded). Tem de vir ANTES do bloco
+      'ranking' abaixo, porque phaseFlow é o MESMO objeto de estado — se
+      isto não estiver aqui em cima, o v-else-if de 'ranking' nunca
+      dispara mal a fase muda, mas também nunca existe uma janela visual
+      para 'battleEnded' em si.
+    -->
+    <div
+      v-else-if="store.phaseFlow.stage === 'battleEnded'"
+      class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
+    >
+      <h2 class="font-black text-amber-400" style="font-size: clamp(2rem, 4.5vw, 3.5rem)">
+        A batalha terminou!
+      </h2>
+      <p style="font-size: clamp(1.1rem, 2vw, 1.75rem)">
+        Aguardem — o Moderador vai revelar o ranking a seguir.
+      </p>
+    </div>
+
     <!-- 5. Sequência de Fim de Fase -->
     <div
       v-else-if="store.phaseFlow.stage === 'ranking'"
@@ -277,6 +373,27 @@ const roundJustEnded = computed(() => {
       <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem)">Ranking da Fase {{ store.phase }}</h2>
       <PhaseRankingBoard :rankings="store.phaseRankings" :eliminated-team-ids="store.eliminatedTeamIds" />
     </div>
+
+    <!--
+      6.75 Ranking pós-apresentações (só fase apresentacao_quiz) — NOVO.
+      Mostra só as notas de apresentação (sem AVANÇA/ELIMINADA), porque
+      nesta fase quem passa só é decidido depois do Quiz, com a média
+      ponderada pelos pesos definidos no Admin (ver finishMatch no
+      backend). Diferente do bloco 5 acima (store.phaseFlow.stage ===
+      'ranking'), que é o ranking real com eliminação, usado só na fase
+      'apresentacao' pura — este bloco nunca reaproveita esse componente,
+      para não mostrar avança/eliminada indevidamente aqui.
+    -->
+    <div
+      v-else-if="store.phaseFlow.stage === 'presentationRanking'"
+      class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
+    >
+      <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem)">
+        Notas de Apresentação — Fase {{ store.phase }}
+      </h2>
+      <PresentationRankingBoard :rankings="store.presentationPhaseScores" />
+    </div>
+
     <SuspenseScreen
       v-else-if="store.phaseFlow.stage === 'partnersPending'"
       message="A preparar os parceiros..."
@@ -358,17 +475,6 @@ const roundJustEnded = computed(() => {
       v-else-if="store.presentationFlow.stage === 'presenting' && store.presentationFlow.presentationMode === 'document'"
       class="min-h-screen bg-black relative overflow-hidden"
     >
-      <!--
-        AJUSTADO — cabeçalho:
-        1. Nome da equipa + tema: agora lado a lado (flex-row), em vez de
-           empilhados, a pedido do utilizador. O nome tem `shrink-0` para
-           nunca perder espaço para o tema, e o tema usa `min-w-0` + truncate
-           para cortar corretamente quando o espaço é curto, em vez de
-           empurrar o resto do cabeçalho.
-        2. Contador de slides: pílula com fundo âmbar e texto maior/negrito,
-           bem mais visível sobre o fundo preto.
-        3. Cronómetro: mesma lógica — pílula própria, maior e mais contrastada.
-      -->
       <div class="absolute top-0 inset-x-0 flex items-start justify-between px-6 py-4 bg-black/70 z-20 text-white gap-4">
         <div class="flex flex-row items-center gap-3 min-w-0">
           <span
@@ -400,17 +506,6 @@ const roundJustEnded = computed(() => {
           </span>
         </div>
       </div>
-      <!--
-        CORRIGIDO (2ª vez) — a faixa de slides estava com a classe `flex-1`.
-        Como flex-1 define flex-basis: 0%, o navegador ignora o `width`
-        inline (slideCount * 100%) e calcula a largura pelo algoritmo flex,
-        fazendo a faixa ocupar apenas 100% do ecrã em vez da largura total
-        esticada. Resultado: com 1 slide funcionava bem (não havia diferença),
-        mas com vários slides eles ficavam todos espremidos lado a lado dentro
-        do mesmo ecrã, aparecendo "todos de uma vez". Trocado para `shrink-0`,
-        que não interfere no width inline e deixa o overflow-hidden do pai
-        cortar o excesso corretamente durante a transição.
-      -->
       <div class="absolute inset-0 pt-20 flex overflow-hidden">
         <div
           class="shrink-0 flex transition-transform duration-500 ease-in-out"
@@ -473,14 +568,6 @@ const roundJustEnded = computed(() => {
       />
     </div>
 
-    <!--
-      8.4 Desempate — pendente (5s de contagem antes de sortear a 1ª pergunta).
-      IMPORTANTE: fica ANTES do bloco 8 (countdown genérico) porque
-      startCountdown() no backend usa o MESMO liveState.countdown para este
-      contador de 5s do desempate e também para o de 10s ao escolher equipas —
-      sem esta verificação aqui, o countdown do desempate caía no bloco 8
-      genérico, sem mensagem de contexto nenhuma.
-    -->
     <CountdownScreen
       v-else-if="store.tiebreak.pending"
       :seconds="store.countdown.value"
@@ -553,7 +640,6 @@ const roundJustEnded = computed(() => {
             </div>
           </div>
         </div>
-        <!-- Fallback: sem pool de perguntas de desempate cadastradas para esta fase -->
         <div v-else class="text-white text-center" style="font-size: clamp(1rem, 1.6vw, 1.25rem)">
           A aguardar pergunta de desempate do moderador...
         </div>
@@ -601,21 +687,29 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!-- 9a. Entre apresentações (fase de Apresentação, ninguém a apresentar agora) -->
     <SuspenseScreen
       v-else-if="isPresentationPhaseNow && store.presentationFlow.stage === 'idle' && store.phaseFlow.stage === 'idle' && !matchStarted"
       message="A próxima apresentação vai começar dentro de instantes. Aguardem."
       transparent
     />
 
-    <!-- 9. Aguardar Início da Batalha -->
     <SuspenseScreen
       v-else-if="!matchStarted"
       :message="startMessage"
       transparent
     />
 
-    <!-- 10. BATALHA ATIVA -->
+    <!--
+      10. BATALHA ATIVA
+      CORRIGIDO — este bloco antes só renderizava perguntas normais
+      (currentQuestion vinha exclusivamente de store.currentQuestionId).
+      Como 'currentQuestion' agora é um computed unificado (ver script),
+      este MESMO bloco passa a mostrar corretamente também os itens
+      analíticos — o texto, a imagem (agora com formatImageUrl corrigido)
+      e as opções de resposta reaproveitam a mesma estrutura já adaptável
+      (flex + clamp() + object-contain), que redimensiona a caixa central
+      conforme o comprimento do texto e a presença/ausência de imagem.
+    -->
     <div
       v-else-if="isBattleActiveState"
       class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container"
@@ -675,15 +769,34 @@ const roundJustEnded = computed(() => {
                 {{ currentQuestion?.text }}
               </h1>
               <div class="w-full mt-2 text-left">
+                <!--
+                  CORRIGIDO — usava 'currentQuestion.options' diretamente,
+                  mas esse campo só existe em QuizQuestion. Para
+                  EvaluationItem (perguntas analíticas), as opções vêm em
+                  optionA/B/C/D separados, já tratados pelo computed
+                  'currentQuestionOptions' (existia no script mas nunca
+                  tinha sido ligado aqui no template — por isso as
+                  perguntas analíticas nunca apareciam na Projeção).
+                  Para o modo 'aberta' (sem opções, avaliação manual dos
+                  jurados) mostramos uma mensagem em vez de tentar
+                  renderizar opções inexistentes.
+                -->
                 <AnswerOptions
-                  v-if="currentQuestion"
-                  :options="currentQuestion.options"
-                  :correct-index="currentQuestion.correctIndex"
+                  v-if="currentQuestion && currentQuestionOptions"
+                  :options="currentQuestionOptions"
+                  :correct-index="currentQuestionCorrectIndex"
                   :team-a-answer="store.teamAAnswer"
                   :team-b-answer="store.teamBAnswer"
                   :team-a-correct="store.teamACorrect"
                   :team-b-correct="store.teamBCorrect"
                 />
+                <p
+                  v-else-if="isOpenAnalyticQuestion"
+                  class="text-slate-500 font-semibold"
+                  style="font-size: clamp(0.9rem, 1.4vw, 1.15rem)"
+                >
+                  Pergunta de resposta aberta — avaliação dos jurados em curso.
+                </p>
               </div>
             </div>
             <div
@@ -769,7 +882,6 @@ const roundJustEnded = computed(() => {
       </footer>
     </div>
 
-    <!-- 10.5 Batalha terminou, à espera do moderador avançar -->
     <div
       v-else-if="roundJustEnded"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
@@ -782,10 +894,8 @@ const roundJustEnded = computed(() => {
       </p>
     </div>
 
-    <!-- 11. Fallback -->
     <SuspenseScreen v-else message="A aguardar a próxima pergunta do moderador..." transparent />
 
-    <!-- Sobreposições -->
     <div
       v-if="store.podiumReveal.finalRankingVisible"
       class="fixed inset-0 z-50 bg-petro-dark/95 flex flex-col items-center justify-center gap-6 p-10"
