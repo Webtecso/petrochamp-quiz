@@ -4,9 +4,8 @@ import { prisma } from '../db'
 const router = Router()
 
 // Tabelas sincronizáveis, por ordem de dependência (as que são referenciadas
-// por outras vêm primeiro, para o lado que recebe conseguir aplicar sem
-// violar foreign keys). Setting, LiveSession, AdminAuth e AdminSession ficam
-// de fora de propósito (ver notas no schema.prisma).
+// por outras vêm primeiro). Setting, LiveSession, AdminAuth e AdminSession
+// ficam de fora de propósito (ver notas no schema.prisma).
 const SYNC_TABLES = [
   'team',
   'juror',
@@ -19,6 +18,8 @@ const SYNC_TABLES = [
   'tiebreakQuestion',
   'evaluationItem',
   'evaluationItemJuror',
+  'evaluationCriteria',
+  'evaluationCriteriaScore',
   'phaseJurorAuthorization',
   'partner',
   'suspensePhrase',
@@ -35,25 +36,93 @@ const SYNC_TABLES = [
 
 type SyncTable = (typeof SYNC_TABLES)[number]
 
-// GET /api/sync/pull?since=<ISO timestamp ou vazio>
-// Devolve tudo o que mudou (criado, editado, ou apagado) depois de "since",
-// em todas as tabelas sincronizáveis. deletedAt preenchido = "apagar aí".
-router.get('/pull', async (req, res) => {
-  try {
-    const since = req.query.since ? new Date(String(req.query.since)) : new Date(0)
-    const result: Record<string, unknown[]> = {}
+type PrismaDelegate = {
+  findMany: (args: unknown) => Promise<unknown[]>
+  findUnique: (args: unknown) => Promise<{ id: string; updatedAt: Date } | null>
+  create: (args: unknown) => Promise<unknown>
+  update: (args: unknown) => Promise<unknown>
+}
 
-    for (const table of SYNC_TABLES) {
-      const delegate = (
-        prisma as unknown as Record<SyncTable, { findMany: (args: unknown) => Promise<unknown[]> }>
-      )[table]
+const prismaClient = prisma as unknown as Record<SyncTable, PrismaDelegate>
 
-      result[table] = await delegate.findMany({
-        where: { updatedAt: { gt: since } }
+function isSyncTable(name: string): name is SyncTable {
+  return (SYNC_TABLES as readonly string[]).includes(name)
+}
+
+// Encontra o registo existente também por chave composta, para tabelas
+// onde o "id" pode divergir entre os dois lados mas o registo lógico é o
+// mesmo (bracketMatch, presentationDupla, presentationDocument).
+async function findExisting(
+  table: SyncTable,
+  record: Record<string, unknown>
+): Promise<{ id: string; updatedAt: Date } | null> {
+  const delegate = prismaClient[table]
+  const rec = record as any
+
+  if (table === 'bracketMatch') {
+    return prisma.bracketMatch.findFirst({
+      where: {
+        OR: [{ id: rec.id }, { championship: rec.championship, round: rec.round, slot: rec.slot }]
+      }
+    })
+  }
+
+  if (table === 'presentationDupla') {
+    return prisma.presentationDupla.findFirst({
+      where: { OR: [{ id: rec.id }, { phaseId: rec.phaseId, teamAId: rec.teamAId }] }
+    })
+  }
+
+  if (table === 'presentationDocument') {
+    if (rec.duplaId && rec.teamId) {
+      return prisma.presentationDocument.findFirst({
+        where: { OR: [{ id: rec.id }, { duplaId: rec.duplaId, teamId: rec.teamId }] }
       })
     }
+  }
 
-    res.json({ serverTime: new Date().toISOString(), tables: result })
+  return delegate.findUnique({ where: { id: rec.id } })
+}
+
+// Aplica um único registo (create ou update, regra "mais recente ganha",
+// incluindo apagados — deletedAt preenchido é só mais um campo do
+// registo, propaga-se como qualquer outro). Devolve true se aplicou algo.
+async function applyRecord(table: SyncTable, record: Record<string, unknown>): Promise<boolean> {
+  const delegate = prismaClient[table]
+  const incomingUpdatedAt = new Date(record.updatedAt as string)
+  const existing = await findExisting(table, record)
+
+  if (!existing) {
+    await delegate.create({ data: record })
+    return true
+  }
+
+  if (incomingUpdatedAt > existing.updatedAt) {
+    // Força o id já existente (caso encontrado pela chave composta) para
+    // não duplicar a primary key nem quebrar referências já existentes.
+    await delegate.update({ where: { id: existing.id }, data: { ...record, id: existing.id } })
+    return true
+  }
+
+  return false
+}
+
+// GET /api/sync/pull?model=<tabela>&since=<ISO timestamp>
+// Devolve um ARRAY dos registos dessa tabela alterados (criados, editados
+// ou apagados — deletedAt preenchido é só mais um campo) depois de
+// "since". Contrato alinhado com services/syncService.ts (SyncService.pullModel),
+// que espera response.data diretamente como array.
+router.get('/pull', async (req, res) => {
+  try {
+    const modelParam = String(req.query.model || '')
+    if (!isSyncTable(modelParam)) {
+      res.status(400).json({ error: `Tabela inválida ou não sincronizável: "${modelParam}"` })
+      return
+    }
+    const since = req.query.since ? new Date(String(req.query.since)) : new Date(0)
+    const delegate = prismaClient[modelParam]
+    const records = await delegate.findMany({ where: { updatedAt: { gt: since } } })
+    res.json(records)
   } catch (error) {
     console.error('Erro em /api/sync/pull:', error)
     res.status(500).json({ error: 'Falha ao gerar dados de sincronização.' })
@@ -61,55 +130,34 @@ router.get('/pull', async (req, res) => {
 })
 
 // POST /api/sync/push
-// Body: { tables: { [tableName]: record[] } }
-// Aplica cada registo recebido via upsert. Se já existir localmente um
-// registo com o mesmo id e updatedAt mais recente ou igual, ignora (o
-// outro lado é que está desatualizado, não este). Só substitui quando o
-// registo recebido é mais recente — regra "mais recente ganha".
+// Body: { model: <tabela>, data: record[] }
+// Contrato alinhado com services/syncService.ts (SyncService.pushModel).
 router.post('/push', async (req, res) => {
   try {
-    const tables = req.body?.tables as Record<string, Array<Record<string, unknown>>> | undefined
-    if (!tables) {
-      res.status(400).json({ error: 'Corpo inválido: falta "tables".' })
+    const { model, data } = req.body as { model?: string; data?: Array<Record<string, unknown>> }
+    if (!model || !isSyncTable(model)) {
+      res.status(400).json({ error: `Corpo inválido: "model" em falta ou não sincronizável.` })
+      return
+    }
+    if (!Array.isArray(data)) {
+      res.status(400).json({ error: 'Corpo inválido: "data" tem de ser um array.' })
       return
     }
 
-    const applied: Record<string, number> = {}
-
-    for (const table of SYNC_TABLES) {
-      const records = tables[table]
-      if (!records || records.length === 0) continue
-
-      const delegate = (
-        prisma as unknown as Record<
-          SyncTable,
-          {
-            findUnique: (args: unknown) => Promise<{ updatedAt: Date } | null>
-            create: (args: unknown) => Promise<unknown>
-            update: (args: unknown) => Promise<unknown>
-          }
-        >
-      )[table]
-
-      let count = 0
-      for (const record of records) {
-        const incomingUpdatedAt = new Date(record.updatedAt as string)
-        const existing = await delegate.findUnique({ where: { id: record.id } })
-
-        if (!existing) {
-          await delegate.create({ data: record })
-          count++
-          continue
+    let applied = 0
+    for (const record of data) {
+      try {
+        const wasApplied = await applyRecord(model, record)
+        if (wasApplied) applied++
+      } catch (err: any) {
+        if (err?.code === 'P2003') {
+          console.warn(`[Sync] Registo em '${model}' (${(record as any).id}) ignorado — chave estrangeira não resolvida.`)
+        } else if (err?.code === 'P2002') {
+          console.warn(`[Sync] Registo duplicado em '${model}' (${(record as any).id}) ignorado.`)
+        } else {
+          throw err
         }
-
-        if (incomingUpdatedAt > existing.updatedAt) {
-          await delegate.update({ where: { id: record.id }, data: record })
-          count++
-        }
-        // Se existing for mais recente ou igual, não faz nada — o lado
-        // que enviou é que vai ficar atualizado no próximo "pull" dele.
       }
-      applied[table] = count
     }
 
     res.json({ success: true, applied })
