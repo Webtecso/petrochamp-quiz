@@ -38,7 +38,12 @@ router.post('/', async (req, res) => {
 })
 
 router.put('/:id', async (req, res) => {
-  const id = Number(req.params.id)
+  // CORRIGIDO — Phase.id é uma string (cuid), não um número. O
+  // `Number(req.params.id)` convertia o cuid para NaN, o que o TypeScript
+  // apanhou em tempo de build (Type 'number' is not assignable to type
+  // 'string') e que também partiria em runtime (nunca encontraria a fase
+  // certa). Basta usar o id tal como vem da URL.
+  const id = req.params.id
   const { label, type, useQuestions, useJudges, order, maxQuestions, questionsPerTeam } = req.body
   try {
     const phase = await prisma.phase.update({
@@ -52,7 +57,8 @@ router.put('/:id', async (req, res) => {
 })
 
 router.delete('/:id', async (req, res) => {
-  const id = Number(req.params.id)
+  // CORRIGIDO — mesmo motivo do PUT acima: id é string (cuid).
+  const id = req.params.id
   try {
     await prisma.phase.delete({ where: { id } })
     res.status(204).send()
