@@ -136,7 +136,7 @@ const isTiedUnresolved = computed(() => isTied.value && !tiebreakResolved.value)
 
 const tiebreakPhaseQuestions = computed(() => tiebreakQuestions.questionsForPhase(store.phase))
 const currentTiebreakQuestion = computed(() =>
-  tiebreakPhaseQuestions.value.find((q) => q.id === store.tiebreak?.currentQuestionId)
+  tiebreakPhaseQuestions.value.find((q) => String(q.id) === String(store.tiebreak?.currentQuestionId))
 )
 
 const canFinish = computed(() => roundIsComplete.value && !isTiedUnresolved.value && !store.awaitingJuryEvaluation)
@@ -277,7 +277,7 @@ function finishMatch(): void {
           :total-questions="totalQuestionsForCounter"
           :time-left="store.timeLeft"
           :correct-index="activeDisplay.correctIndex"
-          :image-url="activeDisplay.imageUrl"
+          :image-url="activeDisplay.imageUrl ?? undefined"
           :team-a-answer="store.teamAAnswer"
           :team-b-answer="store.teamBAnswer"
           :team-a-correct="store.teamACorrect"

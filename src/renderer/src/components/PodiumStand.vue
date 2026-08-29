@@ -10,7 +10,7 @@ const props = defineProps<{
 }>()
 
 const teamsStore = useTeamsStore()
-const logoUrl = computed(() => teamsStore.teamById(props.entry.id)?.logoUrl)
+const logoUrl = computed(() => teamsStore.teamById(props.entry.id)?.logoUrl ?? undefined)
 
 // ATUALIZADO - height deixou de ser uma classe Tailwind fixa (h-44/h-28/h-20)
 // e passou a ser um valor clamp() em vh, aplicado via style inline mais

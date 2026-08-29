@@ -239,7 +239,7 @@ const groupedByPhase = computed(() => {
             Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) - marca as respostas corretas
           </label>
           <div class="flex flex-col gap-2">
-            <div v-for="(opt, i) in form.options" :key="i" class="flex items-center gap-2">
+            <div v-for="(_opt, i) in form.options" :key="i" class="flex items-center gap-2">
               <label class="flex items-center gap-1.5 shrink-0 cursor-pointer select-none">
                 <input
                   type="checkbox"

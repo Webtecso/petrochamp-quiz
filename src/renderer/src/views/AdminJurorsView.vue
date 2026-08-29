@@ -10,14 +10,14 @@ interface Juror {
   code: string
 }
 interface Authorization {
-  id: number
-  phaseId: number
+  id: string
+  phaseId: string
   jurorId: string
 }
 
 const phasesStore = usePhasesStore()
 const selectedChampionship = ref<ChampionshipType>('universitario')
-const selectedPhaseId = ref<number | null>(null)
+const selectedPhaseId = ref<string | null>(null)
 const jurors = ref<Juror[]>([])
 const authorizations = ref<Authorization[]>([])
 const newJurorName = ref('')

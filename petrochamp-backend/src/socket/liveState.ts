@@ -64,6 +64,20 @@ export interface CriteriaScoreEntry {
   score: number
 }
 
+export interface AnalyticCriteriaScoreEntry {
+  jurorId: string
+  criteriaId: string
+  team: 'A' | 'B'
+  score: number
+}
+
+export interface AnalyticEvaluationState {
+  itemId: string | null
+  criteriaScores: AnalyticCriteriaScoreEntry[]
+  jurorsSubmitted: string[]
+  expectedJurorCount: number
+}
+
 // duplaId é um cuid (String) no schema.prisma, não number.
 export interface PresentationFlowState {
   stage: 'idle' | 'countdown' | 'presenting' | 'concluded'
@@ -221,6 +235,7 @@ export interface LiveState {
   teamBCorrect: boolean | null
 
   awaitingJuryEvaluation: boolean
+  analyticEvaluation: AnalyticEvaluationState
 
   countdown: CountdownState
   matchCodes: MatchCodesState
@@ -298,6 +313,12 @@ export const liveState: LiveState = {
   teamBCorrect: null,
 
   awaitingJuryEvaluation: false,
+  analyticEvaluation: {
+    itemId: null,
+    criteriaScores: [],
+    jurorsSubmitted: [],
+    expectedJurorCount: 0
+  },
 
   countdown: { active: false, value: 0 },
   matchCodes: {
@@ -420,6 +441,12 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.usedQuestionIds = []
   liveState.usedAnalyticItemIds = []
   liveState.awaitingJuryEvaluation = false
+  liveState.analyticEvaluation = {
+    itemId: null,
+    criteriaScores: [],
+    jurorsSubmitted: [],
+    expectedJurorCount: 0
+  }
   resetAnswerState()
   liveState.matchStartedAt = null
   liveState.jurors = []
@@ -481,6 +508,15 @@ export async function loadPersistedState(): Promise<void> {
     if (!row) return
     const parsed = JSON.parse(row.value) as Partial<LiveState>
     Object.assign(liveState, parsed)
+    // Snapshots antigos não têm o bloco de avaliação analítica.
+    if (!liveState.analyticEvaluation) {
+      liveState.analyticEvaluation = {
+        itemId: null,
+        criteriaScores: [],
+        jurorsSubmitted: [],
+        expectedJurorCount: 0
+      }
+    }
     console.log('Estado da partida recuperado do último encerramento.')
   } catch (err) {
     console.error('Falha ao recuperar o estado da partida:', err)

@@ -93,19 +93,19 @@ watch(
 const maxVotes = computed(() => Math.max(1, ...repescagemStore.tally.map((t) => t.votes)))
 const matchStarted = computed(() => !!store.teamA && !!store.teamB)
 
-const bracket = computed(() => {
+const bracket = computed<any>(() => {
   if (store.championship && liveBracketStore.matches?.length) {
     const live = liveBracketStore.forTournamentBracket
     if (live && live.rounds && live.rounds.length > 0) {
       const label = championshipLabels[store.championship] || 'Campeonato'
-      return { title: `${label} · Chaveamento`, ...live }
+      return { ...live, title: `${label} · Chaveamento` }
     }
   }
   if (store.championship) {
     const staticBracket = getBracketFor(store.championship)
     if (staticBracket) {
       const label = championshipLabels[store.championship] || 'Campeonato'
-      return { title: `${label} · Chaveamento`, ...staticBracket }
+      return { ...staticBracket, title: `${label} · Chaveamento` }
     }
   }
   return {
@@ -122,7 +122,7 @@ const phaseQuestions = computed(() => quizContent.questionsForPhase(store.phase)
 // pergunta normal.
 const phaseEvaluationItems = computed(() => quizContent.itemsForPhase(store.phase))
 
-const currentQuizQuestion = computed(() => phaseQuestions.value.find((q) => q.id === store.currentQuestionId))
+const currentQuizQuestion = computed(() => phaseQuestions.value.find((q) => String(q.id) === String(store.currentQuestionId)))
 // NOVO - item analítico atualmente sorteado, localizado por
 // store.currentAnalyticItemId (espelha liveState.currentAnalyticItemId
 // do backend).
@@ -162,15 +162,15 @@ const currentQuestionCorrectIndex = computed(() => {
 // - o array de opções da pergunta normal (QuizQuestion.options), OU
 // - as opções montadas do item analítico em 'multipla_escolha', OU
 // - null quando não há opções para mostrar (item analítico 'aberta').
-const currentQuestionOptions = computed((): string[] | null => {
+const currentQuestionOptions = computed((): { label: string; text: string }[] | null => {
   if (store.currentItemSource === 'analytic') {
     const item = currentAnalyticItem.value
     if (!item || item.mode !== 'multipla_escolha') return null
-    return [item.optionA, item.optionB, item.optionC, item.optionD].filter(
-      (o): o is string => !!o
-    )
+    return [item.optionA, item.optionB, item.optionC, item.optionD, item.optionE, item.optionF, item.optionG, item.optionH]
+      .map((text, index) => ({ label: String.fromCharCode(65 + index), text }))
+      .filter((option): option is { label: string; text: string } => Boolean(option.text))
   }
-  const q = currentQuestion.value as { options?: string[] } | undefined
+  const q = currentQuestion.value as { options?: { label: string; text: string }[] } | undefined
   return q?.options ?? null
 })
 
@@ -204,7 +204,7 @@ const questionImage = computed(() => (currentQuestion.value as { imageUrl?: stri
 // Pergunta de desempate ativa, espelha currentQuestion mas usa
 // store.tiebreak.currentQuestionId e a lista carregada de TiebreakQuestion.
 const currentTiebreakQuestion = computed(() =>
-  quizContent.tiebreakQuestionsForPhase(store.phase).find((q) => q.id === store.tiebreak.currentQuestionId)
+  quizContent.tiebreakQuestionsForPhase(store.phase).find((q) => String(q.id) === String(store.tiebreak.currentQuestionId))
 )
 const tiebreakQuestionImage = computed(() => currentTiebreakQuestion.value?.imageUrl ?? null)
 

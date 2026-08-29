@@ -40,11 +40,11 @@ function optionClass(index: number, label: string): string {
     <div
       v-for="(opt, i) in options"
       :key="opt.label"
-      class="relative flex items-center gap-2 border rounded-xl px-4 py-3 text-left transition-all duration-300"
+      class="relative flex items-center gap-3 border rounded-xl px-[clamp(0.8rem,1.2vw,1.4rem)] py-[clamp(0.65rem,1vh,1rem)] text-left transition-all duration-300 text-[clamp(0.95rem,1.5vw,1.65rem)]"
       :class="optionClass(i, opt.label)"
     >
       <span
-        class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-petro-primary/10 text-petro-primary shrink-0"
+        class="w-[clamp(1.5rem,2vw,2.2rem)] h-[clamp(1.5rem,2vw,2.2rem)] rounded-full flex items-center justify-center text-[clamp(0.7rem,1vw,1rem)] font-bold bg-petro-primary/10 text-petro-primary shrink-0"
         :class="optionClass(i, opt.label) !== 'border-gray-200' ? 'bg-white/20 text-white' : ''"
       >
         {{ opt.label }}

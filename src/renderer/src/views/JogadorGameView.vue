@@ -12,8 +12,12 @@ const teamName = computed(() => (route.query.teamName as string) || 'A tua equip
 const opponentName = computed(() => (route.query.opponentName as string) || 'Equipa Adversária')
 
 const store = useCampeonatoStore()
+// O estado em tempo real ainda mantém estas perguntas como campos opcionais
+// para o modo de jogadores remotos. Mantemos a leitura tolerante enquanto a
+// partida é inicializada, evitando quebrar a tela antes do primeiro sync.
+const playerState = store as typeof store & { teamAQuestion?: any; teamBQuestion?: any }
 
-const myQuestion = computed(() => (myTeam.value === 'A' ? store.teamAQuestion : store.teamBQuestion))
+const myQuestion = computed(() => (myTeam.value === 'A' ? playerState.teamAQuestion : playerState.teamBQuestion))
 const myAnswer = computed(() => (myTeam.value === 'A' ? store.teamAAnswer : store.teamBAnswer))
 const opponentAnswer = computed(() => (myTeam.value === 'A' ? store.teamBAnswer : store.teamAAnswer))
 const myCorrect = computed(() => (myTeam.value === 'A' ? store.teamACorrect : store.teamBCorrect))

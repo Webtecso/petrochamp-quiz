@@ -17,7 +17,7 @@ const teamsStore = useTeamsStore()
 
 function logoFor(slot?: Slot): string | undefined {
   if (!slot) return undefined
-  return teamsStore.teamById(slot.id)?.logoUrl
+  return teamsStore.teamById(slot.id)?.logoUrl ?? undefined
 }
 
 function rowClass(team?: Slot): string {

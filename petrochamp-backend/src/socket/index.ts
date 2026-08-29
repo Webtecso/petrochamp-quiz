@@ -1792,6 +1792,9 @@ export function registerSocketHandlers(io: Server): void {
       liveState.teamBScore += Math.round(avgB)
       liveState.jurorSubmittedItemIds.push(payload.itemId)
 
+      liveState.teamAAnsweredCount += 1
+      liveState.teamBAnsweredCount += 1
+
       // Limpa o estado atual do item analítico
       if (liveState.currentItemSource === 'analytic' && liveState.currentAnalyticItemId === payload.itemId) {
         liveState.awaitingJuryEvaluation = false
@@ -1802,6 +1805,12 @@ export function registerSocketHandlers(io: Server): void {
 
       // Reset local analyticEvaluation
       liveState.analyticEvaluation = { itemId: null, criteriaScores: [], jurorsSubmitted: [], expectedJurorCount: 0 }
+      if (await roundQuestionsComplete()) {
+        liveState.currentQuestionId = null
+      } else {
+        const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
+        await drawNextItem(nextTeam)
+      }
       broadcast()
     })
 

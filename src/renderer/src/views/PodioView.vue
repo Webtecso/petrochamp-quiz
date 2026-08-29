@@ -99,19 +99,19 @@ watch(
   { immediate: false }
 )
 
-const bracket = computed(() => {
+const bracket = computed<any>(() => {
   if (store.championship && liveBracketStore.matches?.length) {
     const live = liveBracketStore.forTournamentBracket
     if (live && live.rounds && live.rounds.length > 0) {
       const label = championshipLabels[store.championship] || 'Campeonato'
-      return { title: `${label} · Chaveamento`, ...live }
+      return { ...live, title: `${label} · Chaveamento` }
     }
   }
   if (store.championship) {
     const staticBracket = getBracketFor(store.championship)
     if (staticBracket) {
       const label = championshipLabels[store.championship] || 'Campeonato'
-      return { title: `${label} · Chaveamento`, ...staticBracket }
+      return { ...staticBracket, title: `${label} · Chaveamento` }
     }
   }
   return {
@@ -122,7 +122,7 @@ const bracket = computed(() => {
 })
 
 const phaseQuestions = computed(() => quizContent.questionsForPhase(store.phase))
-const currentQuestion = computed(() => phaseQuestions.value.find((q) => q.id === store.currentQuestionId))
+const currentQuestion = computed(() => phaseQuestions.value.find((q) => String(q.id) === String(store.currentQuestionId)))
 const currentPhaseFull = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
 const totalQuestionsForCounter = computed(() => {
   const perTeam = currentPhaseFull.value?.questionsPerTeam

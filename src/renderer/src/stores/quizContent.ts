@@ -70,7 +70,7 @@ export const useQuizContentStore = defineStore('quizContent', {
         `/tiebreak-questions?championship=${encodeURIComponent(championship)}`
       )
     },
-    async addQuestion(question: Omit<QuizQuestion, 'id'> & { championship: string }) {
+    async addQuestion(question: Partial<QuizQuestion> & { championship: string; text: string; options: QuizQuestion['options'] }) {
       await api.post('/questions', question)
       await this.fetchQuestions(question.championship)
     },

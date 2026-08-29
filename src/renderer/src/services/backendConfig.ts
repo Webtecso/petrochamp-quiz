@@ -19,8 +19,11 @@ export function getBackendUrl(): string {
 
     // Electron em dev: o Vite dev server serve a app em localhost:5173,
     // mas o backend está sempre em localhost:4000 - nunca é a mesma origem.
-    if (port === '5173' && (hostname === 'localhost' || hostname === '127.0.0.1')) {
-      return 'http://localhost:4000'
+    if (port === '5173') {
+      // Em desenvolvimento também pode ser aberto a partir de outro
+      // computador da rede. Nesse caso a API continua na porta 4000 da
+      // mesma máquina, não na porta do Vite (5173).
+      return `http://${hostname}:4000`
     }
 
     // Servido pelo próprio backend (produção local, ou túnel Cloudflare

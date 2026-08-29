@@ -46,7 +46,6 @@ const hasBattle = computed(() => !!store.teamA && !!store.teamB)
 const phaseConfig = computed(() => phasesStore.configFor(store.phase))
 const evaluationItems = computed(() => quizContent.itemsForPhase(store.phase))
 const openItems = computed(() => evaluationItems.value.filter((i) => i.mode !== 'multipla_escolha'))
-const multipleChoiceItems = computed(() => evaluationItems.value.filter((i) => i.mode === 'multipla_escolha'))
 
 function jurorsAllowedFor(item: EvaluationItem | undefined): typeof jurados.jurors {
   if (!item || !item.jurorIds || item.jurorIds.length === 0) return jurados.jurors
@@ -188,14 +187,6 @@ function jurorAnalyticTotal(jurorId: string, team: 'A' | 'B'): number {
   return store.analyticEvaluation.criteriaScores
     .filter((e) => e.jurorId === jurorId && e.team === team)
     .reduce((sum, e) => sum + e.score, 0)
-}
-
-function jurorAnalyticComplete(jurorId: string): boolean {
-  if (!analyticCriteria.value.length) return false
-  return analyticCriteria.value.every(
-    (c) => analyticScoreFor(jurorId, c.id, 'A') > 0 || analyticScoreFor(jurorId, c.id, 'B') > 0 ||
-      store.analyticEvaluation.criteriaScores.some((e) => e.jurorId === jurorId && e.criteriaId === c.id)
-  )
 }
 
 function submitAnalyticEvaluation(jurorId: string): void {

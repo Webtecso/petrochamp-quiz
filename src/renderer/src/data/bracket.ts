@@ -16,6 +16,11 @@ export interface BracketRound {
   rightMatches: BracketMatch[]
 }
 
+export interface BracketPhase {
+  name: string
+  matches: BracketMatch[]
+}
+
 export interface ChampionshipBracket {
   championship: 'universitario' | 'ensino_medio' | 'exibicao'
   title: string

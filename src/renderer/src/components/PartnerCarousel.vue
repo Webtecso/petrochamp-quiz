@@ -37,7 +37,7 @@ defineProps<{ transparent?: boolean }>()
         >
           <!-- AUMENTADO - w-28 h-28 (112px fixos) trocado por clamp() em
                vw/vh, para o logo crescer bastante em ecrãs grandes. -->
-          <div class="bg-white rounded-2xl shadow flex items-center justify-center p-[clamp(0.5rem,1vw,1rem)] w-[clamp(10rem,20vw,32rem)] h-[clamp(10rem,20vw,32rem)]">
+          <div class="bg-white rounded-2xl shadow flex items-center justify-center p-[clamp(0.6rem,1.2vw,1.25rem)] w-[clamp(12rem,26vw,36rem)] h-[clamp(12rem,26vw,36rem)]">
             <img :src="p.logoUrl" :alt="p.name" class="w-full h-full object-contain" />
           </div>
           <span class="text-[clamp(1rem,1.6vw,1.75rem)] text-gray-500 font-semibold">{{ p.name }}</span>

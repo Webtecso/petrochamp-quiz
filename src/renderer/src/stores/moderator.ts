@@ -87,7 +87,10 @@ export const useModeratorStore = defineStore('moderatorSession', {
       this.attachReconnectListener()
       this.subscribeToSocketChanges()
       return new Promise((resolve) => {
-        getSocket().emit('moderator:register', { code }, (res: RegisterResult) => {
+        let settled = false
+        const finish = (res: RegisterResult) => {
+          if (settled) return
+          settled = true
           if (res.success && res.moderatorId && res.role && res.name) {
             this.session = {
               id: res.moderatorId,
@@ -102,6 +105,14 @@ export const useModeratorStore = defineStore('moderatorSession', {
             this.logout()
           }
           resolve(res)
+        }
+        const timeout = setTimeout(
+          () => finish({ success: false, error: 'Não foi possível ligar ao servidor. Confirma o endereço e se o backend está em execução.' }),
+          8000
+        )
+        getSocket().emit('moderator:register', { code }, (res: RegisterResult) => {
+          clearTimeout(timeout)
+          finish(res)
         })
       })
     },

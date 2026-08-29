@@ -235,7 +235,7 @@ async function saveItem(): Promise<void> {
     phase: Number(form.value.phase),
     scope: form.value.scope,
     options: optionsPayload,
-    correctIndexes: form.value.mode === 'multipla_escolha' ? JSON.stringify(form.value.correctIndexes) : undefined,
+    correctIndexes: form.value.mode === 'multipla_escolha' ? form.value.correctIndexes : undefined,
     timeSeconds: form.value.timeSeconds,
     imageUrl: form.value.imageUrl || undefined,
     jurorIds: form.value.mode === 'aberta' ? form.value.jurorIds : []
@@ -434,7 +434,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
               Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) - marca as respostas corretas
             </label>
             <div class="flex flex-col gap-2">
-              <div v-for="(opt, i) in form.options" :key="i" class="flex items-center gap-2">
+              <div v-for="(_opt, i) in form.options" :key="i" class="flex items-center gap-2">
                 <label class="flex items-center gap-1.5 shrink-0 cursor-pointer select-none">
                   <input
                     type="checkbox"
