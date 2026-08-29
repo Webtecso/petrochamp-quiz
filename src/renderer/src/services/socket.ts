@@ -4,14 +4,14 @@ import { getBackendUrl } from './backendConfig'
 let socketInstance: Socket | null = null
 let currentTargetUrl: string | null = null
 
-// CORRIGIDO — antes, nada avisava quem quer que fosse quando
+// CORRIGIDO - antes, nada avisava quem quer que fosse quando
 // 'connectSocket()' decidia criar um socket COMPLETAMENTE NOVO (troca de
 // URL do backend/túnel detetada, ou 'forceReconnect'). Isso deixava a
 // store do moderador (stores/moderator.ts) cega: o listener 'connect'
 // que ela tinha anexado ficava preso ao socket ANTIGO já descartado, e
 // como o re-registo do moderador só era despoletado a partir de
 // 'register()' (chamado apenas no login manual), o socket novo nunca
-// reenviava 'moderator:register' — o painel continuava a MOSTRAR a
+// reenviava 'moderator:register' - o painel continuava a MOSTRAR a
 // sessão como "Principal", mas o backend já não reconhecia esse socket
 // como tal, bloqueando silenciosamente qualquer ação restrita por área.
 //
@@ -28,7 +28,7 @@ export function onSocketRecreated(listener: SocketChangeListener): void {
   socketChangeListeners.add(listener)
 }
 
-// O backend Cloud (Render) não tem Socket.io por design — só o backend
+// O backend Cloud (Render) não tem Socket.io por design - só o backend
 // local, na LAN do evento, trata do tempo real. No build Admin Cloud,
 // VITE_CLOUD_API_URL está sempre definida, por isso serve de sinal seguro
 // para saltar a ligação e evitar tentativas de handshake que dão 404.

@@ -21,7 +21,7 @@ const router = useRouter()
       >
         <div class="text-3xl">🎛️</div>
         <div class="font-semibold">Moderador</div>
-        <p class="text-[11px] text-gray-400">Painel completo — campeonato, equipas, pontuação, pódio</p>
+        <p class="text-[11px] text-gray-400">Painel completo - campeonato, equipas, pontuação, pódio</p>
       </button>
 
       <button
@@ -50,7 +50,7 @@ const router = useRouter()
       </button>
     </div>
 
-    <!-- NOVO — portal remoto dos jurados sempre em destaque neste ecrã
+    <!-- NOVO - portal remoto dos jurados sempre em destaque neste ecrã
          de entrada, com link + QR code gerados a partir do IP da rede
          local detetado dinamicamente pelo backend (services/networkInfo.ts).
          Não depende de internet nem de configuração manual por máquina. -->

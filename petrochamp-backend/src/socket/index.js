@@ -153,11 +153,11 @@ async function buildPool() {
         db_1.prisma.question.findMany({
             where: { phase: liveState_1.liveState.phase, championship: liveState_1.liveState.championship ?? undefined }
         }),
-        // CORRIGIDO — faltava filtrar type: 'analitica'. Sem isto, itens do
+        // CORRIGIDO - faltava filtrar type: 'analitica'. Sem isto, itens do
         // tipo 'apresentacao' (usados só no fluxo de avaliação de
         // apresentações, sem ligação nenhuma ao sorteio de perguntas do
         // quiz) entravam também neste pool e podiam ser sorteados como se
-        // fossem uma pergunta analítica normal — explicando o texto errado
+        // fossem uma pergunta analítica normal - explicando o texto errado
         // ("outra pergunta") a aparecer na Projeção/Moderador quando calhava
         // um item analítico.
         db_1.prisma.evaluationItem.findMany({
@@ -199,7 +199,7 @@ async function drawNextItem(team) {
             db_1.prisma.question.findMany({
                 where: { phase: liveState_1.liveState.phase, championship: liveState_1.liveState.championship ?? undefined }
             }),
-            // CORRIGIDO — mesmo filtro em falta que em buildPool() acima,
+            // CORRIGIDO - mesmo filtro em falta que em buildPool() acima,
             // aplicado aqui também (este bloco monta o pool "sem evitar
             // repetição" de forma independente, por isso precisa da mesma
             // correção em separado).
@@ -341,7 +341,7 @@ async function pickSuspensePhrase() {
     const phrases = await db_1.prisma.suspensePhrase.findMany();
     return phrases.length
         ? phrases[Math.floor(Math.random() * phrases.length)].text
-        : 'Preparem-se — a próxima fase está prestes a começar...';
+        : 'Preparem-se - a próxima fase está prestes a começar...';
 }
 async function checkAllJurorsSubmitted(broadcast) {
     const flow = liveState_1.liveState.presentationFlow;

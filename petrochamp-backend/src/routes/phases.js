@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
         return res.status(500).json({ error: error?.message || 'Erro ao carregar as fases.' });
     }
 });
-// POST /api/phases/swap — troca a posição (order) de duas fases.
+// POST /api/phases/swap - troca a posição (order) de duas fases.
 router.post('/swap', requireAdmin_1.requireAdmin, async (req, res) => {
     try {
         const { firstId, secondId } = req.body;
@@ -58,7 +58,7 @@ router.post('/swap', requireAdmin_1.requireAdmin, async (req, res) => {
         return res.status(500).json({ error: error?.message || 'Erro ao trocar a ordem das fases.' });
     }
 });
-// POST /api/phases/repair-numbering — corrige buracos na numeração de ordem.
+// POST /api/phases/repair-numbering - corrige buracos na numeração de ordem.
 router.post('/repair-numbering', requireAdmin_1.requireAdmin, async (req, res) => {
     try {
         const { championship } = req.body;
@@ -225,7 +225,7 @@ router.put('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
     }
 });
 // DELETE /api/phases/:id
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;

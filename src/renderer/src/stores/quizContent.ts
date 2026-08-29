@@ -9,7 +9,7 @@ export { EvaluationItem }
 // tem os mesmos campos optionA-D/correctIndex), mas é uma tabela separada.
 export type TiebreakQuestion = QuizQuestion
 
-// NOVO — critério de avaliação de uma Pergunta Analítica "aberta"
+// NOVO - critério de avaliação de uma Pergunta Analítica "aberta"
 // (Admin → Avaliação). Um item pode ter vários; se tiver pelo menos um,
 // os jurados pontuam por critério (para as duas equipas) em vez de uma
 // nota única.
@@ -26,7 +26,7 @@ export const useQuizContentStore = defineStore('quizContent', {
     questions: [] as QuizQuestion[],
     evaluationItems: [] as EvaluationItem[],
     tiebreakQuestions: [] as TiebreakQuestion[],
-    // NOVO — critérios carregados, indexados por itemId (mais barato que
+    // NOVO - critérios carregados, indexados por itemId (mais barato que
     // filtrar uma lista plana sempre que uma view precisa dos critérios
     // de um item específico).
     evaluationCriteriaByItem: {} as Record<string, EvaluationCriteria[]>
@@ -104,7 +104,7 @@ export const useQuizContentStore = defineStore('quizContent', {
       }
       await this.fetchEvaluationItems(championship)
     },
-    // NOVO — carrega os critérios de um item específico e guarda-os
+    // NOVO - carrega os critérios de um item específico e guarda-os
     // indexados por itemId.
     async fetchEvaluationCriteria(itemId: string) {
       const criteria = await api.get<EvaluationCriteria[]>(`/evaluation-criteria?itemId=${encodeURIComponent(itemId)}`)

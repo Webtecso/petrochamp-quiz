@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Petrochamp — Painel dos Jurados</title>
+<title>Petrochamp - Painel dos Jurados</title>
 <style>
   :root {
     --petro-primary: #7a1a2e;
@@ -278,7 +278,7 @@
   let multipleChoiceItems = []
   let openItems = []
   let selectedItemId = null
-  // NOVO — evita refazer o fetch da lista de perguntas analíticas e
+  // NOVO - evita refazer o fetch da lista de perguntas analíticas e
   // reconstruir o <select> a cada render() (que corre a cada segundo via
   // state:sync, enquanto o timer está a correr). A lista não muda a meio
   // de uma partida, por isso só faz sentido voltar a pedir ao servidor
@@ -290,7 +290,7 @@
   let criteriaCache = {}
   let currentPhaseRecord = null
 
-  // NOVO — controlo de debounce para envio de notas de apresentação ao
+  // NOVO - controlo de debounce para envio de notas de apresentação ao
   // servidor, por critério. Ver notas mais abaixo em updatePresentationScore.
   const presentationScoreDebounce = {}
   const PRESENTATION_SCORE_DEBOUNCE_MS = 400
@@ -364,7 +364,7 @@
     return currentPhaseRecord?.type === 'apresentacao' || currentPhaseRecord?.type === 'apresentacao_quiz'
   }
 
-  // NOVO — evita reconstruir a área de notas de apresentação enquanto o
+  // NOVO - evita reconstruir a área de notas de apresentação enquanto o
   // jurado está a meio de escrever num desses campos. Sem isto, qualquer
   // state:sync a chegar do servidor (broadcast periódico do timer, outra
   // ação de outro jurado, etc.) reconstruía o innerHTML todo e perdia o
@@ -406,10 +406,10 @@
 
   // ==================== MODO BATALHA (Quiz) ====================
 
-  // CORRIGIDO — bug principal: selectedItemId era reposto à força para a
+  // CORRIGIDO - bug principal: selectedItemId era reposto à força para a
   // primeira pergunta analítica em TODO fetchQuizItems, que corria a cada
   // render() (ou seja, a cada segundo via state:sync). Isso impedia:
-  //   1. Avaliar qualquer pergunta que não a primeira — o dropdown
+  //   1. Avaliar qualquer pergunta que não a primeira - o dropdown
   //      revertia sozinho antes do jurado conseguir preencher/submeter.
   //   2. Depois de submeter a primeira (que ficava desativada), o jurado
   //      ficava preso nela, sem conseguir sequer chegar às restantes.
@@ -417,7 +417,7 @@
   // Agora: o fetch ao servidor e a reconstrução do <select> só acontecem
   // quando a fase muda (quizItemsFetchedForPhase !== phase); e
   // selectedItemId só é reposto por omissão se ainda não houver nenhuma
-  // seleção válida (nula, ou a apontar para um item que já não existe) —
+  // seleção válida (nula, ou a apontar para um item que já não existe) -
   // nunca se o jurado já tiver escolhido outra pergunta válida.
   async function fetchQuizItems(phase) {
     if (quizItemsFetchedForPhase !== phase) {
@@ -453,7 +453,7 @@
     return item.jurorIds.includes(jurorId)
   }
 
-  // NOVO — mesmo princípio do isEditingPresentationScore: não reconstrói
+  // NOVO - mesmo princípio do isEditingPresentationScore: não reconstrói
   // os campos de nota do Quiz enquanto o jurado tem o foco neles, para
   // não perder o valor a meio de escrever quando chega um state:sync.
   function isEditingQuizScore() {
@@ -511,7 +511,7 @@
     idle: 'A aguardar o Moderador',
     countdown: 'A preparar a apresentação...',
     presenting: 'Em apresentação',
-    concluded: 'Apresentação concluída — a avaliar'
+    concluded: 'Apresentação concluída - a avaliar'
   }
 
   async function renderPresentation() {
@@ -554,7 +554,7 @@
 
     const alreadySubmitted = flow.jurorsSubmitted.includes(jurorId)
 
-    // CORRIGIDO — c.id é um cuid (string), NÃO um número. O
+    // CORRIGIDO - c.id é um cuid (string), NÃO um número. O
     // data-criteria-id guarda esse valor tal como está.
     scoreAreaEl.innerHTML = criteria
       .map((c) => {
@@ -575,13 +575,13 @@
       })
       .join('')
 
-    // CORRIGIDO — bug principal estava aqui: `Number(e.target.dataset.criteriaId)`
+    // CORRIGIDO - bug principal estava aqui: `Number(e.target.dataset.criteriaId)`
     // convertia o cuid (ex: "clxyz123abc") para NaN, porque criteriaId
-    // NUNCA foi um número — é sempre uma string cuid gerada pelo Prisma
+    // NUNCA foi um número - é sempre uma string cuid gerada pelo Prisma
     // (ver schema.prisma: PresentationCriteria.id String @default(cuid())).
     // Isso fazia o servidor guardar a nota sob criteriaId: NaN, que depois
     // nunca correspondia ao c.id real (string) ao tentar mostrar o valor
-    // de volta — por isso o campo aparecia sempre a "voltar a zero", mesmo
+    // de volta - por isso o campo aparecia sempre a "voltar a zero", mesmo
     // a nota tendo sido gravada corretamente no servidor sob a chave errada.
     //
     // Também trocado de 'onchange' para 'oninput' com debounce, para dar
@@ -590,7 +590,7 @@
     // depois de uma pequena pausa sem nova tecla).
     scoreAreaEl.querySelectorAll('.pres-score-input').forEach((input) => {
       input.oninput = (e) => {
-        const criteriaId = e.target.dataset.criteriaId // string — NUNCA usar Number() aqui
+        const criteriaId = e.target.dataset.criteriaId // string - NUNCA usar Number() aqui
         const max = Number(e.target.dataset.max)
         let score = Number(e.target.value)
         if (Number.isNaN(score)) score = 0

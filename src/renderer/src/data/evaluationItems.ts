@@ -41,7 +41,7 @@ export const evaluationItems: EvaluationItem[] = [
     id: 'ap-1',
     type: 'apresentacao',
     mode: 'aberta',
-    text: 'Apresentação de Projeto — Fase 1',
+    text: 'Apresentação de Projeto - Fase 1',
     maxPoints: 30,
     phase: 1,
     scope: 'single'

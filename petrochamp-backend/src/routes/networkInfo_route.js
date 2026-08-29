@@ -8,7 +8,7 @@ const router = (0, express_1.Router)();
 // completa do portal de jurados, prontos a mostrar/gerar QR code no
 // frontend. Se não houver nenhuma rede local disponível (ex: máquina só
 // com internet por dados móveis, sem Wi-Fi/Ethernet ativos), ip vem null
-// e portalUrl também — o frontend deve tratar esse caso com uma
+// e portalUrl também - o frontend deve tratar esse caso com uma
 // mensagem, não assumir que a rota falhou.
 router.get('/', (_req, res) => {
     const { ip, port } = (0, networkInfo_1.getNetworkInfo)();

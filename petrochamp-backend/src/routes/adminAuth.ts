@@ -49,7 +49,7 @@ async function getAuth() {
   return prisma.adminAuth.findUnique({ where: { id: 1 } })
 }
 
-// Primeira configuração — só corre se ainda não existir password configurada.
+// Primeira configuração - só corre se ainda não existir password configurada.
 router.post('/setup', async (req, res) => {
   const existing = await getAuth()
   if (existing) {

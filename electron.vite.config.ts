@@ -11,9 +11,9 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
-    // NOVO — base relativa ('./') em vez da absoluta por defeito ('/').
+    // NOVO - base relativa ('./') em vez da absoluta por defeito ('/').
     // Sem isto, o index.html gerado referencia os ficheiros como
-    // "/assets/..." — funciona quando o site vive na raiz do domínio, mas
+    // "/assets/..." - funciona quando o site vive na raiz do domínio, mas
     // parte (404) quando é servido de uma subpasta, como o Admin Cloud no
     // Hostinger (ex: petrochamp.com/admin_quiz/). Com caminhos relativos,
     // funciona em qualquer subpasta, e continua a funcionar normalmente no

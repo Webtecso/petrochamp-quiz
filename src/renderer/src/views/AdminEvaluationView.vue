@@ -265,7 +265,7 @@ async function removeItem(id: string): Promise<void> {
     await quizContent.deleteEvaluationItem(id, selectedChampionship.value)
     if (editingId.value === id) resetForm()
   } catch {
-    errorMsg.value = 'Não foi possível remover o item — confirma que o backend está a correr e tenta outra vez.'
+    errorMsg.value = 'Não foi possível remover o item - confirma que o backend está a correr e tenta outra vez.'
   }
 }
 
@@ -276,7 +276,7 @@ async function clearAllItems(): Promise<void> {
     await quizContent.clearAllEvaluationItems(selectedChampionship.value)
     resetForm()
   } catch {
-    errorMsg.value = 'Falhou a apagar alguns itens — verifica se ainda há algum na lista e tenta outra vez.'
+    errorMsg.value = 'Falhou a apagar alguns itens - verifica se ainda há algum na lista e tenta outra vez.'
   }
 }
 
@@ -338,7 +338,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
         <option v-for="opt in championshipOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <p class="text-[11px] text-gray-400 mt-1">
-        Os itens de avaliação são independentes por campeonato — cada um tem o seu próprio banco.
+        Os itens de avaliação são independentes por campeonato - cada um tem o seu próprio banco.
       </p>
     </div>
 
@@ -431,7 +431,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
         <template v-if="form.mode === 'multipla_escolha'">
           <div>
             <label class="text-xs text-gray-500 block mb-2">
-              Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) — marca as respostas corretas
+              Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) - marca as respostas corretas
             </label>
             <div class="flex flex-col gap-2">
               <div v-for="(opt, i) in form.options" :key="i" class="flex items-center gap-2">
@@ -476,7 +476,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           <div>
             <label class="text-xs text-gray-500 block mb-1">Jurados que avaliam esta pergunta</label>
             <p v-if="!jurors.length" class="text-xs text-gray-400">
-              Nenhum jurado cadastrado ainda — vai a Admin → Jurados primeiro.
+              Nenhum jurado cadastrado ainda - vai a Admin → Jurados primeiro.
             </p>
             <div v-else class="flex flex-wrap gap-2">
               <button
@@ -499,7 +499,7 @@ async function removeCriteria(criteriaId: string): Promise<void> {
             <label class="text-xs text-gray-500 block mb-1">Critérios de Avaliação</label>
 
             <div v-if="!criteriaFor(editingId).length" class="text-[11px] text-gray-400 mb-2">
-              Sem critérios definidos — os jurados vão pontuar com uma nota única (0 a {{ form.maxPoints }}).
+              Sem critérios definidos - os jurados vão pontuar com uma nota única (0 a {{ form.maxPoints }}).
             </div>
 
             <div

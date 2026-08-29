@@ -78,11 +78,11 @@ function submitManual(): void {
 </script>
 
 <template>
-  <!-- AUMENTADO — px-6 gap-6 fixos trocados por clamp() em vw/vh. -->
+  <!-- AUMENTADO - px-6 gap-6 fixos trocados por clamp() em vw/vh. -->
   <div class="min-h-screen bg-petro-bg flex flex-col items-center justify-center px-[clamp(1.2rem,5vw,3rem)] gap-[clamp(1.2rem,3vh,2.5rem)]">
     <LogoMark size="lg" />
 
-    <!-- AUMENTADO — max-w-sm, p-6, gap-4, text-xs e px-4 py-3 fixos
+    <!-- AUMENTADO - max-w-sm, p-6, gap-4, text-xs e px-4 py-3 fixos
          trocados por clamp(), para o cartão crescer em tablets sem
          ficar minúsculo em telemóveis pequenos. -->
     <div
@@ -108,7 +108,7 @@ function submitManual(): void {
 
     <div v-else-if="mode === 'menu'" class="w-full flex flex-col max-w-[clamp(20rem,90vw,28rem)] gap-[clamp(0.75rem,2vh,1.25rem)]">
       <p class="text-gray-400 text-center text-[clamp(0.85rem,2.6vw,1.1rem)]">Como queres entrar na partida?</p>
-      <!-- AUMENTADO — p-6, gap-2, text-3xl (emoji) e font-semibold sem
+      <!-- AUMENTADO - p-6, gap-2, text-3xl (emoji) e font-semibold sem
            tamanho fixo, agora todos em clamp(). -->
       <button
         class="bg-white rounded-2xl shadow flex flex-col items-center gap-2 p-[clamp(1.2rem,4vw,2rem)]"

@@ -12,7 +12,7 @@ const props = defineProps<{
 const teamsStore = useTeamsStore()
 const logoUrl = computed(() => teamsStore.teamById(props.entry.id)?.logoUrl)
 
-// ATUALIZADO — height deixou de ser uma classe Tailwind fixa (h-44/h-28/h-20)
+// ATUALIZADO - height deixou de ser uma classe Tailwind fixa (h-44/h-28/h-20)
 // e passou a ser um valor clamp() em vh, aplicado via style inline mais
 // abaixo, para os degraus do pódio escalarem com a altura do ecrã.
 const rankStyles: Record<number, { stand: string; height: string; order: string; delay: string; startDelay: number }> = {
@@ -47,7 +47,7 @@ onMounted(() => {
     :class="rankStyles[rank].order"
     :style="{ animationDelay: rankStyles[rank].delay }"
   >
-    <!-- ATUALIZADO — w-40 fixo trocado por clamp() em vw. -->
+    <!-- ATUALIZADO - w-40 fixo trocado por clamp() em vw. -->
     <div
       class="bg-white/95 rounded-2xl shadow-lg px-[clamp(0.75rem,1.4vw,1.5rem)] py-[clamp(0.6rem,1.2vh,1.25rem)] flex flex-col items-center gap-1 w-[clamp(10rem,17vw,19rem)] relative"
       :class="rank === 1 ? 'winner-glow' : ''"
@@ -59,7 +59,7 @@ onMounted(() => {
       <div class="flex items-center gap-1 text-petro-primary font-bold text-[clamp(1rem,1.4vw,1.6rem)] mt-1">★ {{ displayedScore }} PTS</div>
     </div>
 
-    <!-- ATUALIZADO — w-28 e alturas h-44/h-28/h-20 fixas trocadas por
+    <!-- ATUALIZADO - w-28 e alturas h-44/h-28/h-20 fixas trocadas por
          clamp() (largura em vw, altura em vh via rankStyles.height acima). -->
     <div
       class="w-[clamp(6rem,11vw,12rem)] rounded-t-lg flex items-center justify-center text-white font-bold text-[clamp(1.5rem,2.4vw,2.8rem)] shadow-inner relative overflow-hidden"

@@ -6,9 +6,9 @@ import http from 'http'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-// NOVO — log persistente em ficheiro. Numa app empacotada (subsistema
+// NOVO - log persistente em ficheiro. Numa app empacotada (subsistema
 // Windows GUI), o stdout/console.log do processo principal não aparece em
-// lado nenhum visível — mesmo correndo o .exe a partir de um terminal.
+// lado nenhum visível - mesmo correndo o .exe a partir de um terminal.
 // Sem isto, um problema no arranque do backend em produção é invisível.
 // O ficheiro fica em %APPDATA%\petrochamp-quiz\logs\main.log.
 function logToFile(message: string): void {
@@ -18,7 +18,7 @@ function logToFile(message: string): void {
     const line = `[${new Date().toISOString()}] ${message}\n`
     appendFileSync(join(logsDir, 'main.log'), line, 'utf8')
   } catch {
-    // Se nem o log conseguir escrever, não há nada a fazer — não deixamos
+    // Se nem o log conseguir escrever, não há nada a fazer - não deixamos
     // isto rebentar a app.
   }
 }
@@ -39,7 +39,7 @@ if (!gotSingleInstanceLock) {
 
   let backendProcess: ChildProcess | null = null
 
-  // NOVO — garante que existe uma base de dados gravável em userData antes
+  // NOVO - garante que existe uma base de dados gravável em userData antes
   // de arrancar o backend em produção. A pasta de instalação (resources/)
   // não é local seguro para gravar (fica só de leitura em muitos setups, e
   // é apagada/substituída em cada atualização). userData é a pasta correta
@@ -82,7 +82,7 @@ if (!gotSingleInstanceLock) {
         stdio: 'pipe'
       })
     } else {
-      // PRODUÇÃO — corre o backend já compilado (dist/index.js) com o
+      // PRODUÇÃO - corre o backend já compilado (dist/index.js) com o
       // próprio binário do Electron em modo "run as node", em vez de
       // depender de `npm`/`tsx` que não fazem parte do pacote final e de
       // depender de o utilizador ter Node.js instalado na máquina.
@@ -171,11 +171,11 @@ if (!gotSingleInstanceLock) {
     })
   }
 
-  // (Bloco 3) — dispara a sincronização com o Cloud através do próprio
+  // (Bloco 3) - dispara a sincronização com o Cloud através do próprio
   // backend Local (que já sabe se há Internet e onde fica o Cloud, via
   // CLOUD_API_URL no seu .env). Não bloqueia a abertura das janelas: corre
   // "fire and forget" com um timeout de segurança, e falha em silêncio se
-  // não houver Internet — a app abre sempre, sincronizada ou não.
+  // não houver Internet - a app abre sempre, sincronizada ou não.
   function triggerSyncInBackground(): void {
     const req = http.request(
       'http://localhost:4000/api/sync/run',
@@ -288,7 +288,7 @@ if (!gotSingleInstanceLock) {
     } catch (error) {
       console.error('Não foi possível confirmar o arranque do backend local:', error)
       logToFile(`Não foi possível confirmar o arranque do backend local: ${error}`)
-      console.log('Sincronização saltada nesta sessão — tenta novamente na próxima abertura da app.')
+      console.log('Sincronização saltada nesta sessão - tenta novamente na próxima abertura da app.')
     }
 
     createModeratorWindow()

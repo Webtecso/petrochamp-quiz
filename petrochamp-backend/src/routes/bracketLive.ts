@@ -10,7 +10,7 @@ const router = Router()
 // anterior terminar). Sem isto, o deleteMany de um pedido podia correr
 // entre o deleteMany e o createMany de outro, e os dois createMany
 // acabavam por inserir os mesmos confrontos duas vezes (ou mais, se
-// houvesse mais pedidos concorrentes) — foi isto que causou os
+// houvesse mais pedidos concorrentes) - foi isto que causou os
 // chaveamentos duplicados infinitamente.
 const generatingChampionships = new Set<string>()
 
@@ -77,11 +77,11 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
   }
 }
 
-// NOVO — tradução central de Phase.order -> BracketMatch.round, espelho
+// NOVO - tradução central de Phase.order -> BracketMatch.round, espelho
 // exato da lógica em stores/phases.ts (phaseOrderToBracketRound) do
 // lado do servidor. Necessária porque isRoundComplete() em
 // socket/index.ts recebia liveState.phase (Phase.order) diretamente
-// como se fosse o round do chaveamento — o que só é correto enquanto
+// como se fosse o round do chaveamento - o que só é correto enquanto
 // não existir nenhuma fase "apresentacao" com noElimination: true no
 // meio da sequência (essas fases não geram BracketMatch nenhum, ver
 // ensurePhasesForRounds acima e syncPresentationDuplasForRound abaixo).
@@ -90,7 +90,7 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
 // sequência de fim de ronda cedo demais.
 //
 // No universitario (sem nenhuma fase apresentacao+noElimination), esta
-// função devolve sempre o mesmo valor que phaseOrder — função
+// função devolve sempre o mesmo valor que phaseOrder - função
 // identidade, nada muda lá.
 export async function getBracketRoundForPhaseOrder(
   championship: string,
@@ -108,12 +108,12 @@ export async function getBracketRoundForPhaseOrder(
       return isOutsideBracket ? round + 1 : round
     }
   }
-  // Fallback — fase não encontrada (dados a meio de sync, etc.):
+  // Fallback - fase não encontrada (dados a meio de sync, etc.):
   // assume identidade para não partir o caso simples de 1-para-1.
   return round || phaseOrder
 }
 
-// Cria/atualiza as PresentationDuplas de uma ronda específica — ver
+// Cria/atualiza as PresentationDuplas de uma ronda específica - ver
 // comentário histórico original sobre o Map local anti-duplicação.
 export async function syncPresentationDuplasForRound(
   championship: string,

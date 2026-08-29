@@ -4,7 +4,7 @@ export declare class SyncService {
     /**
      * Executa o ciclo de sincronização completo.
      *
-     * CORRIGIDO — o endpoint do Admin Cloud (/api/sync/pull e /api/sync/push)
+     * CORRIGIDO - o endpoint do Admin Cloud (/api/sync/pull e /api/sync/push)
      * trabalha com TODAS as tabelas numa única chamada, não uma tabela por
      * pedido. A versão anterior desta classe chamava pullModel/pushModel por
      * tabela, com um formato de payload diferente do que o servidor espera

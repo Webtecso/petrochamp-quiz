@@ -99,7 +99,7 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
 
     if (existing) {
       // Ficheiros físicos: continuam a ser apagados do disco imediatamente
-      // — isso é local a esta máquina, não precisa (nem faz sentido)
+      // - isso é local a esta máquina, não precisa (nem faz sentido)
       // sincronizar entre admin local e admin cloud.
       for (const slide of existing.slides) {
         await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
@@ -138,7 +138,7 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
 })
 
 // DELETE /api/presentation-documents/:id
-// CORRIGIDO — soft delete no registo (ver nota em questions.ts); os
+// CORRIGIDO - soft delete no registo (ver nota em questions.ts); os
 // ficheiros físicos das slides continuam a ser apagados do disco de
 // imediato, já que isso é local e não passa pelo sync.
 router.delete('/:id', requireAdmin, async (req, res) => {

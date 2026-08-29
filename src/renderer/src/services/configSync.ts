@@ -48,7 +48,7 @@ export function startConfigSync(): void {
         case 'jurors':
         case 'partners':
         case 'presentation': {
-          // Sem estado global cacheado na Projeção para estes — as views que
+          // Sem estado global cacheado na Projeção para estes - as views que
           // os usam (Admin/Moderador/Jurados) já fazem fetch próprio ao
           // montar. Nada a fazer aqui por agora.
           break

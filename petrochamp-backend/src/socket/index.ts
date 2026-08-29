@@ -279,6 +279,13 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     liveState.currentQuestionId = null
     liveState.usedAnalyticItemIds.push(chosen.id)
     liveState.activeTeam = team
+    // Inicializa o estado de avaliação analítica para esta pergunta
+    liveState.analyticEvaluation = {
+      itemId: chosen.id,
+      criteriaScores: [],
+      jurorsSubmitted: [],
+      expectedJurorCount: liveState.expectedJurorCount
+    }
   }
   liveState.timeLeft = chosen.timeSeconds
 }
@@ -379,7 +386,7 @@ async function pickSuspensePhrase(): Promise<string> {
   const phrases = await prisma.suspensePhrase.findMany()
   return phrases.length
     ? phrases[Math.floor(Math.random() * phrases.length)].text
-    : 'Preparem-se — a próxima fase está prestes a começar...'
+    : 'Preparem-se - a próxima fase está prestes a começar...'
 }
 
 async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
@@ -612,18 +619,18 @@ export function registerSocketHandlers(io: Server): void {
       }
       if (changed) broadcast()
 
-      // CORRIGIDO — quando o tempo acaba e awaitingJuryEvaluation passa a
+      // CORRIGIDO - quando o tempo acaba e awaitingJuryEvaluation passa a
       // true aqui em cima, é possível que os jurados já tenham enviado a
       // nota ANTES do fim do tempo (juror:setScore chama
       // checkAutoConfirmOpenItem, mas nessa altura awaitingJuryEvaluation
       // ainda era false, então a checagem saía sem confirmar nada). Sem
       // este chamada extra, essa nota ficava presa em jurorEntries para
-      // sempre — nunca era promovida a jurorSubmittedItemIds, e o jurado
+      // sempre - nunca era promovida a jurorSubmittedItemIds, e o jurado
       // via o botão "Confirmar Pontuação" a dizer "enviado" sem nada
       // realmente avançar. Ao chamar checkAutoConfirmOpenItem aqui, assim
       // que awaitingJuryEvaluation se torna true, o sistema volta a
       // verificar se todos os jurados esperados já responderam e, se sim,
-      // confirma imediatamente — sem esperar por um novo juror:setScore
+      // confirma imediatamente - sem esperar por um novo juror:setScore
       // que pode nunca vir (o jurado já enviou a nota dele).
       if (liveState.awaitingJuryEvaluation) {
         checkAutoConfirmOpenItem(broadcast)
@@ -958,12 +965,12 @@ export function registerSocketHandlers(io: Server): void {
       liveState.isRunning = false
       liveState.awaitingJuryEvaluation = true
       broadcast()
-      // CORRIGIDO — mesmo raciocínio do timer principal: se os jurados já
+      // CORRIGIDO - mesmo raciocínio do timer principal: se os jurados já
       // tinham enviado a nota antes do moderador clicar em "Encerrar
       // Pergunta Aberta", essa nota ficava presa em jurorEntries e nunca
       // era promovida a jurorSubmittedItemIds, porque a única chamada a
       // checkAutoConfirmOpenItem acontecia dentro do handler
-      // juror:setScore — e nessa altura awaitingJuryEvaluation ainda
+      // juror:setScore - e nessa altura awaitingJuryEvaluation ainda
       // era false. Agora, assim que awaitingJuryEvaluation passa a true
       // aqui, verificamos imediatamente se a avaliação já pode ser
       // confirmada.
@@ -1715,6 +1722,88 @@ export function registerSocketHandlers(io: Server): void {
         broadcast()
       }
     )
+
+    socket.on(
+      'juror:setAnalyticCriteriaScore',
+      (payload: { jurorId: string; criteriaId: string; team: 'A' | 'B'; score: number }) => {
+        if (liveState.currentItemSource !== 'analytic') return
+        if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== liveState.currentAnalyticItemId) return
+        if (!payload.criteriaId) return
+        const existing = liveState.analyticEvaluation.criteriaScores.find(
+          (e) => e.jurorId === payload.jurorId && e.criteriaId === payload.criteriaId && e.team === payload.team
+        )
+        if (existing) {
+          existing.score = payload.score
+        } else {
+          liveState.analyticEvaluation.criteriaScores.push({ ...payload })
+        }
+        broadcast()
+      }
+    )
+
+    socket.on('juror:submitAnalyticEvaluation', async (payload: { jurorId: string; itemId: string }) => {
+      if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== payload.itemId) return
+      if (liveState.analyticEvaluation.jurorsSubmitted.includes(payload.jurorId)) return
+      if (!liveState.jurors.some((j) => j.id === payload.jurorId)) return
+
+      liveState.analyticEvaluation.jurorsSubmitted.push(payload.jurorId)
+      broadcast()
+
+      // Verifica se todos os jurados esperados submeteram
+      const connectedCount = liveState.jurors.length
+      const target =
+        connectedCount > 0
+          ? Math.min(liveState.expectedJurorCount || connectedCount, connectedCount)
+          : liveState.expectedJurorCount
+
+      if (target <= 0) return
+      if (liveState.analyticEvaluation.jurorsSubmitted.length < target) return
+
+      // Persistir cada critério por jurado e equipa
+      const valid = liveState.analyticEvaluation.criteriaScores
+      const totalsByJurorA = new Map<string, number>()
+      const totalsByJurorB = new Map<string, number>()
+
+      for (const entry of valid) {
+        try {
+          await prisma.evaluationCriteriaScore.upsert({
+            where: { criteriaId_jurorId_team: { criteriaId: entry.criteriaId, jurorId: entry.jurorId, team: entry.team } },
+            update: { score: entry.score },
+            create: { criteriaId: entry.criteriaId, jurorId: entry.jurorId, team: entry.team, score: entry.score }
+          })
+        } catch (err) {
+          console.error('[juror:submitAnalyticEvaluation] Falha ao gravar evaluationCriteriaScore:', err)
+        }
+
+        if (entry.team === 'A') {
+          totalsByJurorA.set(entry.jurorId, (totalsByJurorA.get(entry.jurorId) ?? 0) + entry.score)
+        } else {
+          totalsByJurorB.set(entry.jurorId, (totalsByJurorB.get(entry.jurorId) ?? 0) + entry.score)
+        }
+      }
+
+      const totalsA = Array.from(totalsByJurorA.values())
+      const totalsB = Array.from(totalsByJurorB.values())
+      const avgA = totalsA.length ? totalsA.reduce((a, b) => a + b, 0) / totalsA.length : 0
+      const avgB = totalsB.length ? totalsB.reduce((a, b) => a + b, 0) / totalsB.length : 0
+
+      // Aplica as pontuações ao placar e marca item como confirmado
+      liveState.teamAScore += Math.round(avgA)
+      liveState.teamBScore += Math.round(avgB)
+      liveState.jurorSubmittedItemIds.push(payload.itemId)
+
+      // Limpa o estado atual do item analítico
+      if (liveState.currentItemSource === 'analytic' && liveState.currentAnalyticItemId === payload.itemId) {
+        liveState.awaitingJuryEvaluation = false
+        liveState.currentItemSource = null
+        liveState.currentAnalyticItemId = null
+        liveState.currentItemMode = null
+      }
+
+      // Reset local analyticEvaluation
+      liveState.analyticEvaluation = { itemId: null, criteriaScores: [], jurorsSubmitted: [], expectedJurorCount: 0 }
+      broadcast()
+    })
 
     socket.on('juror:submitPresentationEvaluation', async (payload: { jurorId: string }) => {
       const flow = liveState.presentationFlow

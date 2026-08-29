@@ -70,7 +70,7 @@ const championshipLabels: Record<string, string> = {
   <div class="flex flex-col gap-6 max-w-2xl mx-auto w-full">
     <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
       Aqui só configuras a repescagem com antecedência. Abrir a votação, acompanhar os votos, gerar o
-      chaveamento e inserir a campeã de volta é tudo feito pelo Moderador, na altura certa — depois da fase
+      chaveamento e inserir a campeã de volta é tudo feito pelo Moderador, na altura certa - depois da fase
       terminar de verdade.
     </div>
 
@@ -102,7 +102,7 @@ const championshipLabels: Record<string, string> = {
     </div>
 
     <div class="bg-white rounded-2xl shadow p-6">
-      <h3 class="font-semibold text-sm text-gray-600 mb-3">Configurações — {{ championshipLabels[championship] }}</h3>
+      <h3 class="font-semibold text-sm text-gray-600 mb-3">Configurações - {{ championshipLabels[championship] }}</h3>
       <div v-if="!configs.length" class="text-xs text-gray-400">Nenhuma configuração criada ainda.</div>
       <div v-for="c in configs" :key="c.id" class="flex items-center justify-between gap-3 border-b border-gray-50 py-3 last:border-0">
         <div class="text-sm">

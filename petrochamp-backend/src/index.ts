@@ -28,7 +28,7 @@ import moderatorsRouter from './routes/moderators'
 import adminAuthRouter from './routes/adminAuth'
 import syncRouter from './routes/sync'
 import syncTriggerRouter from './routes/syncTrigger'
-// NOVO — rota que expõe o IP da máquina na rede local, para o frontend
+// NOVO - rota que expõe o IP da máquina na rede local, para o frontend
 // conseguir mostrar o link/QR code do portal de jurados sem depender de
 // nenhum IP fixo nem de configuração manual (ver services/networkInfo.ts).
 import networkInfoRouter from './routes/networkInfo'
@@ -37,7 +37,7 @@ import { registerSocketHandlers } from './socket'
 import { initConfigEvents } from './socket/configEvents'
 import { loadPersistedState, liveState } from './socket/liveState'
 import { startPublicTunnel, stopPublicTunnel } from './services/tunnel'
-// CORRIGIDO — syncService.ts passou a exportar a classe SyncService em vez
+// CORRIGIDO - syncService.ts passou a exportar a classe SyncService em vez
 // da função runSync(). O import antigo compilava (TypeScript não apanha
 // isto sem strict de exports em runtime dinâmico), mas rebentava sempre
 // que o setInterval periódico chamava runSync(), porque deixou de existir.
@@ -49,20 +49,20 @@ import { SyncService } from './services/syncService'
 // ar por completo (todos os pedidos seguintes, incluindo Socket.io,
 // passavam a dar ERR_CONNECTION_REFUSED até o tsx watch reiniciar
 // sozinho). Isto garante que o processo nunca morre por causa de um erro
-// isolado — o erro fica registado na consola, mas o backend continua vivo.
+// isolado - o erro fica registado na consola, mas o backend continua vivo.
 process.on('uncaughtException', (err) => {
-  console.error('[uncaughtException] Erro não tratado — o backend continua a correr:', err)
+  console.error('[uncaughtException] Erro não tratado - o backend continua a correr:', err)
 })
 process.on('unhandledRejection', (err) => {
   console.error(
-    '[unhandledRejection] Rejeição de Promise não tratada — o backend continua a correr:',
+    '[unhandledRejection] Rejeição de Promise não tratada - o backend continua a correr:',
     err
   )
 })
 
 const app = express()
 app.use(cors())
-// CORRIGIDO — 10mb para 15mb. Perguntas/critérios/equipas com imagem
+// CORRIGIDO - 10mb para 15mb. Perguntas/critérios/equipas com imagem
 // guardam a imagem como base64 diretamente no campo (ver upload.ts), o
 // que facilmente ultrapassa vários MB no JSON do pedido inteiro (POST/PATCH
 // de uma pergunta com imagem). O limite antigo (mesmo a 10mb) ainda podia
@@ -71,7 +71,7 @@ app.use(cors())
 // causado um PayloadTooLargeError confirmado nos logs.
 app.use(express.json({ limit: '15mb' }))
 
-// ALTERADO — em produção (empacotado), __dirname fica dentro da pasta de
+// ALTERADO - em produção (empacotado), __dirname fica dentro da pasta de
 // instalação (resources/petrochamp-backend/dist), que não é local seguro
 // nem persistente para guardar ficheiros: pode não ter permissão de
 // escrita, e é substituída a cada atualização da app. UPLOADS_DIR é
@@ -95,7 +95,7 @@ app.get('/health', async (_req, res) => {
 app.use('/api/teams', teamsRouter)
 app.use('/api/questions', questionsRouter)
 app.use('/api/evaluation-items', evaluationItemsRouter)
-// NOVO — critérios de avaliação por Pergunta Analítica (Admin → Avaliação).
+// NOVO - critérios de avaliação por Pergunta Analítica (Admin → Avaliação).
 app.use('/api/evaluation-criteria', evaluationCriteriaRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/upload', uploadRouter)
@@ -114,13 +114,13 @@ app.use('/api/presentation', presentationRouter)
 app.use('/api/presentation-documents', presentationDocumentsRouter)
 app.use('/api/moderators', requireAdmin, moderatorsRouter)
 app.use('/api/admin-auth', adminAuthRouter)
-// NOVO — GET /api/network-info: { ip, port, portalUrl }. Sem autenticação
+// NOVO - GET /api/network-info: { ip, port, portalUrl }. Sem autenticação
 // de propósito, para o ecrã inicial da app poder mostrar o link/QR do
 // portal de jurados assim que abre, sem exigir login de moderador antes.
 app.use('/api/network-info', networkInfoRouter)
 
 // Rotas de sincronização com o Cloud. syncRouter expõe /pull e /push
-// (usadas pelo Cloud quando é ELE a chamar-nos — não é o caso normal, mas
+// (usadas pelo Cloud quando é ELE a chamar-nos - não é o caso normal, mas
 // fica simétrico); syncTriggerRouter expõe /run, chamada tanto pelo
 // processo do Electron (main/index.ts) ao abrir a app, como pelo botão
 // "Atualizar" no Admin, para forçar sync sem esperar pelo ciclo periódico.
@@ -178,7 +178,7 @@ loadPersistedState().then(() => {
   // Sincronização periódica em segundo plano (3 minutos)
   const SYNC_INTERVAL_MS = 3 * 60 * 1000
   setInterval(() => {
-    // CORRIGIDO — usa SyncService.syncAll() em vez da função runSync()
+    // CORRIGIDO - usa SyncService.syncAll() em vez da função runSync()
     // antiga (ver nota no import acima). Sem CLOUD_API_URL configurado,
     // salta silenciosamente em vez de tentar sincronizar.
     const cloudApiUrl = process.env.CLOUD_API_URL

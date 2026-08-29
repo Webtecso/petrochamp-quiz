@@ -29,9 +29,9 @@ function rowClass(team?: Slot): string {
 </script>
 
 <template>
-  <!-- ATUALIZADO — w-52, p-3 e text-sm fixos trocados por clamp() em vw,
+  <!-- ATUALIZADO - w-52, p-3 e text-sm fixos trocados por clamp() em vw,
        para o cartão de cada confronto escalar com o ecrã. Aumentei
-       também o TeamAvatar de 'sm' para 'md' — com o cartão maior, um
+       também o TeamAvatar de 'sm' para 'md' - com o cartão maior, um
        avatar 'sm' ficava desproporcionalmente pequeno lá dentro. -->
   <div class="bg-white rounded-xl shadow p-[clamp(0.6rem,1vw,1.1rem)] w-[clamp(11rem,17vw,19rem)] flex flex-col gap-1">
     <div

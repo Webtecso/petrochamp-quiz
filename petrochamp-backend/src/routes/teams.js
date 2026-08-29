@@ -52,7 +52,7 @@ router.put('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
         res.status(404).json({ error: 'Equipa não encontrada' });
     }
 });
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
     const { id } = req.params;
     try {

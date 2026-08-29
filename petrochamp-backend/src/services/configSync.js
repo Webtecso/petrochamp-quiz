@@ -33,7 +33,7 @@ function startConfigSync() {
                 break;
             // jurors, partners, suspensePhrases, presentation: os ecrãs que usam
             // esses dados hoje buscam-nos diretamente via fetch() local (não têm
-            // store dedicado com action de refetch) — nada a fazer aqui por agora.
+            // store dedicado com action de refetch) - nada a fazer aqui por agora.
         }
     });
 }

@@ -19,7 +19,7 @@ async function addPhrase(): Promise<void> {
     <div class="bg-white rounded-2xl shadow p-6">
       <h2 class="font-semibold text-petro-primary mb-4">Frases de Suspense</h2>
       <p class="text-xs text-gray-400 mb-4">
-        Usadas na tela de Projeção enquanto se aguarda o início — o sistema escolhe uma aleatoriamente de cada vez.
+        Usadas na tela de Projeção enquanto se aguarda o início - o sistema escolhe uma aleatoriamente de cada vez.
       </p>
       <div class="flex gap-2 mb-4">
         <input

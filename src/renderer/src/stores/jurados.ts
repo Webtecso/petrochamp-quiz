@@ -34,18 +34,18 @@ export const useJuradosStore = defineStore('jurados', {
     submittedItemIds: [] as string[],
     initialEntries: [] as InitialScoreEntry[],
     initialScoresConfirmed: false,
-    // NOVO — id do jurado registado NESTE dispositivo. Antes não existia
+    // NOVO - id do jurado registado NESTE dispositivo. Antes não existia
     // nenhum estado local para isto, e a JuradosView.vue já referenciava
     // `jurados.myJurorId` (para decidir se mostra o formulário de
-    // registo) sem o store alguma vez o definir — ficava sempre
+    // registo) sem o store alguma vez o definir - ficava sempre
     // undefined, e o formulário de registo dependia só de
     // `jurors.length`.
     myJurorId: null as string | null,
-    // NOVO — pendingScores guarda o que o jurado está a escrever
+    // NOVO - pendingScores guarda o que o jurado está a escrever
     // AGORA MESMO neste dispositivo, antes de ser confirmado ao
     // servidor. Isto é o que resolve a lentidão: o valor mostrado no
     // input vem daqui primeiro (instantâneo), e só depois de um pequeno
-    // intervalo sem novas teclas é que emitimos ao socket — em vez de
+    // intervalo sem novas teclas é que emitimos ao socket - em vez de
     // emitir (e provocar um broadcast do liveState inteiro) a cada
     // caractere digitado.
     pendingScores: {} as Record<string, { scoreA?: number; scoreB?: number }>,
@@ -58,7 +58,7 @@ export const useJuradosStore = defineStore('jurados', {
         if (incoming.jurorEntries) {
           this.entries = incoming.jurorEntries
           // Assim que o servidor confirma um valor, limpamos o pendente
-          // correspondente — evita que um valor "pendente" antigo fique
+          // correspondente - evita que um valor "pendente" antigo fique
           // para sempre a sobrepor-se ao valor real do servidor.
           for (const key of Object.keys(this.pendingScores)) {
             const [jurorId, itemId] = key.split('::')
@@ -90,11 +90,11 @@ export const useJuradosStore = defineStore('jurados', {
     removeJuror(id: string) {
       getSocket().emit('moderator:removeJuror', { jurorId: id })
     },
-    // CORRIGIDO — antes emitia diretamente ao socket a cada chamada
+    // CORRIGIDO - antes emitia diretamente ao socket a cada chamada
     // (ou seja, a cada tecla digitada no input, já que a UI chama isto
     // em @input). Agora atualiza primeiro o valor pendente local
     // (refletido de imediato no ecrã do jurado) e só emite ao servidor
-    // depois de 400ms sem nova alteração — reduz drasticamente o
+    // depois de 400ms sem nova alteração - reduz drasticamente o
     // volume de broadcasts de liveState e elimina a sensação de
     // lentidão/"não grava".
     setEntry(jurorId: string, itemId: string, scoreA: number, scoreB: number) {
@@ -138,7 +138,7 @@ export const useJuradosStore = defineStore('jurados', {
     isSubmitted(itemId: string): boolean {
       return this.submittedItemIds.includes(itemId)
     },
-    // CORRIGIDO — mesmo tratamento de debounce local para as Notas
+    // CORRIGIDO - mesmo tratamento de debounce local para as Notas
     // Iniciais.
     setInitialScore(jurorId: string, scoreA: number, scoreB: number) {
       this.pendingInitialScores[jurorId] = { scoreA, scoreB }

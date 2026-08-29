@@ -15,7 +15,7 @@ defineProps<{ transparent?: boolean }>()
     class="min-h-screen flex flex-col items-center justify-center gap-[clamp(1.5rem,3vh,3rem)] px-10 overflow-hidden"
     :class="transparent ? 'bg-petro-bg/85' : 'bg-petro-bg'"
   >
-    <!-- AUMENTADO — text-3xl fixo trocado por clamp() em vw, para o
+    <!-- AUMENTADO - text-3xl fixo trocado por clamp() em vw, para o
          título escalar com o tamanho real do ecrã (TV grande vs monitor
          pequeno) em vez de ficar sempre do mesmo tamanho físico. -->
     <div class="text-petro-primary font-bold text-[clamp(1.8rem,4vw,4rem)]">PETROCHAMP</div>
@@ -25,7 +25,7 @@ defineProps<{ transparent?: boolean }>()
     <div v-if="!partnersStore.partners.length" class="text-[clamp(0.75rem,1vw,1rem)] text-gray-400">
       Nenhum parceiro cadastrado ainda.
     </div>
-    <!-- AUMENTADO — max-w-4xl trocado por max-w-[90vw], para o carrossel
+    <!-- AUMENTADO - max-w-4xl trocado por max-w-[90vw], para o carrossel
          ocupar quase toda a largura do ecrã em vez de ficar limitado a
          uma faixa central estreita. -->
     <div v-else class="w-full max-w-[90vw] overflow-hidden">
@@ -35,10 +35,10 @@ defineProps<{ transparent?: boolean }>()
           :key="p.id + '-' + Math.random()"
           class="flex flex-col items-center gap-[clamp(0.75rem,1.5vh,1.5rem)] shrink-0"
         >
-          <!-- AUMENTADO — w-28 h-28 (112px fixos) trocado por clamp() em
+          <!-- AUMENTADO - w-28 h-28 (112px fixos) trocado por clamp() em
                vw/vh, para o logo crescer bastante em ecrãs grandes. -->
-          <div class="bg-white rounded-2xl shadow flex items-center justify-center p-[clamp(1rem,2vw,2.5rem)] w-[clamp(9rem,14vw,18rem)] h-[clamp(9rem,14vw,18rem)]">
-            <img :src="p.logoUrl" :alt="p.name" class="max-w-full max-h-full object-contain" />
+          <div class="bg-white rounded-2xl shadow flex items-center justify-center p-[clamp(0.5rem,1vw,1rem)] w-[clamp(10rem,20vw,32rem)] h-[clamp(10rem,20vw,32rem)]">
+            <img :src="p.logoUrl" :alt="p.name" class="w-full h-full object-contain" />
           </div>
           <span class="text-[clamp(1rem,1.6vw,1.75rem)] text-gray-500 font-semibold">{{ p.name }}</span>
         </div>

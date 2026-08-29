@@ -16,7 +16,7 @@ async function triggerSync() {
   syncError.value = false
 
   try {
-    // CORRIGIDO — o caminho relativo '/api/sync/run' ia sempre para a
+    // CORRIGIDO - o caminho relativo '/api/sync/run' ia sempre para a
     // origem da própria app (localhost:5173 no Vite dev), que não tem essa
     // rota. Precisa de apontar explicitamente para o backend Local
     // (localhost:4000 em dev, ou a mesma origem em produção/túnel).
@@ -26,7 +26,7 @@ async function triggerSync() {
     if (res.ok && data.ran) {
       const pushedCount = Object.values(data.pushed ?? {}).reduce((a: number, b: unknown) => a + Number(b), 0)
       const pulledCount = Object.values(data.pulled ?? {}).reduce((a: number, b: unknown) => a + Number(b), 0)
-      syncMessage.value = `Sincronização concluída — ${pushedCount} enviado(s), ${pulledCount} recebido(s).`
+      syncMessage.value = `Sincronização concluída - ${pushedCount} enviado(s), ${pulledCount} recebido(s).`
     } else if (res.ok && !data.ran) {
       syncError.value = true
       syncMessage.value = data.reason || 'Sincronização não correu (provavelmente sem Internet).'
@@ -147,7 +147,7 @@ onMounted(() => {
       </div>
 
       <p class="text-xs text-gray-400">
-        Alterações aqui aplicam-se à próxima partida/pergunta iniciada — não afetam uma pergunta já em curso.
+        Alterações aqui aplicam-se à próxima partida/pergunta iniciada - não afetam uma pergunta já em curso.
       </p>
     </div>
   </div>

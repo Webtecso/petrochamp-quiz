@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// POST /api/phases/swap — troca a posição (order) de duas fases.
+// POST /api/phases/swap - troca a posição (order) de duas fases.
 router.post('/swap', requireAdmin, async (req, res) => {
   try {
     const { firstId, secondId } = req.body as { firstId?: string; secondId?: string }
@@ -61,7 +61,7 @@ router.post('/swap', requireAdmin, async (req, res) => {
   }
 })
 
-// POST /api/phases/repair-numbering — corrige buracos na numeração de ordem.
+// POST /api/phases/repair-numbering - corrige buracos na numeração de ordem.
 router.post('/repair-numbering', requireAdmin, async (req, res) => {
   try {
     const { championship } = req.body as { championship?: string }
@@ -267,10 +267,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
-// NOVO — conta quanto conteúdo (perguntas normais, perguntas analíticas,
+// NOVO - conta quanto conteúdo (perguntas normais, perguntas analíticas,
 // perguntas de desempate) ainda aponta para o número (order) desta fase,
 // neste campeonato. Usado pelo DELETE abaixo para impedir apagar uma fase
-// e deixar esse conteúdo órfão — foi exatamente isto que causou o bug em
+// e deixar esse conteúdo órfão - foi exatamente isto que causou o bug em
 // que as perguntas do Quiz "desapareciam": a Phase com order:4 foi
 // apagada, mas as Question com phase:4 continuaram na BD, presas a um
 // número que já não correspondia a nenhuma fase viva.
@@ -285,12 +285,12 @@ async function countAssociatedContent(championship: string | null, order: number
 }
 
 // DELETE /api/phases/:id
-// ATUALIZADO — antes de apagar (soft delete), verifica se ainda há
+// ATUALIZADO - antes de apagar (soft delete), verifica se ainda há
 // Question/EvaluationItem/TiebreakQuestion associadas ao número desta
 // fase neste campeonato. Se houver, bloqueia com 409 e diz quantas,
 // evitando que fiquem órfãs (presas a um número de fase que deixa de
 // existir). Passa ?force=true (ou { force: true } no body) para apagar
-// mesmo assim — útil para fases de teste sem conteúdo real que o
+// mesmo assim - útil para fases de teste sem conteúdo real que o
 // utilizador queira mesmo remover apesar do aviso.
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
@@ -310,7 +310,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       const counts = await countAssociatedContent(existing.championship, existing.order)
       if (counts.total > 0) {
         return res.status(409).json({
-          error: `Esta fase ainda tem conteúdo associado (${counts.questions} pergunta(s) de quiz, ${counts.evaluationItems} pergunta(s) analítica(s), ${counts.tiebreakQuestions} pergunta(s) de desempate) ligado ao número da fase (${existing.order}). Apagar a fase agora deixaria esse conteúdo órfão — ele deixaria de aparecer, mas continuaria na base de dados. Move esse conteúdo para outra fase primeiro, ou confirma que queres apagar mesmo assim.`,
+          error: `Esta fase ainda tem conteúdo associado (${counts.questions} pergunta(s) de quiz, ${counts.evaluationItems} pergunta(s) analítica(s), ${counts.tiebreakQuestions} pergunta(s) de desempate) ligado ao número da fase (${existing.order}). Apagar a fase agora deixaria esse conteúdo órfão - ele deixaria de aparecer, mas continuaria na base de dados. Move esse conteúdo para outra fase primeiro, ou confirma que queres apagar mesmo assim.`,
           counts,
           requiresForce: true
         })

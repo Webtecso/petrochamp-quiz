@@ -11,7 +11,7 @@ export const judgedItems: JudgedItem[] = [
     id: 'apresentacao-1',
     kind: 'apresentacao',
     phase: 1,
-    text: 'Apresentação do Projeto — Fase 1 (Perfuração)',
+    text: 'Apresentação do Projeto - Fase 1 (Perfuração)',
     maxPoints: 30
   },
   {

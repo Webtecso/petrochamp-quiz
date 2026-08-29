@@ -50,7 +50,7 @@ async function getAuth() {
   return prisma.adminAuth.findUnique({ where: { id: 1 } })
 }
 
-// Primeira configuração — só corre se ainda não existir password configurada.
+// Primeira configuração - só corre se ainda não existir password configurada.
 router.post('/setup', async (req, res) => {
   const existing = await getAuth()
   if (existing) {
@@ -283,7 +283,7 @@ const router = Router()
 // anterior terminar). Sem isto, o deleteMany de um pedido podia correr
 // entre o deleteMany e o createMany de outro, e os dois createMany
 // acabavam por inserir os mesmos confrontos duas vezes (ou mais, se
-// houvesse mais pedidos concorrentes) — foi isto que causou os
+// houvesse mais pedidos concorrentes) - foi isto que causou os
 // chaveamentos duplicados infinitamente.
 const generatingChampionships = new Set<string>()
 
@@ -354,7 +354,7 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
 // essa ronda corresponder a uma fase de Apresentação (pura ou + Quiz) e já
 // tiver equipas definidas nos confrontos. Chamada tanto ao gerar o
 // chaveamento (Ronda 1) como sempre que uma equipa avança para uma ronda
-// seguinte (ver recordBracketResult em socket/index.ts) — assim as duplas
+// seguinte (ver recordBracketResult em socket/index.ts) - assim as duplas
 // nunca dessincronizam do chaveamento, seja qual for a ronda escolhida
 // para ser de Apresentação.
 //
@@ -363,15 +363,15 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
 // ser chamada primeiro só com teamAId preenchido (e teamBId ainda null),
 // e mais tarde outra vez já com teamBId preenchido. Por isso a
 // identidade de uma dupla é sempre o teamAId (que nunca muda depois de
-// definido) — nunca comparamos teamAId+teamBId juntos, para não criar
+// definido) - nunca comparamos teamAId+teamBId juntos, para não criar
 // duplicados quando a segunda equipa só chega mais tarde.
 //
-// CORRIGIDO — a causa da duplicação de duplas: o array `existingDuplas`
+// CORRIGIDO - a causa da duplicação de duplas: o array `existingDuplas`
 // era lido UMA VEZ antes do loop e nunca atualizado depois de criar uma
 // dupla nova dentro do próprio loop. Sempre que havia mais do que um
 // `bracketMatch` com o mesmo teamAId na mesma ronda (exatamente o que a
 // duplicação do /generate produzia), a 1ª ocorrência criava a dupla mas
-// as seguintes não a encontravam no array desatualizado — e criavam-na
+// as seguintes não a encontravam no array desatualizado - e criavam-na
 // outra vez. Agora usamos um Map local que é atualizado a cada criação, e
 // além disso o upsert usa a constraint única (phaseId, teamAId) da BD
 // como rede de segurança final, mesmo que outra via de código chame esta
@@ -390,7 +390,7 @@ export async function syncPresentationDuplasForRound(
   const existingDuplas = await prisma.presentationDupla.findMany({ where: { phaseId: phase.id } })
 
   // Map local mantido em sincronia com as criações feitas dentro deste
-  // próprio loop — é isto que faltava antes.
+  // próprio loop - é isto que faltava antes.
   const byTeamA = new Map(existingDuplas.map((d) => [d.teamAId, d]))
 
   let order = existingDuplas.length + 1
@@ -479,8 +479,8 @@ router.get('/:championship', async (req, res) => {
 // createMany corriam como duas operações separadas, sem transação. Se o
 // /generate fosse chamado mais do que uma vez em sucessão (duplo clique,
 // nova chamada antes da resposta anterior voltar, etc.), os pedidos
-// entrelaçavam-se — ex: A apaga, B apaga (nada a apagar), A cria, B cria
-// — e cada chamada extra ficava a somar mais um conjunto completo de
+// entrelaçavam-se - ex: A apaga, B apaga (nada a apagar), A cria, B cria
+// - e cada chamada extra ficava a somar mais um conjunto completo de
 // confrontos em cima dos anteriores, sem nunca limpar os que já lá
 // estavam. Agora:
 //   1. Um "lock" em memória (generatingChampionships) rejeita pedidos
@@ -546,7 +546,7 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
 
     // Apagar o chaveamento anterior e criar o novo dentro da mesma
     // transação: ou as duas operações são aplicadas juntas, ou nenhuma é
-    // — nunca fica um estado a meio onde os antigos já foram apagados mas
+    // - nunca fica um estado a meio onde os antigos já foram apagados mas
     // os novos ainda não existem (nem o inverso, os dois a coexistir).
     //
     // As PresentationDuplas da categoria também são apagadas aqui: como o
@@ -595,7 +595,7 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
 // re-sincroniza as duplas de Apresentação de todas as fases já
 // existentes, sem apagar/regerar o chaveamento. Útil sempre que se edita
 // o "type" de uma fase (ex: mudar de "quiz" para "apresentacao_quiz")
-// depois de o chaveamento já ter sido gerado — nesse caso as duplas dessa
+// depois de o chaveamento já ter sido gerado - nesse caso as duplas dessa
 // ronda nunca tinham sido criadas, porque syncPresentationDuplasForRound
 // só corre automaticamente ao gerar o chaveamento e quando uma equipa
 // avança de ronda.
@@ -1126,7 +1126,7 @@ router.post('/', async (req, res) => {
     if (!exists) break
     code = generateModeratorCode()
   }
-  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas — já tem tudo
+  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas - já tem tudo
   const moderator = await prisma.moderator.create({
     data: {
       name,
@@ -1164,7 +1164,7 @@ router.put('/:id', async (req, res) => {
         name,
         role: finalRole,
         // Sempre que 'areas' vem no payload, substitui o conjunto inteiro
-        // (delete + recreate) — mais simples que fazer diff.
+        // (delete + recreate) - mais simples que fazer diff.
         ...(areas !== undefined
           ? { areas: { deleteMany: {}, create: cleanAreas.map((area) => ({ area })) } }
           : {})
@@ -1267,7 +1267,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// POST /api/phases/swap — troca a posição (order) de duas fases.
+// POST /api/phases/swap - troca a posição (order) de duas fases.
 router.post('/swap', requireAdmin, async (req, res) => {
   try {
     const { firstId, secondId } = req.body as { firstId?: string; secondId?: string }
@@ -1302,7 +1302,7 @@ router.post('/swap', requireAdmin, async (req, res) => {
   }
 })
 
-// POST /api/phases/repair-numbering — corrige buracos na numeração de ordem.
+// POST /api/phases/repair-numbering - corrige buracos na numeração de ordem.
 router.post('/repair-numbering', requireAdmin, async (req, res) => {
   try {
     const { championship } = req.body as { championship?: string }
@@ -1425,7 +1425,7 @@ router.post('/', requireAdmin, async (req, res) => {
     if (presentationWeight !== undefined)
       dataToCreate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToCreate.quizWeight = Number(quizWeight)
-    // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam
+    // NOVO - fase de Apresentação sem eliminação: todas as equipas avançam
     // e a nota é transportada (ponderada) para o Quiz da fase seguinte.
     if (noElimination !== undefined) dataToCreate.noElimination = Boolean(noElimination)
 
@@ -1545,7 +1545,7 @@ import { requireAdmin } from '../middleware/requireAdmin'
 const router = Router()
 
 // PresentationDupla não tem relações Prisma definidas para Team/Phase (só
-// teamAId/teamBId/phaseId como texto simples) — por isso, em vez de
+// teamAId/teamBId/phaseId como texto simples) - por isso, em vez de
 // include, buscamos as equipas à parte e juntamos manualmente.
 async function attachTeams(duplas: Array<{ teamAId: string; teamBId: string | null }>) {
   const teamIds = new Set<string>()
@@ -2044,7 +2044,7 @@ export async function getEligibleTeams(championship: string, phase: number) {
   return prisma.team.findMany({ where: { id: { in: Array.from(loserIds) } } })
 }
 
-// NOVO — Admin: listar configurações de um campeonato
+// NOVO - Admin: listar configurações de um campeonato
 router.get('/configs', async (req, res) => {
   const { championship } = req.query as { championship?: string }
   const configs = await prisma.repescagemConfig.findMany({
@@ -2054,7 +2054,7 @@ router.get('/configs', async (req, res) => {
   res.json(configs)
 })
 
-// NOVO — Admin: criar configuração (não abre votação, só prepara)
+// NOVO - Admin: criar configuração (não abre votação, só prepara)
 router.post('/config', async (req, res) => {
   const { championship, phase, maxRepescados, votingDurationSeconds } = req.body
   if (!championship || !phase || !maxRepescados) {
@@ -2074,7 +2074,7 @@ router.post('/config', async (req, res) => {
   res.status(201).json(config)
 })
 
-// NOVO — Admin: editar configuração (só antes de ser iniciada pelo Moderador)
+// NOVO - Admin: editar configuração (só antes de ser iniciada pelo Moderador)
 router.put('/config/:id', async (req, res) => {
   const id = Number(req.params.id)
   const { maxRepescados, votingDurationSeconds } = req.body
@@ -2096,7 +2096,7 @@ router.put('/config/:id', async (req, res) => {
   res.json(config)
 })
 
-// NOVO — Admin: apagar configuração não usada
+// NOVO - Admin: apagar configuração não usada
 router.delete('/config/:id', async (req, res) => {
   const id = Number(req.params.id)
   const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
@@ -2112,7 +2112,7 @@ router.delete('/config/:id', async (req, res) => {
   res.status(204).send()
 })
 
-// NOVO — usado pelo backend/Moderador: existe uma configuração por iniciar
+// NOVO - usado pelo backend/Moderador: existe uma configuração por iniciar
 // para esta fase deste campeonato?
 router.get('/for-phase', async (req, res) => {
   const { championship, phase } = req.query as { championship?: string; phase?: string }
@@ -2655,7 +2655,7 @@ async function getAuth() {
   return prisma.adminAuth.findUnique({ where: { id: 1 } })
 }
 
-// Primeira configuração — só corre se ainda não existir password configurada.
+// Primeira configuração - só corre se ainda não existir password configurada.
 router.post('/setup', async (req, res) => {
   const existing = await getAuth()
   if (existing) {
@@ -2888,7 +2888,7 @@ const router = Router()
 // anterior terminar). Sem isto, o deleteMany de um pedido podia correr
 // entre o deleteMany e o createMany de outro, e os dois createMany
 // acabavam por inserir os mesmos confrontos duas vezes (ou mais, se
-// houvesse mais pedidos concorrentes) — foi isto que causou os
+// houvesse mais pedidos concorrentes) - foi isto que causou os
 // chaveamentos duplicados infinitamente.
 const generatingChampionships = new Set<string>()
 
@@ -2959,7 +2959,7 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
 // essa ronda corresponder a uma fase de Apresentação (pura ou + Quiz) e já
 // tiver equipas definidas nos confrontos. Chamada tanto ao gerar o
 // chaveamento (Ronda 1) como sempre que uma equipa avança para uma ronda
-// seguinte (ver recordBracketResult em socket/index.ts) — assim as duplas
+// seguinte (ver recordBracketResult em socket/index.ts) - assim as duplas
 // nunca dessincronizam do chaveamento, seja qual for a ronda escolhida
 // para ser de Apresentação.
 //
@@ -2968,15 +2968,15 @@ async function resolveByesRecursively(championship: string, totalRounds: number)
 // ser chamada primeiro só com teamAId preenchido (e teamBId ainda null),
 // e mais tarde outra vez já com teamBId preenchido. Por isso a
 // identidade de uma dupla é sempre o teamAId (que nunca muda depois de
-// definido) — nunca comparamos teamAId+teamBId juntos, para não criar
+// definido) - nunca comparamos teamAId+teamBId juntos, para não criar
 // duplicados quando a segunda equipa só chega mais tarde.
 //
-// CORRIGIDO — a causa da duplicação de duplas: o array `existingDuplas`
+// CORRIGIDO - a causa da duplicação de duplas: o array `existingDuplas`
 // era lido UMA VEZ antes do loop e nunca atualizado depois de criar uma
 // dupla nova dentro do próprio loop. Sempre que havia mais do que um
 // `bracketMatch` com o mesmo teamAId na mesma ronda (exatamente o que a
 // duplicação do /generate produzia), a 1ª ocorrência criava a dupla mas
-// as seguintes não a encontravam no array desatualizado — e criavam-na
+// as seguintes não a encontravam no array desatualizado - e criavam-na
 // outra vez. Agora usamos um Map local que é atualizado a cada criação, e
 // além disso o upsert usa a constraint única (phaseId, teamAId) da BD
 // como rede de segurança final, mesmo que outra via de código chame esta
@@ -2995,7 +2995,7 @@ export async function syncPresentationDuplasForRound(
   const existingDuplas = await prisma.presentationDupla.findMany({ where: { phaseId: phase.id } })
 
   // Map local mantido em sincronia com as criações feitas dentro deste
-  // próprio loop — é isto que faltava antes.
+  // próprio loop - é isto que faltava antes.
   const byTeamA = new Map(existingDuplas.map((d) => [d.teamAId, d]))
 
   let order = existingDuplas.length + 1
@@ -3084,8 +3084,8 @@ router.get('/:championship', async (req, res) => {
 // createMany corriam como duas operações separadas, sem transação. Se o
 // /generate fosse chamado mais do que uma vez em sucessão (duplo clique,
 // nova chamada antes da resposta anterior voltar, etc.), os pedidos
-// entrelaçavam-se — ex: A apaga, B apaga (nada a apagar), A cria, B cria
-// — e cada chamada extra ficava a somar mais um conjunto completo de
+// entrelaçavam-se - ex: A apaga, B apaga (nada a apagar), A cria, B cria
+// - e cada chamada extra ficava a somar mais um conjunto completo de
 // confrontos em cima dos anteriores, sem nunca limpar os que já lá
 // estavam. Agora:
 //   1. Um "lock" em memória (generatingChampionships) rejeita pedidos
@@ -3151,7 +3151,7 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
 
     // Apagar o chaveamento anterior e criar o novo dentro da mesma
     // transação: ou as duas operações são aplicadas juntas, ou nenhuma é
-    // — nunca fica um estado a meio onde os antigos já foram apagados mas
+    // - nunca fica um estado a meio onde os antigos já foram apagados mas
     // os novos ainda não existem (nem o inverso, os dois a coexistir).
     //
     // As PresentationDuplas da categoria também são apagadas aqui: como o
@@ -3200,7 +3200,7 @@ router.post('/:championship/generate', requireAdmin, async (req, res) => {
 // re-sincroniza as duplas de Apresentação de todas as fases já
 // existentes, sem apagar/regerar o chaveamento. Útil sempre que se edita
 // o "type" de uma fase (ex: mudar de "quiz" para "apresentacao_quiz")
-// depois de o chaveamento já ter sido gerado — nesse caso as duplas dessa
+// depois de o chaveamento já ter sido gerado - nesse caso as duplas dessa
 // ronda nunca tinham sido criadas, porque syncPresentationDuplasForRound
 // só corre automaticamente ao gerar o chaveamento e quando uma equipa
 // avança de ronda.
@@ -3731,7 +3731,7 @@ router.post('/', async (req, res) => {
     if (!exists) break
     code = generateModeratorCode()
   }
-  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas — já tem tudo
+  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas - já tem tudo
   const moderator = await prisma.moderator.create({
     data: {
       name,
@@ -3769,7 +3769,7 @@ router.put('/:id', async (req, res) => {
         name,
         role: finalRole,
         // Sempre que 'areas' vem no payload, substitui o conjunto inteiro
-        // (delete + recreate) — mais simples que fazer diff.
+        // (delete + recreate) - mais simples que fazer diff.
         ...(areas !== undefined
           ? { areas: { deleteMany: {}, create: cleanAreas.map((area) => ({ area })) } }
           : {})
@@ -3872,7 +3872,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// POST /api/phases/swap — troca a posição (order) de duas fases.
+// POST /api/phases/swap - troca a posição (order) de duas fases.
 router.post('/swap', requireAdmin, async (req, res) => {
   try {
     const { firstId, secondId } = req.body as { firstId?: string; secondId?: string }
@@ -3907,7 +3907,7 @@ router.post('/swap', requireAdmin, async (req, res) => {
   }
 })
 
-// POST /api/phases/repair-numbering — corrige buracos na numeração de ordem.
+// POST /api/phases/repair-numbering - corrige buracos na numeração de ordem.
 router.post('/repair-numbering', requireAdmin, async (req, res) => {
   try {
     const { championship } = req.body as { championship?: string }
@@ -4030,7 +4030,7 @@ router.post('/', requireAdmin, async (req, res) => {
     if (presentationWeight !== undefined)
       dataToCreate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToCreate.quizWeight = Number(quizWeight)
-    // NOVO — fase de Apresentação sem eliminação: todas as equipas avançam
+    // NOVO - fase de Apresentação sem eliminação: todas as equipas avançam
     // e a nota é transportada (ponderada) para o Quiz da fase seguinte.
     if (noElimination !== undefined) dataToCreate.noElimination = Boolean(noElimination)
 
@@ -4150,7 +4150,7 @@ import { requireAdmin } from '../middleware/requireAdmin'
 const router = Router()
 
 // PresentationDupla não tem relações Prisma definidas para Team/Phase (só
-// teamAId/teamBId/phaseId como texto simples) — por isso, em vez de
+// teamAId/teamBId/phaseId como texto simples) - por isso, em vez de
 // include, buscamos as equipas à parte e juntamos manualmente.
 async function attachTeams(duplas: Array<{ teamAId: string; teamBId: string | null }>) {
   const teamIds = new Set<string>()
@@ -4649,7 +4649,7 @@ export async function getEligibleTeams(championship: string, phase: number) {
   return prisma.team.findMany({ where: { id: { in: Array.from(loserIds) } } })
 }
 
-// NOVO — Admin: listar configurações de um campeonato
+// NOVO - Admin: listar configurações de um campeonato
 router.get('/configs', async (req, res) => {
   const { championship } = req.query as { championship?: string }
   const configs = await prisma.repescagemConfig.findMany({
@@ -4659,7 +4659,7 @@ router.get('/configs', async (req, res) => {
   res.json(configs)
 })
 
-// NOVO — Admin: criar configuração (não abre votação, só prepara)
+// NOVO - Admin: criar configuração (não abre votação, só prepara)
 router.post('/config', async (req, res) => {
   const { championship, phase, maxRepescados, votingDurationSeconds } = req.body
   if (!championship || !phase || !maxRepescados) {
@@ -4679,7 +4679,7 @@ router.post('/config', async (req, res) => {
   res.status(201).json(config)
 })
 
-// NOVO — Admin: editar configuração (só antes de ser iniciada pelo Moderador)
+// NOVO - Admin: editar configuração (só antes de ser iniciada pelo Moderador)
 router.put('/config/:id', async (req, res) => {
   const id = Number(req.params.id)
   const { maxRepescados, votingDurationSeconds } = req.body
@@ -4701,7 +4701,7 @@ router.put('/config/:id', async (req, res) => {
   res.json(config)
 })
 
-// NOVO — Admin: apagar configuração não usada
+// NOVO - Admin: apagar configuração não usada
 router.delete('/config/:id', async (req, res) => {
   const id = Number(req.params.id)
   const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
@@ -4717,7 +4717,7 @@ router.delete('/config/:id', async (req, res) => {
   res.status(204).send()
 })
 
-// NOVO — usado pelo backend/Moderador: existe uma configuração por iniciar
+// NOVO - usado pelo backend/Moderador: existe uma configuração por iniciar
 // para esta fase deste campeonato?
 router.get('/for-phase', async (req, res) => {
   const { championship, phase } = req.query as { championship?: string; phase?: string }

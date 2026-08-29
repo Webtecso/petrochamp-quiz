@@ -78,7 +78,7 @@ async function choose(type: ChampionshipType): Promise<void> {
         @input="triedWithoutName = false"
       />
       <p v-if="triedWithoutName && !hasEditionName" class="text-xs text-red-500 mt-1">
-        Escreve o nome da edição antes de escolheres o campeonato — fica gravado no histórico.
+        Escreve o nome da edição antes de escolheres o campeonato - fica gravado no histórico.
       </p>
     </div>
 
@@ -100,7 +100,7 @@ async function choose(type: ChampionshipType): Promise<void> {
           to="/admin/fases"
           class="text-[11px] text-amber-600 underline text-center"
         >
-          Sem fases configuradas — ir ao Admin
+          Sem fases configuradas - ir ao Admin
         </RouterLink>
       </div>
     </div>

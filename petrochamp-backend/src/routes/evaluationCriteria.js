@@ -40,7 +40,7 @@ exports.evaluationCriteriaRouter.put('/:id', async (req, res) => {
     });
     res.json(updated);
 });
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 exports.evaluationCriteriaRouter.delete('/:id', async (req, res) => {
     await db_1.prisma.evaluationCriteria.update({
         where: { id: req.params.id },

@@ -1,7 +1,7 @@
 <script setup lang="ts"></script>
 
 <template>
-  <!-- ATUALIZADO — w-10 fixo trocado por clamp() em vw, para as linhas de
+  <!-- ATUALIZADO - w-10 fixo trocado por clamp() em vw, para as linhas de
        ligação do chaveamento escalarem proporcionalmente às caixas das
        equipas (que também passaram a usar clamp), em vez de ficarem
        desproporcionalmente curtas/longas em ecrãs grandes. -->

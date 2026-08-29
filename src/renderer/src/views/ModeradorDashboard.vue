@@ -318,7 +318,7 @@ function finishMatch(): void {
     <main v-else class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4">
       <template v-if="roundIsComplete">
         <p v-if="isTiedUnresolved" class="text-amber-700 text-sm font-semibold max-w-sm">
-          Empate! ({{ store.teamAScore }} - {{ store.teamBScore }}) — dispara o desempate antes de finalizar.
+          Empate! ({{ store.teamAScore }} - {{ store.teamBScore }}) - dispara o desempate antes de finalizar.
         </p>
         <button v-if="isTiedUnresolved" class="bg-amber-500 text-white rounded-lg px-6 py-3 font-semibold shadow" @click="startTiebreak">
           ⚔️ Iniciar Desempate

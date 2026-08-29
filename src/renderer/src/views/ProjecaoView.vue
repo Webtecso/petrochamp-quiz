@@ -69,7 +69,7 @@ watch(
   async (newVal) => {
     if (!newVal) return
     await quizContent.fetchQuestions(newVal)
-    await quizContent.fetchEvaluationItems(newVal) // NOVO — antes só recarregava perguntas normais e de desempate ao trocar de campeonato; itens analíticos ficavam presos ao campeonato anterior.
+    await quizContent.fetchEvaluationItems(newVal) // NOVO - antes só recarregava perguntas normais e de desempate ao trocar de campeonato; itens analíticos ficavam presos ao campeonato anterior.
     await quizContent.fetchTiebreakQuestions(newVal) // NOVO
     await phasesStore.fetchPhases(newVal)
   }
@@ -116,26 +116,26 @@ const bracket = computed(() => {
 })
 
 const phaseQuestions = computed(() => quizContent.questionsForPhase(store.phase))
-// NOVO — pool de itens analíticos da fase atual, paralelo a
+// NOVO - pool de itens analíticos da fase atual, paralelo a
 // 'phaseQuestions'. Sem isto não havia nenhuma forma de encontrar o
 // item ativo quando o sorteio caía num item analítico em vez de uma
 // pergunta normal.
 const phaseEvaluationItems = computed(() => quizContent.itemsForPhase(store.phase))
 
 const currentQuizQuestion = computed(() => phaseQuestions.value.find((q) => q.id === store.currentQuestionId))
-// NOVO — item analítico atualmente sorteado, localizado por
+// NOVO - item analítico atualmente sorteado, localizado por
 // store.currentAnalyticItemId (espelha liveState.currentAnalyticItemId
 // do backend).
 const currentAnalyticItem = computed(() =>
   phaseEvaluationItems.value.find((i) => i.id === store.currentAnalyticItemId)
 )
 
-// CORRIGIDO — antes 'currentQuestion' só olhava para
+// CORRIGIDO - antes 'currentQuestion' só olhava para
 // store.currentQuestionId, que o backend deixa a 'null' sempre que o
 // item sorteado é analítico (currentItemSource === 'analytic'). Como
 // resultado, sempre que calhava uma Pergunta Analítica, o ecrã de
 // batalha ficava totalmente vazio (sem texto, sem opções, sem imagem)
-// — currentQuestion.value era sempre 'undefined' nesse caso. Agora
+// - currentQuestion.value era sempre 'undefined' nesse caso. Agora
 // escolhemos a fonte certa consoante store.currentItemSource, e todo o
 // resto do ecrã (texto, imagem, opções de resposta) passa a funcionar
 // igual para os dois tipos de item, porque ambos alimentam o mesmo
@@ -145,7 +145,7 @@ const currentQuestion = computed(() => {
   return currentQuizQuestion.value
 })
 
-// CORRIGIDO — EvaluationItem usa 'correctIndex' singular (não um array
+// CORRIGIDO - EvaluationItem usa 'correctIndex' singular (não um array
 // 'correctIndexes' como se assumiu antes), igual a QuizQuestion. Basta
 // ler diretamente.
 const currentQuestionCorrectIndex = computed(() => {
@@ -153,10 +153,10 @@ const currentQuestionCorrectIndex = computed(() => {
   return typeof q?.correctIndex === 'number' ? q.correctIndex : -1
 })
 
-// NOVO — EvaluationItem não tem um campo 'options' (array) como
+// NOVO - EvaluationItem não tem um campo 'options' (array) como
 // QuizQuestion; guarda cada opção em campos separados
 // (optionA/B/C/D), e só faz sentido construir a lista quando
-// mode === 'multipla_escolha' — em modo 'aberta' não há opções, a
+// mode === 'multipla_escolha' - em modo 'aberta' não há opções, a
 // resposta é avaliada manualmente pelos jurados (fluxo já existente via
 // store.awaitingJuryEvaluation). Este computed devolve:
 // - o array de opções da pergunta normal (QuizQuestion.options), OU
@@ -174,7 +174,7 @@ const currentQuestionOptions = computed((): string[] | null => {
   return q?.options ?? null
 })
 
-// NOVO — sinaliza uma pergunta analítica aberta ativa (sem opções, à
+// NOVO - sinaliza uma pergunta analítica aberta ativa (sem opções, à
 // espera de avaliação dos jurados), para o template mostrar uma
 // mensagem adequada em vez de tentar renderizar <AnswerOptions> sem
 // opções nenhumas.
@@ -208,13 +208,13 @@ const currentTiebreakQuestion = computed(() =>
 )
 const tiebreakQuestionImage = computed(() => currentTiebreakQuestion.value?.imageUrl ?? null)
 
-// CORRIGIDO — caminhos relativos (ex: 'uploads/xxx.jpg') resolviam
+// CORRIGIDO - caminhos relativos (ex: 'uploads/xxx.jpg') resolviam
 // apenas para '/uploads/xxx.jpg', que o browser interpretava contra a
-// própria origem da Projeção (Vite, porta 5173) — onde esse ficheiro
+// própria origem da Projeção (Vite, porta 5173) - onde esse ficheiro
 // não existe. Ele só existe no backend (porta 4000, onde
 // express.static('/uploads', ...) está montado). Por isso NENHUMA
 // imagem de pergunta, de desempate, ou logo de equipa aparecia, mesmo
-// com o caminho gravado corretamente na base de dados — só as slides
+// com o caminho gravado corretamente na base de dados - só as slides
 // de apresentação em modo documento funcionavam, porque já prefixavam
 // com getBackendUrl() à parte. Agora formatImageUrl faz o mesmo para
 // todos os casos relativos.
@@ -315,7 +315,7 @@ const roundJustEnded = computed(() => {
         {{ store.championReveal.teamName ?? 'Campeã' }}
       </h1>
       <p class="text-white/90 z-10 tracking-widest uppercase" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">
-        Grande Campeã{{ store.editionName ? ' — ' + store.editionName : '' }}
+        Grande Campeã{{ store.editionName ? ' - ' + store.editionName : '' }}
       </p>
     </div>
 
@@ -344,11 +344,11 @@ const roundJustEnded = computed(() => {
 
     <!--
       4.5 Batalha terminou (fim da última pergunta do Quiz de um round).
-      NOVO — o backend passou a mostrar este estado (phaseFlow.stage ===
+      NOVO - o backend passou a mostrar este estado (phaseFlow.stage ===
       'battleEnded') antes de avançar para ranking/repescagem/parceiros,
       e só avança quando o moderador confirmar
       (moderator:continueAfterBattleEnded). Tem de vir ANTES do bloco
-      'ranking' abaixo, porque phaseFlow é o MESMO objeto de estado — se
+      'ranking' abaixo, porque phaseFlow é o MESMO objeto de estado - se
       isto não estiver aqui em cima, o v-else-if de 'ranking' nunca
       dispara mal a fase muda, mas também nunca existe uma janela visual
       para 'battleEnded' em si.
@@ -361,7 +361,7 @@ const roundJustEnded = computed(() => {
         A batalha terminou!
       </h2>
       <p style="font-size: clamp(1.1rem, 2vw, 1.75rem)">
-        Aguardem — o Moderador vai revelar o ranking a seguir.
+        Aguardem - o Moderador vai revelar o ranking a seguir.
       </p>
     </div>
 
@@ -375,13 +375,13 @@ const roundJustEnded = computed(() => {
     </div>
 
     <!--
-      6.75 Ranking pós-apresentações (só fase apresentacao_quiz) — NOVO.
+      6.75 Ranking pós-apresentações (só fase apresentacao_quiz) - NOVO.
       Mostra só as notas de apresentação (sem AVANÇA/ELIMINADA), porque
       nesta fase quem passa só é decidido depois do Quiz, com a média
       ponderada pelos pesos definidos no Admin (ver finishMatch no
       backend). Diferente do bloco 5 acima (store.phaseFlow.stage ===
       'ranking'), que é o ranking real com eliminação, usado só na fase
-      'apresentacao' pura — este bloco nunca reaproveita esse componente,
+      'apresentacao' pura - este bloco nunca reaproveita esse componente,
       para não mostrar avança/eliminada indevidamente aqui.
     -->
     <div
@@ -389,7 +389,7 @@ const roundJustEnded = computed(() => {
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
     >
       <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem)">
-        Notas de Apresentação — Fase {{ store.phase }}
+        Notas de Apresentação - Fase {{ store.phase }}
       </h2>
       <PresentationRankingBoard :rankings="store.presentationPhaseScores" />
     </div>
@@ -404,14 +404,14 @@ const roundJustEnded = computed(() => {
     <EventOrganizerPresentation v-else-if="store.phaseFlow.stage === 'organizer'" transparent />
     <SuspenseScreen
       v-else-if="store.phaseFlow.stage === 'suspense'"
-      :message="store.phaseFlow.suspensePhrase ?? 'Preparem-se — a próxima fase está prestes a começar...'"
+      :message="store.phaseFlow.suspensePhrase ?? 'Preparem-se - a próxima fase está prestes a começar...'"
       transparent
     />
 
     <!-- 5.5 Votação de Repescagem -->
     <SuspenseScreen
       v-else-if="store.repescagemReveal.stage === 'suspense'"
-      message="A VOTAÇÃO VAI COMEÇAR — Prepare-se!"
+      message="A VOTAÇÃO VAI COMEÇAR - Prepare-se!"
       transparent
     />
     <CountdownScreen
@@ -470,7 +470,7 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!-- 6.6 Em apresentação — modo documento -->
+    <!-- 6.6 Em apresentação - modo documento -->
     <div
       v-else-if="store.presentationFlow.stage === 'presenting' && store.presentationFlow.presentationMode === 'document'"
       class="min-h-screen bg-black relative overflow-hidden"
@@ -550,7 +550,7 @@ const roundJustEnded = computed(() => {
     <!-- 6.8 Introdução ao Quiz -->
     <SuspenseScreen
       v-else-if="store.phaseFlow.stage === 'quizIntro'"
-      message="Vamos entrar agora para a Batalha de Quiz — as equipas vão disputar para a eliminação!"
+      message="Vamos entrar agora para a Batalha de Quiz - as equipas vão disputar para a eliminação!"
       transparent
     />
 
@@ -575,7 +575,7 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!-- 8.5 Desempate — ativo, com pergunta e respostas em tempo real -->
+    <!-- 8.5 Desempate - ativo, com pergunta e respostas em tempo real -->
     <div
       v-else-if="store.tiebreak.active"
       class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container tiebreak-container"
@@ -683,7 +683,7 @@ const roundJustEnded = computed(() => {
 
     <SuspenseScreen
       v-else-if="isPresentationPhaseNow && store.presentationRoundReady"
-      message="Todas as apresentações desta fase foram avaliadas — o Moderador vai revelar o ranking."
+      message="Todas as apresentações desta fase foram avaliadas - o Moderador vai revelar o ranking."
       transparent
     />
 
@@ -701,11 +701,11 @@ const roundJustEnded = computed(() => {
 
     <!--
       10. BATALHA ATIVA
-      CORRIGIDO — este bloco antes só renderizava perguntas normais
+      CORRIGIDO - este bloco antes só renderizava perguntas normais
       (currentQuestion vinha exclusivamente de store.currentQuestionId).
       Como 'currentQuestion' agora é um computed unificado (ver script),
       este MESMO bloco passa a mostrar corretamente também os itens
-      analíticos — o texto, a imagem (agora com formatImageUrl corrigido)
+      analíticos - o texto, a imagem (agora com formatImageUrl corrigido)
       e as opções de resposta reaproveitam a mesma estrutura já adaptável
       (flex + clamp() + object-contain), que redimensiona a caixa central
       conforme o comprimento do texto e a presença/ausência de imagem.
@@ -770,12 +770,12 @@ const roundJustEnded = computed(() => {
               </h1>
               <div class="w-full mt-2 text-left">
                 <!--
-                  CORRIGIDO — usava 'currentQuestion.options' diretamente,
+                  CORRIGIDO - usava 'currentQuestion.options' diretamente,
                   mas esse campo só existe em QuizQuestion. Para
                   EvaluationItem (perguntas analíticas), as opções vêm em
                   optionA/B/C/D separados, já tratados pelo computed
                   'currentQuestionOptions' (existia no script mas nunca
-                  tinha sido ligado aqui no template — por isso as
+                  tinha sido ligado aqui no template - por isso as
                   perguntas analíticas nunca apareciam na Projeção).
                   Para o modo 'aberta' (sem opções, avaliação manual dos
                   jurados) mostramos uma mensagem em vez de tentar
@@ -795,7 +795,7 @@ const roundJustEnded = computed(() => {
                   class="text-slate-500 font-semibold"
                   style="font-size: clamp(0.9rem, 1.4vw, 1.15rem)"
                 >
-                  Pergunta de resposta aberta — avaliação dos jurados em curso.
+                  Pergunta de resposta aberta - avaliação dos jurados em curso.
                 </p>
               </div>
             </div>
@@ -890,7 +890,7 @@ const roundJustEnded = computed(() => {
         A batalha terminou!
       </h2>
       <p style="font-size: clamp(1.1rem, 2vw, 1.75rem)">
-        Preparem-se — vamos entrar para a próxima batalha.
+        Preparem-se - vamos entrar para a próxima batalha.
       </p>
     </div>
 

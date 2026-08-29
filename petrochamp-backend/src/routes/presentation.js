@@ -6,7 +6,7 @@ const configEvents_1 = require("../socket/configEvents");
 const requireAdmin_1 = require("../middleware/requireAdmin");
 const router = (0, express_1.Router)();
 // PresentationDupla não tem relações Prisma definidas para Team/Phase (só
-// teamAId/teamBId/phaseId como texto simples) — por isso, em vez de
+// teamAId/teamBId/phaseId como texto simples) - por isso, em vez de
 // include, buscamos as equipas à parte e juntamos manualmente.
 async function attachTeams(duplas) {
     const teamIds = new Set();
@@ -30,7 +30,7 @@ router.get('/duplas', async (req, res) => {
         let duplas = [];
         if (phaseId && phaseId !== 'undefined' && phaseId !== 'null') {
             duplas = await db_1.prisma.presentationDupla.findMany({
-                where: { phaseId, deletedAt: null }, // CORRIGIDO — filtra apagados
+                where: { phaseId, deletedAt: null }, // CORRIGIDO - filtra apagados
                 orderBy: { order: 'asc' }
             });
         }
@@ -38,7 +38,7 @@ router.get('/duplas', async (req, res) => {
             const phases = await db_1.prisma.phase.findMany({ where: { championship }, select: { id: true } });
             const phaseIds = phases.map((p) => p.id);
             duplas = await db_1.prisma.presentationDupla.findMany({
-                where: { phaseId: { in: phaseIds }, deletedAt: null }, // CORRIGIDO — filtra apagados
+                where: { phaseId: { in: phaseIds }, deletedAt: null }, // CORRIGIDO - filtra apagados
                 orderBy: { order: 'asc' }
             });
         }
@@ -75,13 +75,13 @@ router.patch('/duplas/:id/theme', requireAdmin_1.requireAdmin, async (req, res) 
     }
 });
 // DELETE /api/presentation/duplas/:id
-// CORRIGIDO — antes usava prisma.presentationDupla.delete() (apagamento
+// CORRIGIDO - antes usava prisma.presentationDupla.delete() (apagamento
 // FÍSICO). O sistema de sincronização com o Cloud só consegue comunicar
-// remoções através do campo deletedAt (soft delete) — um registo
+// remoções através do campo deletedAt (soft delete) - um registo
 // verdadeiramente apagado deixa de existir localmente, por isso nunca é
 // "enviado" ao Cloud como apagado. No próximo ciclo de sync, o Cloud
 // (que continua com o registo antigo, nunca avisado) via que o local já
-// não o tem e recriava-o automaticamente — exatamente o bug "apaga e
+// não o tem e recriava-o automaticamente - exatamente o bug "apaga e
 // depois volta a aparecer".
 router.delete('/duplas/:id', requireAdmin_1.requireAdmin, async (req, res) => {
     const { id } = req.params;
@@ -101,7 +101,7 @@ router.get('/criteria', async (req, res) => {
         if (!phaseId)
             return res.json([]);
         const criteria = await db_1.prisma.presentationCriteria.findMany({
-            where: { phaseId, deletedAt: null }, // CORRIGIDO — filtra apagados
+            where: { phaseId, deletedAt: null }, // CORRIGIDO - filtra apagados
             orderBy: { id: 'asc' }
         });
         return res.json(criteria);
@@ -132,7 +132,7 @@ router.post('/criteria', requireAdmin_1.requireAdmin, async (req, res) => {
     }
 });
 // DELETE /api/presentation/criteria/:id
-// CORRIGIDO — mesmo motivo do DELETE /duplas acima: apagamento físico
+// CORRIGIDO - mesmo motivo do DELETE /duplas acima: apagamento físico
 // impedia o sync de comunicar a remoção ao Cloud, fazendo o critério
 // reaparecer no próximo ciclo de sincronização.
 router.delete('/criteria/:id', requireAdmin_1.requireAdmin, async (req, res) => {

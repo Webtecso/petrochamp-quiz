@@ -3,7 +3,7 @@ import { SyncService } from '../services/syncService'
 
 const router = Router()
 
-// CORRIGIDO — syncService.ts passou a exportar a classe SyncService em vez
+// CORRIGIDO - syncService.ts passou a exportar a classe SyncService em vez
 // da função runSync(). O CLOUD_API_URL é o mesmo usado no resto do backend
 // para saber onde está o Admin Cloud (Render).
 const CLOUD_API_URL = process.env.CLOUD_API_URL

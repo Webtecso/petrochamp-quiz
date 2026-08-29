@@ -46,7 +46,7 @@ router.get('/', async (req, res) => {
         where: {
             championship: championship || undefined,
             phase: phase ? Number(phase) : undefined,
-            deletedAt: null // NOVO — soft delete: nunca listar registos apagados
+            deletedAt: null // NOVO - soft delete: nunca listar registos apagados
         },
         orderBy: { id: 'asc' }
     });
@@ -119,7 +119,7 @@ router.put('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
         res.status(500).json({ error: error.message || 'Erro interno' });
     }
 });
-// CORRIGIDO — hard delete trocado por soft delete (marca deletedAt em vez
+// CORRIGIDO - hard delete trocado por soft delete (marca deletedAt em vez
 // de apagar a linha da BD). O syncService compara updatedAt > lastSyncedAt
 // para saber o que propagar entre o admin local e o admin cloud; uma linha
 // fisicamente apagada desaparece de qualquer findMany e nunca é vista como

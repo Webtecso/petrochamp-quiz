@@ -48,19 +48,19 @@ onMounted(async () => {
 const hasBracket = computed(() => liveBracketStore.matches.length > 0)
 const isLastPhaseFlow = computed(() => store.phase >= phasesStore.totalPhases)
 
-// CORRIGIDO — antes usava store.phase diretamente como round do
+// CORRIGIDO - antes usava store.phase diretamente como round do
 // chaveamento (liveBracketStore.pendingMatchesForRound(store.phase)).
 // Isso só é correto quando Phase.order coincide sempre com
 // BracketMatch.round. Assim que existe uma fase "apresentacao" com
 // noElimination: true na sequência (que não gera nenhuma ronda de
-// bracket — ver bracketLive.ts), store.phase avança à frente do round
+// bracket - ver bracketLive.ts), store.phase avança à frente do round
 // real, e pendingMatchesForRound(store.phase) passava a procurar um
-// round inexistente — devolvendo sempre lista vazia, mesmo com
+// round inexistente - devolvendo sempre lista vazia, mesmo com
 // confrontos por jogar no round real. Agora traduz-se sempre
 // Phase.order -> BracketMatch.round através de
 // phasesStore.phaseOrderToBracketRound antes de filtrar os confrontos.
 // No universitario (sem nenhuma fase apresentacao+noElimination), esta
-// tradução é a identidade — nada muda lá.
+// tradução é a identidade - nada muda lá.
 const currentBracketRound = computed(() => phasesStore.phaseOrderToBracketRound(store.phase))
 const pendingMatchesThisRound = computed(() => liveBracketStore.pendingMatchesForRound(currentBracketRound.value))
 
@@ -84,7 +84,7 @@ function onStartNextPhase(): void {
   if (nextPhase?.type === 'apresentacao' || nextPhase?.type === 'apresentacao_quiz') {
     router.push('/moderador/apresentacao')
   }
-  // Se for quiz, não fazemos nada — o componente EquipasView continuará montado
+  // Se for quiz, não fazemos nada - o componente EquipasView continuará montado
   // e, assim que o estado sync chegar via socket (stage: 'idle'), ele mostrará
   // automaticamente o chaveamento/confrontos.
 }
@@ -150,7 +150,7 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
 
     <!-- Repescagem Template -->
     <template v-else-if="store.phaseFlow.stage === 'repescagem'">
-      <h1 class="text-2xl font-bold text-amber-700">Repescagem — Fase {{ store.phase }}</h1>
+      <h1 class="text-2xl font-bold text-amber-700">Repescagem - Fase {{ store.phase }}</h1>
       <p v-if="repescagemError" class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-sm">
         {{ repescagemError }}
       </p>
@@ -170,7 +170,7 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
       </template>
 
       <template v-else-if="repescagemStore.config?.votingOpen">
-        <p class="text-sm text-gray-500 max-w-sm">Votação aberta — o público já pode votar no portal.</p>
+        <p class="text-sm text-gray-500 max-w-sm">Votação aberta - o público já pode votar no portal.</p>
         <div class="flex flex-col gap-2 w-full max-w-sm">
           <div
             v-for="t in repescagemStore.tally"
@@ -266,7 +266,7 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
     <h1 class="text-2xl font-bold text-petro-primary">Escolha o Próximo Confronto</h1>
     <template v-if="hasBracket">
       <p v-if="pendingMatchesThisRound.length" class="text-sm text-gray-400 text-center max-w-md">
-        Escolhe um dos confrontos pendentes — as equipas já usadas nesta fase não voltam a aparecer aqui.
+        Escolhe um dos confrontos pendentes - as equipas já usadas nesta fase não voltam a aparecer aqui.
       </p>
       <div v-if="pendingMatchesThisRound.length" class="grid grid-cols-1 gap-3 w-full max-w-md">
         <button
@@ -301,7 +301,7 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
       <div class="w-full max-w-md border-t border-gray-200 pt-6 flex flex-col items-center gap-3">
         <h2 class="text-sm font-bold text-amber-700 uppercase tracking-wide">🔁 Confrontos da Repescagem</h2>
         <p class="text-xs text-gray-400 text-center">
-          Equipas que voltaram por votação pública — jogam normalmente, como qualquer outra batalha.
+          Equipas que voltaram por votação pública - jogam normalmente, como qualquer outra batalha.
         </p>
         <div class="grid grid-cols-1 gap-3 w-full">
           <button

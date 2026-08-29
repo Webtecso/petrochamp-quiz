@@ -130,11 +130,11 @@ async function deleteMatch(entry: { id: number; teamAName: string; teamBName: st
         </div>
         <div class="flex items-center justify-between text-sm">
           <span :class="entry.winnerName === entry.teamAName ? 'font-bold text-petro-primary' : ''">
-            {{ entry.teamAName }} — {{ entry.teamAScore }}
+            {{ entry.teamAName }} - {{ entry.teamAScore }}
           </span>
           <span class="text-gray-300 text-xs">vs</span>
           <span :class="entry.winnerName === entry.teamBName ? 'font-bold text-petro-primary' : ''">
-            {{ entry.teamBName }} — {{ entry.teamBScore }}
+            {{ entry.teamBName }} - {{ entry.teamBScore }}
           </span>
         </div>
         <div class="flex items-center justify-between mt-1">

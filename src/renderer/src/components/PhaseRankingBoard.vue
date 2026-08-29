@@ -42,7 +42,7 @@ function isEliminated(teamId: string): boolean {
     Ainda não há partidas concluídas nesta fase. O ranking aparece aqui assim que a primeira partida terminar.
   </div>
 
-  <!-- ATUALIZADO — max-w-2xl fixo trocado por um teto maior + clamp em vw,
+  <!-- ATUALIZADO - max-w-2xl fixo trocado por um teto maior + clamp em vw,
        para a lista de ranking aproveitar mais espaço horizontal em
        ecrãs grandes/TVs, em vez de ficar sempre com a mesma largura
        física independentemente da resolução. -->

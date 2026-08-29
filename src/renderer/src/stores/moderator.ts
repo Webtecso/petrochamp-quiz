@@ -32,18 +32,18 @@ export const useModeratorStore = defineStore('moderatorSession', {
     // background, mudança de IP/túnel via configSync, navegação que
     // force um novo connectSocket(), etc.). Sem isto, o servidor
     // perdia a noção de que este socket era o moderador
-    // principal/secundário — o Pinia 'session' continuava com o role
+    // principal/secundário - o Pinia 'session' continuava com o role
     // antigo no ecrã, mas o backend já não reconhecia esse socket como
     // tal, e todas as ações restritas por área (ex: Iniciar Tempo,
     // Avançar Apresentação) ficavam silenciosamente bloqueadas sem
     // nenhum aviso.
     //
-    // CORRIGIDO — antes 'lastCode' só existia em memória (estado
+    // CORRIGIDO - antes 'lastCode' só existia em memória (estado
     // Pinia), por isso um restart COMPLETO da app (não uma simples
     // reconexão de socket) perdia-o por completo: a store nascia do
     // zero com lastCode null, e como attachReconnectListener()/
     // subscribeToSocketChanges() só eram chamados a partir de
-    // register() — que só corre no login manual — NADA reenviava o
+    // register() - que só corre no login manual - NADA reenviava o
     // registo depois de um restart. O moderador ficava bloqueado em
     // todas as ações restritas por área até alguém voltar a fazer
     // login manualmente no ecrã do moderador. Agora lastCode é
@@ -59,12 +59,12 @@ export const useModeratorStore = defineStore('moderatorSession', {
     registeredSocket: null as Socket | null,
     // Subscrevemos 'onSocketRecreated()' UMA ÚNICA VEZ por sessão do
     // store (guardado por este boolean, que é seguro porque não
-    // depende de qual socket existe — é "já subscrevi ao evento
+    // depende de qual socket existe - é "já subscrevi ao evento
     // global de recriação", não "já anexei o listener a este socket").
     // Sempre que um socket novo nascer em QUALQUER parte da app,
     // somos avisados e reanexamos o listener + tentamos o re-registo.
     subscribedToSocketChanges: false,
-    // NOVO — evita chamar initFromStorage() mais que uma vez por
+    // NOVO - evita chamar initFromStorage() mais que uma vez por
     // sessão do store (idempotência, tal como subscribedToSocketChanges).
     initializedFromStorage: false
   }),
@@ -79,7 +79,7 @@ export const useModeratorStore = defineStore('moderatorSession', {
   actions: {
     register(code: string): Promise<RegisterResult> {
       this.lastCode = code
-      // NOVO — persiste o código assim que um login (manual ou
+      // NOVO - persiste o código assim que um login (manual ou
       // automático) é tentado, para sobreviver a um restart completo.
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, code)
@@ -96,8 +96,8 @@ export const useModeratorStore = defineStore('moderatorSession', {
               areas: res.areas || []
             }
           } else if (!res.success) {
-            // NOVO — código guardado já não é válido (ex: moderador
-            // removido/recriado no Admin) — limpa para não ficar em
+            // NOVO - código guardado já não é válido (ex: moderador
+            // removido/recriado no Admin) - limpa para não ficar em
             // loop de tentativas silenciosas com um código morto.
             this.logout()
           }
@@ -133,7 +133,7 @@ export const useModeratorStore = defineStore('moderatorSession', {
       this.subscribedToSocketChanges = true
       onSocketRecreated(() => {
         // Reanexa o listener 'connect' ao socket novo e, já agora,
-        // tenta logo o re-registo — o novo socket já pode estar
+        // tenta logo o re-registo - o novo socket já pode estar
         // ligado no momento em que este callback corre.
         this.attachReconnectListener()
         if (this.lastCode) {
@@ -142,7 +142,7 @@ export const useModeratorStore = defineStore('moderatorSession', {
       })
     },
 
-    // NOVO — chamado UMA VEZ, o mais cedo possível no arranque da área
+    // NOVO - chamado UMA VEZ, o mais cedo possível no arranque da área
     // do moderador (ver ModeradorLayout.vue). Se houver um código
     // guardado de uma sessão anterior (restart completo da app, reload
     // da página, etc.), tenta o re-registo imediatamente, sem depender
@@ -152,7 +152,7 @@ export const useModeratorStore = defineStore('moderatorSession', {
     //
     // subscribeToSocketChanges() é chamado ANTES do try/catch de
     // propósito: não depende de getSocket() já existir, por isso nunca
-    // falha aqui — mesmo que o socket inicial ainda não tenha sido
+    // falha aqui - mesmo que o socket inicial ainda não tenha sido
     // criado neste momento (ex: ModeradorLayout montou antes do
     // connectSocket() inicial correr), a subscrição fica pronta e o
     // re-registo automático dispara assim que o primeiro socket nascer.

@@ -23,7 +23,7 @@ async function testAndSave(): Promise<void> {
     await saveBackendHost(trimmed)
     const res = await fetch(`${getBackendUrl()}/health`, { signal: AbortSignal.timeout(6000) })
     if (!res.ok) throw new Error('Resposta inválida do servidor.')
-    // Liga o socket E inicializa as stores/listeners — sem isto, a
+    // Liga o socket E inicializa as stores/listeners - sem isto, a
     // primeira ligação a um PC ficava com o socket aberto mas nenhuma
     // store reativa a ouvir 'state:sync', deixando o Moderador "preso"
     // até reiniciar a app manualmente.

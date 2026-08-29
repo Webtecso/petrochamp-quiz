@@ -106,14 +106,14 @@ const isLocalAccess =
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1'
 
-// NOVO — cache simples em memória do resultado de checkAdminConfigured().
+// NOVO - cache simples em memória do resultado de checkAdminConfigured().
 // Depois de confirmarmos que HÁ password configurada, esse facto nunca
 // deixa de ser verdade durante a vida da aplicação (só ficaria falso de
 // novo se a BD fosse apagada, o que implica reiniciar a app de qualquer
 // forma). Isto evita fazer um pedido de rede a cada navegação para dentro
 // da área /admin. Enquanto ainda não sabemos (null) ou sabemos que NÃO
 // está configurado (false), voltamos a perguntar ao servidor a cada
-// navegação — é barato e garante que assim que o setup for concluído
+// navegação - é barato e garante que assim que o setup for concluído
 // nesta mesma sessão, a próxima navegação já reconhece isso.
 let adminConfiguredCache: boolean | null = null
 
@@ -153,9 +153,9 @@ async function resumeRoute(store: ReturnType<typeof useCampeonatoStore>): Promis
 
   // 5. Deteção do tipo da fase atual
   //
-  // ATUALIZADO — refaz sempre esta busca (em vez de só quando o array
+  // ATUALIZADO - refaz sempre esta busca (em vez de só quando o array
   // estava vazio). O array ficava em cache de um campeonato para o
-  // seguinte — se mudasses de tipo de campeonato (ex: Universitário para
+  // seguinte - se mudasses de tipo de campeonato (ex: Universitário para
   // Ensino Médio, que têm tipos de fase diferentes), o resumo continuava a
   // ler as fases do campeonato anterior e detetava o tipo de fase errado.
   // Era a causa da Apresentação/Apresentação+Quiz parecer "estragada" sem
@@ -182,12 +182,12 @@ router.beforeEach(async (to, from) => {
 
   const store = useCampeonatoStore()
 
-  // NOVO — se estamos a entrar em qualquer página da área /admin (exceto
+  // NOVO - se estamos a entrar em qualquer página da área /admin (exceto
   // a própria /admin/setup) e ainda NÃO existe nenhuma password
   // configurada no backend, manda sempre para /admin/setup em vez de
   // /admin/login. Antes disto, ir direto a /admin/login sem nunca ter
   // configurado password mostrava o formulário de login normalmente, e só
-  // ao submeter é que aparecia o erro "Admin ainda não foi configurado." —
+  // ao submeter é que aparecia o erro "Admin ainda não foi configurado." -
   // confuso para quem está a montar o evento pela primeira vez, ou depois
   // de uma migração/reset ter apagado a tabela AdminAuth sem se
   // aperceberem.

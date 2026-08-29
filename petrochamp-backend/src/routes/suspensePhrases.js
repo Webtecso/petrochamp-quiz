@@ -22,7 +22,7 @@ router.post('/', requireAdmin_1.requireAdmin, async (req, res) => {
     (0, configEvents_1.emitConfigUpdated)('suspensePhrases');
     res.status(201).json(phrase);
 });
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
     try {

@@ -87,7 +87,7 @@ function confirmInitialScores(): void {
   jurados.confirmInitialScores()
 }
 
-// ==================== Perguntas Analíticas — nota única (sem critérios) ====================
+// ==================== Perguntas Analíticas - nota única (sem critérios) ====================
 // Usado só quando o item ativo NÃO tem critérios definidos (ver bloco
 // "Avaliação por Critérios" abaixo, que assume prioridade quando existem).
 
@@ -99,7 +99,7 @@ const selectedItem = computed(() => openItems.value.find((i) => i.id === selecte
 const itemSubmitted = computed(() => (selectedItem.value ? jurados.isSubmitted(selectedItem.value.id) : false))
 const allowedJurorsForSelected = computed(() => jurorsAllowedFor(selectedItem.value))
 
-// NOVO — este item específico tem critérios? Se sim, a UI de nota única
+// NOVO - este item específico tem critérios? Se sim, a UI de nota única
 // abaixo fica escondida e usa-se o bloco de critérios em vez dela.
 const selectedItemHasCriteria = computed(() => {
   if (!selectedItem.value) return false
@@ -142,9 +142,9 @@ function confirmItem(): void {
   jurados.confirmItem(selectedItem.value.id)
 }
 
-// ==================== NOVO — Avaliação por Critérios (Pergunta Analítica) ====================
+// ==================== NOVO - Avaliação por Critérios (Pergunta Analítica) ====================
 // Abre automaticamente quando liveState.analyticEvaluation.itemId (via
-// store, sincronizado por socket) aponta para uma pergunta com critérios —
+// store, sincronizado por socket) aponta para uma pergunta com critérios -
 // não precisa de nenhuma ação do moderador ou dos jurados para aparecer.
 
 const activeAnalyticItemId = computed(() => store.analyticEvaluation.itemId)
@@ -258,7 +258,7 @@ const presentationStageLabel = computed(() => {
     case 'presenting':
       return 'Em apresentação'
     case 'concluded':
-      return 'Apresentação concluída — a aguardar avaliações'
+      return 'Apresentação concluída - a aguardar avaliações'
     default:
       return ''
   }
@@ -284,7 +284,7 @@ const presentationStageLabel = computed(() => {
       <p v-if="registerError" class="text-xs text-red-400">{{ registerError }}</p>
     </div>
 
-    <!-- NOVO — Avaliação por Critérios de uma Pergunta Analítica. Abre
+    <!-- NOVO - Avaliação por Critérios de uma Pergunta Analítica. Abre
          automaticamente assim que store.analyticEvaluation.itemId chega
          via socket, sem qualquer ação do moderador. -->
     <div
@@ -332,7 +332,7 @@ const presentationStageLabel = computed(() => {
         </div>
 
         <div class="flex items-center justify-between text-xs text-white/60">
-          <span>Total — A: {{ jurorAnalyticTotal(juror.id, 'A') }} · B: {{ jurorAnalyticTotal(juror.id, 'B') }}</span>
+          <span>Total - A: {{ jurorAnalyticTotal(juror.id, 'A') }} · B: {{ jurorAnalyticTotal(juror.id, 'B') }}</span>
           <button
             v-if="!jurorHasSubmittedAnalytic(juror.id)"
             class="px-4 py-1.5 rounded-lg bg-petro-primary text-white font-semibold text-xs"
@@ -374,7 +374,7 @@ const presentationStageLabel = computed(() => {
       </button>
     </div>
 
-    <!-- Bloco de Avaliação de Item — nota única (só quando o item ATIVO não tem critérios) -->
+    <!-- Bloco de Avaliação de Item - nota única (só quando o item ATIVO não tem critérios) -->
     <div
       v-if="selectedItem && !selectedItemHasCriteria"
       class="w-full max-w-4xl bg-petro-card p-6 rounded-2xl flex flex-col gap-4 border border-white/10"
@@ -417,7 +417,7 @@ const presentationStageLabel = computed(() => {
         />
       </div>
 
-      <div class="text-xs text-white/50">Totais — A: {{ totals.totalA }} · B: {{ totals.totalB }}</div>
+      <div class="text-xs text-white/50">Totais - A: {{ totals.totalA }} · B: {{ totals.totalB }}</div>
     </div>
 
     <!-- Apresentação de Projetos -->

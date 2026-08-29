@@ -4,7 +4,7 @@ import axios from 'axios';
 const prisma = new PrismaClient();
 
 // Ordem estrita: Pais primeiro, Filhos depois (evita erros de Foreign Key)
-// NOTA: 'setting' foi removido de propósito desta lista — o modelo Setting
+// NOTA: 'setting' foi removido de propósito desta lista - o modelo Setting
 // usa "key" como chave primária em vez de "id" (ver schema.prisma), e toda
 // a lógica de sync (aqui e em routes/sync.ts) assume um campo "id". Por
 // isso o Setting também está de fora de SYNC_TABLES em routes/sync.ts.
@@ -90,10 +90,10 @@ export class SyncService {
 
     if (changes.length === 0) return;
 
-    // CORRIGIDO — o backend (routes/sync.ts, local e cloud) espera
+    // CORRIGIDO - o backend (routes/sync.ts, local e cloud) espera
     // { model, data } no body de /api/sync/push. Antes disto batia
     // sempre em 400 "Corpo inválido: falta tables", e o push nunca
-    // aplicava nada do outro lado — incluindo os apagados (soft
+    // aplicava nada do outro lado - incluindo os apagados (soft
     // delete), que é exatamente o bug reportado ("apago de um lado, o
     // outro continua"). O endpoint devolvia erro, o catch do syncAll()
     // engolia silenciosamente, e os logs diziam "concluída com
@@ -105,10 +105,10 @@ export class SyncService {
   }
 
   private async pullModel(modelName: string, lastSync: Date) {
-    // CORRIGIDO — o backend devolve agora um array diretamente para
+    // CORRIGIDO - o backend devolve agora um array diretamente para
     // ?model=<nome>&since=<data> (antes devolvia sempre TODAS as
     // tabelas num objeto { serverTime, tables }, ignorando por completo
-    // o parâmetro "model" da query — o Array.isArray abaixo falhava
+    // o parâmetro "model" da query - o Array.isArray abaixo falhava
     // sempre, e o pull nunca aplicava nada).
     const response = await axios.get(`${this.cloudUrl}/api/sync/pull`, {
       params: { model: modelName, since: lastSync.toISOString() },
@@ -138,14 +138,14 @@ export class SyncService {
           update: dataToSave,
         });
       } catch (err: any) {
-        // CORRIGIDO — antes, uma exceção num único registo (ex: chave
+        // CORRIGIDO - antes, uma exceção num único registo (ex: chave
         // estrangeira ainda não resolvida, P2003) abortava o `for`
         // inteiro, e todos os registos seguintes deste lote nunca
         // chegavam a ser aplicados. Agora regista o aviso e continua
-        // com o resto — os registos com FK pendente acabam por ser
+        // com o resto - os registos com FK pendente acabam por ser
         // aplicados num ciclo de sync seguinte, quando o pai já existir.
         if (err?.code === 'P2003') {
-          console.warn(`[Sync] '${modelName}' (${item.id}) ignorado nesta ronda — chave estrangeira não resolvida.`);
+          console.warn(`[Sync] '${modelName}' (${item.id}) ignorado nesta ronda - chave estrangeira não resolvida.`);
         } else if (err?.code === 'P2002') {
           console.warn(`[Sync] '${modelName}' (${item.id}) duplicado, ignorado.`);
         } else {

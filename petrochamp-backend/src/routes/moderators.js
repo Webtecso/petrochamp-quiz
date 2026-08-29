@@ -48,7 +48,7 @@ router.post('/', async (req, res) => {
             break;
         code = (0, liveState_1.generateModeratorCode)();
     }
-    const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas); // Principal não precisa de áreas — já tem tudo
+    const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas); // Principal não precisa de áreas - já tem tudo
     const moderator = await db_1.prisma.moderator.create({
         data: {
             name,
@@ -81,7 +81,7 @@ router.put('/:id', async (req, res) => {
                 name,
                 role: finalRole,
                 // Sempre que 'areas' vem no payload, substitui o conjunto inteiro
-                // (delete + recreate) — tabela auxiliar, não precisa de soft delete.
+                // (delete + recreate) - tabela auxiliar, não precisa de soft delete.
                 ...(areas !== undefined
                     ? { areas: { deleteMany: {}, create: cleanAreas.map((area) => ({ area })) } }
                     : {})
@@ -94,7 +94,7 @@ router.put('/:id', async (req, res) => {
         res.status(404).json({ error: 'Moderador não encontrado' });
     }
 });
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     try {

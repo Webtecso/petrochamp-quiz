@@ -26,7 +26,7 @@ router.get('/:id', async (req, res) => {
   res.json(entry)
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts) + id como string
+// CORRIGIDO - soft delete (ver nota em questions.ts) + id como string
 router.delete('/:id', async (req, res) => {
   const id = req.params.id
   try {

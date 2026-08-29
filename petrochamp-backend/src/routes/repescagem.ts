@@ -31,7 +31,7 @@ export async function getEligibleTeams(championship: string, phase: number) {
   return prisma.team.findMany({ where: { id: { in: Array.from(loserIds) }, deletedAt: null } })
 }
 
-// NOVO — Admin: listar configurações de um campeonato
+// NOVO - Admin: listar configurações de um campeonato
 router.get('/configs', async (req, res) => {
   const { championship } = req.query as { championship?: string }
   const configs = await prisma.repescagemConfig.findMany({
@@ -44,7 +44,7 @@ router.get('/configs', async (req, res) => {
   res.json(configs)
 })
 
-// NOVO — Admin: criar configuração (não abre votação, só prepara)
+// NOVO - Admin: criar configuração (não abre votação, só prepara)
 router.post('/config', async (req, res) => {
   const { championship, phase, maxRepescados, votingDurationSeconds } = req.body
   if (!championship || !phase || !maxRepescados) {
@@ -64,8 +64,8 @@ router.post('/config', async (req, res) => {
   res.status(201).json(config)
 })
 
-// NOVO — Admin: editar configuração (só antes de ser iniciada pelo Moderador)
-// CORRIGIDO — id é cuid() (string) no schema, não Int.
+// NOVO - Admin: editar configuração (só antes de ser iniciada pelo Moderador)
+// CORRIGIDO - id é cuid() (string) no schema, não Int.
 router.put('/config/:id', async (req, res) => {
   const id = req.params.id
   const { maxRepescados, votingDurationSeconds } = req.body
@@ -87,8 +87,8 @@ router.put('/config/:id', async (req, res) => {
   res.json(config)
 })
 
-// NOVO — Admin: apagar configuração não usada
-// CORRIGIDO — soft delete (ver nota em questions.ts) + id como string
+// NOVO - Admin: apagar configuração não usada
+// CORRIGIDO - soft delete (ver nota em questions.ts) + id como string
 router.delete('/config/:id', async (req, res) => {
   const id = req.params.id
   const existing = await prisma.repescagemConfig.findUnique({ where: { id } })
@@ -104,7 +104,7 @@ router.delete('/config/:id', async (req, res) => {
   res.status(204).send()
 })
 
-// NOVO — usado pelo backend/Moderador: existe uma configuração por iniciar
+// NOVO - usado pelo backend/Moderador: existe uma configuração por iniciar
 // para esta fase deste campeonato?
 router.get('/for-phase', async (req, res) => {
   const { championship, phase } = req.query as { championship?: string; phase?: string }
@@ -149,7 +149,7 @@ router.get('/has-voted', async (req, res) => {
     res.json({ voted: false })
     return
   }
-  // CORRIGIDO — configId é cuid() (string), sem Number(...)
+  // CORRIGIDO - configId é cuid() (string), sem Number(...)
   const existing = await prisma.repescagemVote.findUnique({
     where: { configId_voterToken: { configId, voterToken } }
   })
@@ -199,7 +199,7 @@ router.post('/:id/generate-bracket', async (req, res) => {
 
   const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`
   // Reset de um chaveamento sintético derivado, sempre recalculado do
-  // zero — intencionalmente hard-delete/deleteMany, não é uma entidade
+  // zero - intencionalmente hard-delete/deleteMany, não é uma entidade
   // que o utilizador "apaga" manualmente através de um botão.
   await prisma.bracketMatch.deleteMany({ where: { championship: syntheticChampionship } })
 

@@ -14,7 +14,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   })
 
   if (res.status === 401 && adminToken.value) {
-    // Sessão de Admin expirou ou é inválida — limpa localmente
+    // Sessão de Admin expirou ou é inválida - limpa localmente
     adminToken.value = null
     localStorage.removeItem('petrochamp_admin_token')
   }

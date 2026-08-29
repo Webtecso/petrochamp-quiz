@@ -3,7 +3,7 @@ import { prisma } from '../db'
 const BATTLE_PHASE_TYPES = ['quiz', 'apresentacao_quiz']
 
 // Dado o order de uma fase, devolve a que ronda do chaveamento ela
-// corresponde — contando só fases de batalha (quiz/apresentacao_quiz)
+// corresponde - contando só fases de batalha (quiz/apresentacao_quiz)
 // até e incluindo essa fase. Fases de apresentação pura não contam.
 // Devolve null se a fase não for uma fase de batalha (não tem ronda).
 export async function getRoundForPhaseOrder(

@@ -135,9 +135,9 @@ function advanceNext(): void {
   store.advanceToNextPresentation()
 }
 
-// CORRIGIDO — antes, no ramo "só apresentação" (isCompositePhase === false),
+// CORRIGIDO - antes, no ramo "só apresentação" (isCompositePhase === false),
 // esta função chamava store.confirmPresentationRanking() e navegava para
-// '/moderador/ranking'. Mas RankingView.vue é só uma tabela de ranking —
+// '/moderador/ranking'. Mas RankingView.vue é só uma tabela de ranking -
 // não tem nenhum botão nem lógica para os estágios seguintes do phaseFlow
 // ('ranking' → 'partners' → 'webtec' → 'organizer' → 'suspense' →
 // avançar fase). Essa lógica está toda em EquipasSelectView.vue (rota
@@ -158,7 +158,7 @@ function goNext(): void {
 
 <template>
   <div class="flex-1 flex flex-col items-center justify-center px-10 py-12 gap-6">
-    <h1 class="text-2xl font-bold text-petro-primary">Apresentação de Projetos — Fase {{ store.phase }}</h1>
+    <h1 class="text-2xl font-bold text-petro-primary">Apresentação de Projetos - Fase {{ store.phase }}</h1>
 
     <div v-if="!isPresentationPhase" class="bg-white rounded-2xl shadow p-6 max-w-md text-center">
       <p class="text-sm text-gray-500">
@@ -274,7 +274,7 @@ function goNext(): void {
         </button>
       </div>
 
-      <!-- Concluída — à espera dos jurados, ou já com resultado -->
+      <!-- Concluída - à espera dos jurados, ou já com resultado -->
       <div v-else-if="store.presentationFlow.stage === 'concluded'" class="bg-white rounded-2xl shadow p-6 w-full max-w-lg text-center">
         <p class="text-sm text-gray-500 mb-1">Apresentação concluída</p>
         <p class="text-lg font-bold text-petro-primary mb-4">{{ store.presentationFlow.teamName }}</p>

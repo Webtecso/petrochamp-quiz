@@ -59,7 +59,7 @@ function continueFlow(): void {
     <div class="max-w-2xl mx-auto flex flex-col gap-6">
       <div class="flex items-center gap-2">
         <span class="text-2xl">🎯</span>
-        <h1 class="text-2xl font-bold text-petro-primary">Repescagem — Fase {{ store.phase }}</h1>
+        <h1 class="text-2xl font-bold text-petro-primary">Repescagem - Fase {{ store.phase }}</h1>
       </div>
 
       <div v-if="!repescagemStore.config" class="bg-white rounded-2xl shadow p-6 text-center">
@@ -70,7 +70,7 @@ function continueFlow(): void {
         <!-- 1. Por iniciar -->
         <div v-if="store.repescagemReveal.stage === 'idle'" class="bg-white rounded-2xl shadow p-6 flex flex-col items-center gap-4 text-center">
           <p class="text-sm text-gray-500 max-w-sm">
-            Repescar {{ repescagemStore.config.maxRepescados }} equipa(s) — votação com
+            Repescar {{ repescagemStore.config.maxRepescados }} equipa(s) - votação com
             {{ repescagemStore.config.votingDurationSeconds }}s de duração. Quando clicares em Iniciar, o público vota
             no telemóvel através do portal remoto.
           </p>
@@ -87,10 +87,10 @@ function continueFlow(): void {
           <div v-if="store.repescagemReveal.stage === 'countdown'" class="text-6xl font-black text-amber-500">
             {{ store.repescagemReveal.countdownValue }}
           </div>
-          <p class="text-sm text-amber-600 font-semibold">A votação vai abrir — o público já pode preparar-se...</p>
+          <p class="text-sm text-amber-600 font-semibold">A votação vai abrir - o público já pode preparar-se...</p>
         </div>
 
-        <!-- 3. Votação aberta — acompanhamento em tempo real -->
+        <!-- 3. Votação aberta - acompanhamento em tempo real -->
         <div v-else-if="store.repescagemReveal.stage === 'voting'" class="bg-white rounded-2xl shadow p-6 flex flex-col gap-4">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-green-600 bg-green-100 px-3 py-1 rounded-full uppercase tracking-wide">

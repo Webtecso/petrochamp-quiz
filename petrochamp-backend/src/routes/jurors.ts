@@ -49,7 +49,7 @@ router.post('/authorizations', requireAdmin, async (req, res) => {
   }
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/authorizations/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   if (!id) {
@@ -110,7 +110,7 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 })
 
-// CORRIGIDO — este é o botão "remover" que estava a apresentar o bug: o
+// CORRIGIDO - este é o botão "remover" que estava a apresentar o bug: o
 // jurado desaparecia só de um lado (o que fez o DELETE) porque o
 // syncService nunca via a linha apagada fisicamente. Agora tanto o jurado
 // como as suas autorizações passam a soft delete, e o syncService apanha

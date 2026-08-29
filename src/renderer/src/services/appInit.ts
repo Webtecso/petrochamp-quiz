@@ -13,7 +13,7 @@ let initialized = false
 // listeners de tempo real e carrega os dados iniciais das stores. Chamada
 // tanto no arranque normal da app (main.ts, quando já há um host guardado)
 // como logo após o utilizador configurar o host pela primeira vez
-// (ServerConfigView.vue) — sem isto, a primeira ligação a um PC ficava
+// (ServerConfigView.vue) - sem isto, a primeira ligação a um PC ficava
 // com o socket aberto mas nenhuma store reativa a ouvir nada.
 export function initApp(forceReconnect = false): void {
   connectSocket(forceReconnect)

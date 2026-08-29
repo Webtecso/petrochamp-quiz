@@ -168,7 +168,7 @@ function typeLabel(type: string): string {
         <option v-for="opt in championshipOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <p class="text-[11px] text-gray-400 mt-1">
-        As fases são independentes por campeonato — cada um tem a sua própria lista.
+        As fases são independentes por campeonato - cada um tem a sua própria lista.
       </p>
     </div>
 
@@ -252,7 +252,7 @@ function typeLabel(type: string): string {
           </div>
         </template>
 
-        <!-- NOVO — só para fase 'apresentacao' pura: opção de não eliminar
+        <!-- NOVO - só para fase 'apresentacao' pura: opção de não eliminar
         ninguém e transportar a nota (ponderada) para o Quiz seguinte. -->
         <template v-if="form.type === 'apresentacao'">
           <div class="flex items-center justify-between">

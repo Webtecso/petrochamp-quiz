@@ -7,7 +7,7 @@ defineProps<{ seconds: number; message?: string; transparent?: boolean }>()
     :class="transparent ? 'bg-petro-dark/85' : 'bg-petro-dark'"
   >
     <!--
-      CORRIGIDO — 'text-9xl' era um tamanho fixo em rem, igual em qualquer
+      CORRIGIDO - 'text-9xl' era um tamanho fixo em rem, igual em qualquer
       ecrã, independentemente do tamanho físico do monitor/projetor. Em
       ecrãs de projeção grandes ficava desproporcionalmente pequeno.
       clamp(mínimo, preferido, máximo) faz o número escalar com a largura

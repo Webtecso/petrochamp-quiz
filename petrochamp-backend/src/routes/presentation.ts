@@ -6,7 +6,7 @@ import { requireAdmin } from '../middleware/requireAdmin'
 const router = Router()
 
 // PresentationDupla não tem relações Prisma definidas para Team/Phase (só
-// teamAId/teamBId/phaseId como texto simples) — por isso, em vez de
+// teamAId/teamBId/phaseId como texto simples) - por isso, em vez de
 // include, buscamos as equipas à parte e juntamos manualmente.
 async function attachTeams(duplas: Array<{ teamAId: string; teamBId: string | null }>) {
   const teamIds = new Set<string>()
@@ -32,14 +32,14 @@ router.get('/duplas', async (req, res) => {
 
     if (phaseId && phaseId !== 'undefined' && phaseId !== 'null') {
       duplas = await prisma.presentationDupla.findMany({
-        where: { phaseId, deletedAt: null }, // CORRIGIDO — filtra apagados
+        where: { phaseId, deletedAt: null }, // CORRIGIDO - filtra apagados
         orderBy: { order: 'asc' }
       })
     } else if (championship && championship !== 'undefined' && championship !== 'null') {
       const phases = await prisma.phase.findMany({ where: { championship }, select: { id: true } })
       const phaseIds = phases.map((p) => p.id)
       duplas = await prisma.presentationDupla.findMany({
-        where: { phaseId: { in: phaseIds }, deletedAt: null }, // CORRIGIDO — filtra apagados
+        where: { phaseId: { in: phaseIds }, deletedAt: null }, // CORRIGIDO - filtra apagados
         orderBy: { order: 'asc' }
       })
     }
@@ -53,23 +53,23 @@ router.get('/duplas', async (req, res) => {
 })
 
 // POST /api/presentation/duplas
-// ALTERADO — permite criação manual só em fases "apresentacao" com
+// ALTERADO - permite criação manual só em fases "apresentacao" com
 // noElimination: true. Nas restantes fases (ligadas a chaveamento), as
 // duplas continuam a vir exclusivamente de syncPresentationDuplasForRound()
-// em bracketLive.ts — este endpoint bloqueia esse caso com 400.
+// em bracketLive.ts - este endpoint bloqueia esse caso com 400.
 //
-// CORRIGIDO — usava prisma.presentationDupla.create(), que falha com
+// CORRIGIDO - usava prisma.presentationDupla.create(), que falha com
 // P2002 (unique constraint) sempre que já existir uma linha
-// soft-deleted com o mesmo (phaseId, teamAId) — o @@unique do schema
+// soft-deleted com o mesmo (phaseId, teamAId) - o @@unique do schema
 // não distingue linhas "apagadas" (deletedAt preenchido) de ativas,
 // por isso o create() batia contra esse registo antigo. A mesma
 // situação já era tratada em syncPresentationDuplasForRound()
-// (bracketLive.ts) com upsert + update: { deletedAt: null } — aplicado
+// (bracketLive.ts) com upsert + update: { deletedAt: null } - aplicado
 // aqui também, para reativar/atualizar uma dupla apagada em vez de
 // rebentar com erro 500.
 //
 // Também valida que as equipas escolhidas pertencem à mesma categoria
-// (Team.category) do campeonato da fase — mantém o comportamento manual
+// (Team.category) do campeonato da fase - mantém o comportamento manual
 // consistente com o automático, que já filtra por category no
 // bracketLive.ts generate.
 router.post('/duplas', requireAdmin, async (req, res) => {
@@ -113,9 +113,9 @@ router.post('/duplas', requireAdmin, async (req, res) => {
     }
 
     // Verifica se já existe uma dupla ATIVA (não apagada) com esta
-    // Equipa A nesta fase — só aí bloqueamos com 409. Uma dupla
+    // Equipa A nesta fase - só aí bloqueamos com 409. Uma dupla
     // soft-deleted com o mesmo par não conta como "já existe" para o
-    // utilizador, mas ainda ocupa a linha na base de dados — por isso
+    // utilizador, mas ainda ocupa a linha na base de dados - por isso
     // é tratada no upsert abaixo, não aqui.
     const existingActive = await prisma.presentationDupla.findFirst({
       where: { phaseId, teamAId, deletedAt: null }
@@ -179,13 +179,13 @@ router.patch('/duplas/:id/theme', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/presentation/duplas/:id
-// CORRIGIDO — antes usava prisma.presentationDupla.delete() (apagamento
+// CORRIGIDO - antes usava prisma.presentationDupla.delete() (apagamento
 // FÍSICO). O sistema de sincronização com o Cloud só consegue comunicar
-// remoções através do campo deletedAt (soft delete) — um registo
+// remoções através do campo deletedAt (soft delete) - um registo
 // verdadeiramente apagado deixa de existir localmente, por isso nunca é
 // "enviado" ao Cloud como apagado. No próximo ciclo de sync, o Cloud
 // (que continua com o registo antigo, nunca avisado) via que o local já
-// não o tem e recriava-o automaticamente — exatamente o bug "apaga e
+// não o tem e recriava-o automaticamente - exatamente o bug "apaga e
 // depois volta a aparecer".
 router.delete('/duplas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
@@ -206,7 +206,7 @@ router.get('/criteria', async (req, res) => {
     if (!phaseId) return res.json([])
 
     const criteria = await prisma.presentationCriteria.findMany({
-      where: { phaseId, deletedAt: null }, // CORRIGIDO — filtra apagados
+      where: { phaseId, deletedAt: null }, // CORRIGIDO - filtra apagados
       orderBy: { id: 'asc' }
     })
     return res.json(criteria)
@@ -241,7 +241,7 @@ router.post('/criteria', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/presentation/criteria/:id
-// CORRIGIDO — mesmo motivo do DELETE /duplas acima: apagamento físico
+// CORRIGIDO - mesmo motivo do DELETE /duplas acima: apagamento físico
 // impedia o sync de comunicar a remoção ao Cloud, fazendo o critério
 // reaparecer no próximo ciclo de sincronização.
 router.delete('/criteria/:id', requireAdmin, async (req, res) => {

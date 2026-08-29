@@ -57,7 +57,7 @@ router.get('/pull', async (req, res) => {
 // Aplica cada registo recebido via upsert. Se já existir localmente um
 // registo com o mesmo id e updatedAt mais recente ou igual, ignora (o
 // outro lado é que está desatualizado, não este). Só substitui quando o
-// registo recebido é mais recente — regra "mais recente ganha".
+// registo recebido é mais recente - regra "mais recente ganha".
 router.post('/push', async (req, res) => {
     try {
         const tables = req.body?.tables;
@@ -84,7 +84,7 @@ router.post('/push', async (req, res) => {
                     await delegate.update({ where: { id: record.id }, data: record });
                     count++;
                 }
-                // Se existing for mais recente ou igual, não faz nada — o lado
+                // Se existing for mais recente ou igual, não faz nada - o lado
                 // que enviou é que vai ficar atualizado no próximo "pull" dele.
             }
             applied[table] = count;

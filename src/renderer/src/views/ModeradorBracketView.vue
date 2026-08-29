@@ -22,7 +22,7 @@ function proceed(): void {
 <template>
   <div class="flex-1 flex flex-col items-center justify-center gap-8 px-10 py-10">
     <TournamentBracket v-if="bracket" :rounds="bracket.rounds" :final-match="bracket.finalMatch" :title="bracket.title" />
-    <p v-else class="text-sm text-gray-400">Esta categoria não tem chaveamento — segue direto para a escolha de equipas.</p>
+    <p v-else class="text-sm text-gray-400">Esta categoria não tem chaveamento - segue direto para a escolha de equipas.</p>
     <button class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold" @click="proceed">
       Continuar para Escolha de Equipas →
     </button>

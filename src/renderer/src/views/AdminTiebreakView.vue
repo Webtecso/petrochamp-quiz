@@ -157,7 +157,7 @@ async function removeQuestion(id: string): Promise<void> {
     await tiebreakStore.deleteQuestion(id, selectedChampionship.value)
     if (editingId.value === id) resetForm()
   } catch {
-    errorMsg.value = 'Não foi possível remover a pergunta — tenta outra vez.'
+    errorMsg.value = 'Não foi possível remover a pergunta - tenta outra vez.'
   }
 }
 
@@ -188,12 +188,12 @@ const groupedByPhase = computed(() => {
         <option v-for="opt in championshipOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <p class="text-[11px] text-gray-400 mt-1">
-        As perguntas de desempate são independentes por campeonato — cada um tem o seu próprio banco.
+        As perguntas de desempate são independentes por campeonato - cada um tem o seu próprio banco.
       </p>
     </div>
 
     <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
-      Estas perguntas ficam reservadas só para desempates — nunca aparecem no jogo normal.
+      Estas perguntas ficam reservadas só para desempates - nunca aparecem no jogo normal.
     </div>
 
     <div class="bg-white rounded-2xl shadow p-6">
@@ -232,7 +232,7 @@ const groupedByPhase = computed(() => {
 
         <div>
           <label class="text-xs text-gray-500 block mb-2">
-            Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) — marca as respostas corretas
+            Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) - marca as respostas corretas
           </label>
           <div class="flex flex-col gap-2">
             <div v-for="(opt, i) in form.options" :key="i" class="flex items-center gap-2">

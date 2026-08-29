@@ -59,7 +59,7 @@ router.get('/:championship', async (req, res) => {
 });
 // Função auxiliar para eliminar o chaveamento, duplas e limpar grupos das
 // equipas. NOTA: este apagamento em massa continua intencionalmente hard
-// delete/deleteMany — é dado derivado, sempre recalculado do zero quando
+// delete/deleteMany - é dado derivado, sempre recalculado do zero quando
 // se gera um novo chaveamento, e não uma entidade que o utilizador apaga
 // individualmente através de um botão "remover".
 async function deleteBracketData(championship) {

@@ -83,7 +83,7 @@ async function confirmTotp(): Promise<void> {
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-petro-bg px-6 relative">
-    <!-- NOVO — fundo do Admin (a mesma imagem usada na Projeção). Esta view
+    <!-- NOVO - fundo do Admin (a mesma imagem usada na Projeção). Esta view
     fica fora do AdminLayout (é acedida antes do login), por isso precisa
     do seu próprio fundo. -->
     <div
@@ -143,7 +143,7 @@ async function confirmTotp(): Promise<void> {
           class="text-xs text-petro-primary underline"
           @click="step = 'confirm'"
         >
-          Já digitalizei — continuar
+          Já digitalizei - continuar
         </button>
       </div>
 

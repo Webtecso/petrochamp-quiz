@@ -219,7 +219,7 @@ const isBattleActiveState = computed(() => {
         {{ store.championReveal.teamName ?? 'Campeã' }}
       </h1>
       <p class="text-lg text-white/90 z-10 tracking-widest uppercase">
-        Grande Campeã{{ store.editionName ? ' — ' + store.editionName : '' }}
+        Grande Campeã{{ store.editionName ? ' - ' + store.editionName : '' }}
       </p>
     </div>
 
@@ -264,14 +264,14 @@ const isBattleActiveState = computed(() => {
     <EventOrganizerPresentation v-else-if="store.phaseFlow.stage === 'organizer'" transparent />
     <SuspenseScreen
       v-else-if="store.phaseFlow.stage === 'suspense'"
-      :message="store.phaseFlow.suspensePhrase ?? 'Preparem-se — a próxima fase está prestes a começar...'"
+      :message="store.phaseFlow.suspensePhrase ?? 'Preparem-se - a próxima fase está prestes a começar...'"
       transparent
     />
 
     <!-- 5.5 Votação de Repescagem -->
     <SuspenseScreen
       v-else-if="store.repescagemReveal.stage === 'suspense'"
-      message="A VOTAÇÃO VAI COMEÇAR — Prepare-se!"
+      message="A VOTAÇÃO VAI COMEÇAR - Prepare-se!"
       transparent
     />
     <CountdownScreen
@@ -329,7 +329,7 @@ const isBattleActiveState = computed(() => {
       transparent
     />
 
-    <!-- 6.6 Em apresentação — modo documento -->
+    <!-- 6.6 Em apresentação - modo documento -->
     <div
       v-else-if="store.presentationFlow.stage === 'presenting' && store.presentationFlow.presentationMode === 'document'"
       class="min-h-screen bg-black relative overflow-hidden"

@@ -33,7 +33,7 @@ const moderators_1 = __importDefault(require("./routes/moderators"));
 const adminAuth_1 = __importDefault(require("./routes/adminAuth"));
 const sync_1 = __importDefault(require("./routes/sync"));
 const syncTrigger_1 = __importDefault(require("./routes/syncTrigger"));
-// NOVO — rota que expõe o IP da máquina na rede local, para o frontend
+// NOVO - rota que expõe o IP da máquina na rede local, para o frontend
 // conseguir mostrar o link/QR code do portal de jurados sem depender de
 // nenhum IP fixo nem de configuração manual (ver services/networkInfo.ts).
 const networkInfo_1 = __importDefault(require("./routes/networkInfo"));
@@ -42,7 +42,7 @@ const socket_1 = require("./socket");
 const configEvents_1 = require("./socket/configEvents");
 const liveState_1 = require("./socket/liveState");
 const tunnel_1 = require("./services/tunnel");
-// CORRIGIDO — syncService.ts passou a exportar a classe SyncService em vez
+// CORRIGIDO - syncService.ts passou a exportar a classe SyncService em vez
 // da função runSync(). O import antigo compilava (TypeScript não apanha
 // isto sem strict de exports em runtime dinâmico), mas rebentava sempre
 // que o setInterval periódico chamava runSync(), porque deixou de existir.
@@ -53,16 +53,16 @@ const syncService_1 = require("./services/syncService");
 // ar por completo (todos os pedidos seguintes, incluindo Socket.io,
 // passavam a dar ERR_CONNECTION_REFUSED até o tsx watch reiniciar
 // sozinho). Isto garante que o processo nunca morre por causa de um erro
-// isolado — o erro fica registado na consola, mas o backend continua vivo.
+// isolado - o erro fica registado na consola, mas o backend continua vivo.
 process.on('uncaughtException', (err) => {
-    console.error('[uncaughtException] Erro não tratado — o backend continua a correr:', err);
+    console.error('[uncaughtException] Erro não tratado - o backend continua a correr:', err);
 });
 process.on('unhandledRejection', (err) => {
-    console.error('[unhandledRejection] Rejeição de Promise não tratada — o backend continua a correr:', err);
+    console.error('[unhandledRejection] Rejeição de Promise não tratada - o backend continua a correr:', err);
 });
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
-// CORRIGIDO — 10mb para 15mb. Perguntas/critérios/equipas com imagem
+// CORRIGIDO - 10mb para 15mb. Perguntas/critérios/equipas com imagem
 // guardam a imagem como base64 diretamente no campo (ver upload.ts), o
 // que facilmente ultrapassa vários MB no JSON do pedido inteiro (POST/PATCH
 // de uma pergunta com imagem). O limite antigo (mesmo a 10mb) ainda podia
@@ -80,7 +80,7 @@ app.get('/health', async (_req, res) => {
 app.use('/api/teams', teams_1.default);
 app.use('/api/questions', questions_1.default);
 app.use('/api/evaluation-items', evaluationItems_1.default);
-// NOVO — critérios de avaliação por Pergunta Analítica (Admin → Avaliação).
+// NOVO - critérios de avaliação por Pergunta Analítica (Admin → Avaliação).
 app.use('/api/evaluation-criteria', evaluationCriteria_1.evaluationCriteriaRouter);
 app.use('/api/settings', settings_1.default);
 app.use('/api/upload', upload_1.default);
@@ -99,12 +99,12 @@ app.use('/api/presentation', presentation_1.default);
 app.use('/api/presentation-documents', presentationDocuments_1.default);
 app.use('/api/moderators', requireAdmin_1.requireAdmin, moderators_1.default);
 app.use('/api/admin-auth', adminAuth_1.default);
-// NOVO — GET /api/network-info: { ip, port, portalUrl }. Sem autenticação
+// NOVO - GET /api/network-info: { ip, port, portalUrl }. Sem autenticação
 // de propósito, para o ecrã inicial da app poder mostrar o link/QR do
 // portal de jurados assim que abre, sem exigir login de moderador antes.
 app.use('/api/network-info', networkInfo_1.default);
 // Rotas de sincronização com o Cloud. syncRouter expõe /pull e /push
-// (usadas pelo Cloud quando é ELE a chamar-nos — não é o caso normal, mas
+// (usadas pelo Cloud quando é ELE a chamar-nos - não é o caso normal, mas
 // fica simétrico); syncTriggerRouter expõe /run, chamada tanto pelo
 // processo do Electron (main/index.ts) ao abrir a app, como pelo botão
 // "Atualizar" no Admin, para forçar sync sem esperar pelo ciclo periódico.
@@ -150,7 +150,7 @@ const PORT = process.env.PORT || 4000;
     // Sincronização periódica em segundo plano (3 minutos)
     const SYNC_INTERVAL_MS = 3 * 60 * 1000;
     setInterval(() => {
-        // CORRIGIDO — usa SyncService.syncAll() em vez da função runSync()
+        // CORRIGIDO - usa SyncService.syncAll() em vez da função runSync()
         // antiga (ver nota no import acima). Sem CLOUD_API_URL configurado,
         // salta silenciosamente em vez de tentar sincronizar.
         const cloudApiUrl = process.env.CLOUD_API_URL;

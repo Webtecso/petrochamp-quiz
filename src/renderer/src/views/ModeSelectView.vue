@@ -23,12 +23,12 @@ function choose(mode: DeviceMode): void {
   useJuradosStore().listenToServer()
   useTeamsStore().fetchTeams()
   useQuizContentStore().fetchQuestions(campeonatoStore.championship ?? undefined)
-  // CORRIGIDO — chamava fetchEvaluationItems() sem argumento nenhum. O
+  // CORRIGIDO - chamava fetchEvaluationItems() sem argumento nenhum. O
   // store trata "sem championship" como "esvazia a lista inteira"
   // (this.evaluationItems = []), por isso sempre que se escolhia o modo
   // do dispositivo (o que acontece cada vez que se entra neste ecrã), a
   // lista de perguntas de avaliação em memória ficava vazia até a
-  // próxima view a repor com o championship certo — dando a falsa
+  // próxima view a repor com o championship certo - dando a falsa
   // impressão de que as perguntas tinham sido apagadas, quando na
   // verdade só desapareciam do estado local (nada era tocado no
   // backend). Agora passa o championship atual da store do campeonato,
@@ -47,7 +47,7 @@ function choose(mode: DeviceMode): void {
     <LogoMark size="lg" />
     <div class="text-center">
       <h1 class="text-2xl font-bold text-petro-primary">Como as equipas vão responder hoje?</h1>
-      <p class="text-sm text-gray-400 mt-1">Rede local do evento — sem necessidade de internet</p>
+      <p class="text-sm text-gray-400 mt-1">Rede local do evento - sem necessidade de internet</p>
     </div>
 
     <div class="grid grid-cols-2 gap-6 w-full max-w-2xl">

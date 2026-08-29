@@ -25,7 +25,7 @@ function timestamp() {
 
 function main() {
   if (!fs.existsSync(DB_PATH)) {
-    console.log(`[backup-db] Nenhuma base de dados encontrada em ${DB_PATH} — nada para copiar (primeira execução?).`)
+    console.log(`[backup-db] Nenhuma base de dados encontrada em ${DB_PATH} - nada para copiar (primeira execução?).`)
     return
   }
 

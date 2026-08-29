@@ -5,12 +5,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
-// ATUALIZADO — deixou de gravar em disco (multer.diskStorage). Cada
+// ATUALIZADO - deixou de gravar em disco (multer.diskStorage). Cada
 // servidor (backend local e admin cloud) tinha a sua própria pasta
 // uploads/, completamente separada uma da outra. O /api/sync só
 // sincroniza os REGISTOS da base de dados (ex: o campo logoUrl da Team
 // como texto "/uploads/abc123.png"), nunca copia os ficheiros físicos
-// entre servidores — por isso, ao sincronizar, o outro lado recebia um
+// entre servidores - por isso, ao sincronizar, o outro lado recebia um
 // caminho que apontava para um ficheiro que só existia no disco de
 // origem, resultando em imagem partida. No Render (admin cloud) isto
 // ainda era pior, porque o disco é efémero e perde os ficheiros a cada
@@ -20,7 +20,7 @@ const multer_1 = __importDefault(require("multer"));
 // Data URL (ex: "data:image/png;base64,...."), para ser guardada
 // diretamente no campo logoUrl da Team. Como o valor passa a viver
 // dentro do próprio registo, ele sincroniza automaticamente com o resto
-// dos dados — sem precisar de nenhum mecanismo extra para copiar
+// dos dados - sem precisar de nenhum mecanismo extra para copiar
 // ficheiros entre servidores.
 const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),

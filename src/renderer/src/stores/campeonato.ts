@@ -161,7 +161,7 @@ interface LiveState {
   initialScoreEntries: InitialScoreEntry[]
   initialScoresConfirmed: boolean
   presentationFlow: PresentationFlowState
-  // NOVO — notas de apresentação da fase 'apresentacao_quiz' (uma
+  // NOVO - notas de apresentação da fase 'apresentacao_quiz' (uma
   // entrada por equipa, só a média das notas dos jurados, sem pesos
   // aplicados ainda). O backend já enviava isto no state:sync; faltava
   // na tipagem do store, por isso nunca era usado no frontend.

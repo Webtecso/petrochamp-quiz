@@ -201,7 +201,7 @@ const groupedByPhase = computed(() => {
         <option v-for="opt in championshipOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <p class="text-[11px] text-gray-400 mt-1">
-        As perguntas são independentes por campeonato — cada um tem o seu próprio banco.
+        As perguntas são independentes por campeonato - cada um tem o seu próprio banco.
       </p>
     </div>
 
@@ -236,7 +236,7 @@ const groupedByPhase = computed(() => {
 
         <div>
           <label class="text-xs text-gray-500 block mb-2">
-            Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) — marca as respostas corretas
+            Alíneas ({{ form.options.length }}/{{ MAX_OPTIONS }}) - marca as respostas corretas
           </label>
           <div class="flex flex-col gap-2">
             <div v-for="(opt, i) in form.options" :key="i" class="flex items-center gap-2">
@@ -311,8 +311,8 @@ const groupedByPhase = computed(() => {
     </div>
 
     <div v-if="!quizPhases.length" class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
-      Este campeonato ainda não tem nenhuma fase do tipo Quiz ou Apresentação + Quiz — vai a Admin → Fases primeiro.
-      (Fases do tipo "Apresentação de Projetos" pura não usam perguntas — usa Admin → Apresentação para essas.)
+      Este campeonato ainda não tem nenhuma fase do tipo Quiz ou Apresentação + Quiz - vai a Admin → Fases primeiro.
+      (Fases do tipo "Apresentação de Projetos" pura não usam perguntas - usa Admin → Apresentação para essas.)
     </div>
 
     <div v-for="phase in quizPhases" :key="phase.id" class="bg-white rounded-2xl shadow p-6">

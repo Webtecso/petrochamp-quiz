@@ -39,9 +39,9 @@ const SYNC_ORDER = [
     'evaluationCriteriaScore',
     'presentationSlide'
 ];
-// CORRIGIDO — sem isto, o axios usa por omissão maxContentLength/
+// CORRIGIDO - sem isto, o axios usa por omissão maxContentLength/
 // maxBodyLength de ~2000 bytes em algumas versões, ou 100mb noutras
-// conforme a versão instalada — para não depender disso, forçamos
+// conforme a versão instalada - para não depender disso, forçamos
 // explicitamente Infinity nas duas chamadas (push e pull), já que o
 // payload de sincronização pode facilmente ultrapassar vários MB quando
 // há imagens em base64 em qualquer uma das tabelas sincronizadas.
@@ -57,7 +57,7 @@ class SyncService {
     /**
      * Executa o ciclo de sincronização completo.
      *
-     * CORRIGIDO — o endpoint do Admin Cloud (/api/sync/pull e /api/sync/push)
+     * CORRIGIDO - o endpoint do Admin Cloud (/api/sync/pull e /api/sync/push)
      * trabalha com TODAS as tabelas numa única chamada, não uma tabela por
      * pedido. A versão anterior desta classe chamava pullModel/pushModel por
      * tabela, com um formato de payload diferente do que o servidor espera

@@ -100,7 +100,7 @@ router.put('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
     try {
         // Esta tabela de junção continua hard delete de propósito: é
         // recriada por inteiro a cada PUT do item, não é uma entidade que o
-        // utilizador apaga diretamente através de um botão "remover" — não
+        // utilizador apaga diretamente através de um botão "remover" - não
         // precisa de soft delete nem de sincronizar como "apagado".
         await db_1.prisma.evaluationItemJuror.deleteMany({ where: { itemId: id } });
         const serializedCorrectIndexes = mode === 'multipla_escolha'
@@ -141,7 +141,7 @@ router.put('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
         res.status(404).json({ error: 'Item não encontrado ou erro na atualização' });
     }
 });
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin_1.requireAdmin, async (req, res) => {
     const { id } = req.params;
     try {

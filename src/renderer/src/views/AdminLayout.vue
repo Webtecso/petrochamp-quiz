@@ -12,7 +12,7 @@ const isLocalAccess =
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1'
 
-// NOVO — adminToken é limpo automaticamente (para null) sempre que
+// NOVO - adminToken é limpo automaticamente (para null) sempre que
 // qualquer pedido via adminFetch/api.ts recebe 401 (sessão expirada ou
 // inválida). Antes disso não havia nenhuma reação na UI: o token
 // desaparecia do localStorage silenciosamente, mas continuavas dentro do
@@ -33,7 +33,7 @@ async function logout(): Promise<void> {
 
 <template>
   <div class="min-h-screen flex flex-col relative">
-    <!-- NOVO — fundo do Admin (a mesma imagem usada na Projeção), aplicado
+    <!-- NOVO - fundo do Admin (a mesma imagem usada na Projeção), aplicado
     aqui no layout para cobrir todas as páginas do Admin de uma vez, em vez
     de repetir em cada view. -->
     <div

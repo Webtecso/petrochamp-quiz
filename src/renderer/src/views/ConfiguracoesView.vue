@@ -67,7 +67,7 @@ async function changeServer(): Promise<void> {
         <span v-if="store.publicVotingStatus === 'idle'">Portal público de votação: inativo</span>
         <span v-else-if="store.publicVotingStatus === 'starting'">Portal público de votação: a estabelecer ligação...</span>
         <span v-else-if="store.publicVotingStatus === 'online'">Portal público de votação: online</span>
-        <span v-else>Portal público de votação: falhou — verifica a ligação à internet</span>
+        <span v-else>Portal público de votação: falhou - verifica a ligação à internet</span>
       </div>
 
       <div>

@@ -127,7 +127,7 @@ function advance(): void {
       <div class="bg-white rounded-2xl shadow p-5 flex flex-col items-center gap-3 max-w-md text-center">
         <p class="text-xs text-gray-500">
           A transição institucional (parceiros + Webtec Solution) já acontece automaticamente no fim de cada
-          fase — este botão só serve para a repetires manualmente, se precisares.
+          fase - este botão só serve para a repetires manualmente, se precisares.
         </p>
         <button
           class="bg-petro-dark text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"

@@ -25,7 +25,7 @@ router.post('/', requireAdmin, async (req, res) => {
 })
 
 router.put('/:id', requireAdmin, async (req, res) => {
-  // CORRIGIDO — id é cuid() (string) no schema, não Int. O Number(...)
+  // CORRIGIDO - id é cuid() (string) no schema, não Int. O Number(...)
   // convertia "ck8x..." em NaN, e o Prisma rejeitava o tipo em compilação.
   const id = req.params.id
   const { name, logoUrl, order } = req.body
@@ -38,7 +38,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const id = req.params.id
   try {

@@ -55,7 +55,7 @@ router.post('/', async (req, res) => {
     if (!exists) break
     code = generateModeratorCode()
   }
-  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas — já tem tudo
+  const cleanAreas = role === 'principal' ? [] : sanitizeAreas(areas) // Principal não precisa de áreas - já tem tudo
   const moderator = await prisma.moderator.create({
     data: {
       name,
@@ -93,7 +93,7 @@ router.put('/:id', async (req, res) => {
         name,
         role: finalRole,
         // Sempre que 'areas' vem no payload, substitui o conjunto inteiro
-        // (delete + recreate) — tabela auxiliar, não precisa de soft delete.
+        // (delete + recreate) - tabela auxiliar, não precisa de soft delete.
         ...(areas !== undefined
           ? { areas: { deleteMany: {}, create: cleanAreas.map((area) => ({ area })) } }
           : {})
@@ -106,7 +106,7 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', async (req, res) => {
   const { id } = req.params
   try {

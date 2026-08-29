@@ -93,7 +93,7 @@ function launch() {
             return;
         }
         if (restartCount >= MAX_AUTO_RESTARTS) {
-            console.error('[tunnel] Número máximo de tentativas de reinício atingido — a desistir.');
+            console.error('[tunnel] Número máximo de tentativas de reinício atingido - a desistir.');
             setStatus('failed');
             return;
         }

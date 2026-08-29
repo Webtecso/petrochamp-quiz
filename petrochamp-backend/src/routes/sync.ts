@@ -85,7 +85,7 @@ async function findExisting(
 }
 
 // Aplica um único registo (create ou update, regra "mais recente ganha",
-// incluindo apagados — deletedAt preenchido é só mais um campo do
+// incluindo apagados - deletedAt preenchido é só mais um campo do
 // registo, propaga-se como qualquer outro). Devolve true se aplicou algo.
 async function applyRecord(table: SyncTable, record: Record<string, unknown>): Promise<boolean> {
   const delegate = prismaClient[table]
@@ -109,7 +109,7 @@ async function applyRecord(table: SyncTable, record: Record<string, unknown>): P
 
 // GET /api/sync/pull?model=<tabela>&since=<ISO timestamp>
 // Devolve um ARRAY dos registos dessa tabela alterados (criados, editados
-// ou apagados — deletedAt preenchido é só mais um campo) depois de
+// ou apagados - deletedAt preenchido é só mais um campo) depois de
 // "since". Contrato alinhado com services/syncService.ts (SyncService.pullModel),
 // que espera response.data diretamente como array.
 router.get('/pull', async (req, res) => {
@@ -151,7 +151,7 @@ router.post('/push', async (req, res) => {
         if (wasApplied) applied++
       } catch (err: any) {
         if (err?.code === 'P2003') {
-          console.warn(`[Sync] Registo em '${model}' (${(record as any).id}) ignorado — chave estrangeira não resolvida.`)
+          console.warn(`[Sync] Registo em '${model}' (${(record as any).id}) ignorado - chave estrangeira não resolvida.`)
         } else if (err?.code === 'P2002') {
           console.warn(`[Sync] Registo duplicado em '${model}' (${(record as any).id}) ignorado.`)
         } else {

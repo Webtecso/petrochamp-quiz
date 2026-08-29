@@ -11,7 +11,7 @@ const router = (0, express_1.Router)();
 // anterior terminar). Sem isto, o deleteMany de um pedido podia correr
 // entre o deleteMany e o createMany de outro, e os dois createMany
 // acabavam por inserir os mesmos confrontos duas vezes (ou mais, se
-// houvesse mais pedidos concorrentes) — foi isto que causou os
+// houvesse mais pedidos concorrentes) - foi isto que causou os
 // chaveamentos duplicados infinitamente.
 const generatingChampionships = new Set();
 function nextPowerOfTwo(n) {
@@ -77,7 +77,7 @@ async function resolveByesRecursively(championship, totalRounds) {
         }
     }
 }
-// Cria/atualiza as PresentationDuplas de uma ronda específica — ver
+// Cria/atualiza as PresentationDuplas de uma ronda específica - ver
 // comentário histórico original sobre o Map local anti-duplicação.
 async function syncPresentationDuplasForRound(championship, round) {
     const phase = await db_1.prisma.phase.findFirst({
@@ -167,11 +167,11 @@ router.get('/:championship', async (req, res) => {
     }));
     res.json({ championship, matches: shaped });
 });
-// NOTA — /generate continua a apagar bracketMatch e presentationDupla com
+// NOTA - /generate continua a apagar bracketMatch e presentationDupla com
 // deleteMany/hard-delete dentro da transação: o chaveamento é sempre
 // recriado do zero a partir das equipas atuais, é dado derivado e não uma
 // entidade que o utilizador apaga manualmente através de um botão
-// "remover" — não precisa de soft delete nem de propagar como "apagado"
+// "remover" - não precisa de soft delete nem de propagar como "apagado"
 // via sync.
 router.post('/:championship/generate', requireAdmin_1.requireAdmin, async (req, res) => {
     const { championship } = req.params;

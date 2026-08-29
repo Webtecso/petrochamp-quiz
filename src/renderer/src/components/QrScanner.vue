@@ -54,7 +54,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- AUMENTADO — max-w-xs fixo trocado por clamp() em vw, para a área
+  <!-- AUMENTADO - max-w-xs fixo trocado por clamp() em vw, para a área
        da câmara crescer em tablets/ecrãs maiores. Textos também em clamp(). -->
   <div class="flex flex-col items-center gap-3">
     <p v-if="error" class="text-red-500 text-center text-[clamp(0.75rem,2.4vw,1rem)]">{{ error }}</p>

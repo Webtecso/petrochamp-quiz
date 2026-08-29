@@ -15,7 +15,7 @@ const props = withDefaults(
   }
 )
 const sizeClass = { sm: 'h-8', md: 'h-12', lg: 'h-20' }[props.size]
-// AUMENTADO — sizePx fixo (88/156/200px) trocado por sizeClamp, uma
+// AUMENTADO - sizePx fixo (88/156/200px) trocado por sizeClamp, uma
 // string CSS clamp() por tamanho, para o logo escalar com a largura do
 // ecrã em vez de ter sempre a mesma altura física em qualquer
 // dispositivo (telemóvel pequeno vs monitor/projetor grande).

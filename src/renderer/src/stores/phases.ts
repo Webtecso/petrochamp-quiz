@@ -78,21 +78,21 @@ export const usePhasesStore = defineStore('phases', {
         }
       }
     },
-    // NOVO — traduz Phase.order (numeração das fases do campeonato,
+    // NOVO - traduz Phase.order (numeração das fases do campeonato,
     // visível ao utilizador) para BracketMatch.round (a ronda real do
     // chaveamento, gerada em bracketLive.ts). São o mesmo número só
     // enquanto todas as fases geram uma ronda de chaveamento própria
     // (ex: apresentacao_quiz no universitario). Assim que existe uma
     // fase "apresentacao" com noElimination: true no meio da sequência
-    // (que não gera nenhum BracketMatch — ver bracketLive.ts e
+    // (que não gera nenhum BracketMatch - ver bracketLive.ts e
     // socket/index.ts), Phase.order fica à frente do round real em 1
-    // (ou mais, se houver várias fases assim) — este getter compensa
+    // (ou mais, se houver várias fases assim) - este getter compensa
     // esse desvio contando, entre as fases ordenadas por `order` até
     // (e incluindo) a fase pedida, quantas delas correspondem
     // efetivamente a uma ronda de bracket.
     //
     // No universitario (sem nenhuma fase apresentacao+noElimination),
-    // isto devolve sempre o mesmo valor que `order` — função identidade,
+    // isto devolve sempre o mesmo valor que `order` - função identidade,
     // nada muda lá.
     phaseOrderToBracketRound: (state) => {
       return (order: number | string): number => {

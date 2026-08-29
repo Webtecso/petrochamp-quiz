@@ -17,7 +17,7 @@ const battleInProgress = computed(() => !!store.teamA && !!store.teamB)
 
 // Modal com o link/QR do portal de jurados, acessível a partir de um
 // botão sempre visível no nav, independentemente de onde o moderador
-// esteja no fluxo (Nova Partida, Jogo, Ranking, etc.) — cumpre o pedido
+// esteja no fluxo (Nova Partida, Jogo, Ranking, etc.) - cumpre o pedido
 // de estar "sempre em destaque assim que a app abrir", já que este layout
 // envolve praticamente todo o percurso do Moderador.
 const showPortalModal = ref(false)
@@ -33,7 +33,7 @@ function go(path: string): void {
 
 function confirmReset(): void {
   const message = battleInProgress.value
-    ? 'Há uma batalha em curso. Reiniciar agora apaga essa batalha e todos os dados desta edição do campeonato — usa isto só se ficaste preso sem conseguir terminar a rodada. Continuar?'
+    ? 'Há uma batalha em curso. Reiniciar agora apaga essa batalha e todos os dados desta edição do campeonato - usa isto só se ficaste preso sem conseguir terminar a rodada. Continuar?'
     : 'Tem certeza que deseja reiniciar este campeonato? Vais poder escolher o campeonato novamente e todos os dados desta edição serão apagados.'
   const ok = confirm(message)
   if (ok) {
@@ -42,12 +42,12 @@ function confirmReset(): void {
   }
 }
 
-// NOVO — este layout é o pai persistente de toda a área /moderador/*,
+// NOVO - este layout é o pai persistente de toda a área /moderador/*,
 // por isso é o sítio certo para garantir que, assim que o moderador
 // entra nesta secção da app, tentamos reidratar a sessão a partir do
 // código guardado em localStorage (ver stores/moderator.ts). Isto cobre
 // o caso de um restart completo da app (Electron reiniciado, F5, etc.)
-// em que a store nasce do zero mas o backend continua vivo — sem isto,
+// em que a store nasce do zero mas o backend continua vivo - sem isto,
 // o socket ficava ligado sem nunca reenviar 'moderator:register', e o
 // backend bloqueava silenciosamente qualquer ação restrita por área
 // (ex: Avançar Apresentação) mesmo sendo o moderador Principal, até
@@ -143,7 +143,7 @@ onMounted(() => {
           ⟲ Reiniciar Campeonato
         </button>
         <span v-if="battleInProgress" class="text-[11px] text-amber-300 font-semibold px-2">
-          🔒 Batalha em curso — navegação bloqueada (Reiniciar continua disponível)
+          🔒 Batalha em curso - navegação bloqueada (Reiniciar continua disponível)
         </span>
       </div>
     </nav>

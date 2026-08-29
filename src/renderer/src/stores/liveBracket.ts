@@ -26,11 +26,11 @@ export const useLiveBracketStore = defineStore('liveBracket', {
     totalRounds: (state) => (state.matches.length ? Math.max(...state.matches.map((m) => m.round)) : 0),
     // MANTIDO por compatibilidade com outros usos existentes, mas
     // NÃO deve ser usado para a tela de escolha de confronto do
-    // moderador — ver pendingMatchesForRound abaixo.
+    // moderador - ver pendingMatchesForRound abaixo.
     pendingMatches: (state) => state.matches.filter((m) => !m.winnerId && m.teamA && m.teamB),
-    // CORRIGIDO — bug em que equipas de rondas diferentes apareciam
+    // CORRIGIDO - bug em que equipas de rondas diferentes apareciam
     // juntas na tela de escolha do moderador. `pendingMatches` (acima)
-    // filtra por TODO o chaveamento, sem olhar à ronda — assim que uma
+    // filtra por TODO o chaveamento, sem olhar à ronda - assim que uma
     // equipa avançava automaticamente para a ronda seguinte (por bye, ou
     // por o adversário já estar decidido), o confronto dessa ronda
     // seguinte aparecia na lista ao mesmo tempo que confrontos antigos

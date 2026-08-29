@@ -35,7 +35,7 @@ async function getEligibleTeams(championship, phase) {
     return db_1.prisma.team.findMany({ where: { id: { in: Array.from(loserIds) }, deletedAt: null } });
 }
 exports.getEligibleTeams = getEligibleTeams;
-// NOVO — Admin: listar configurações de um campeonato
+// NOVO - Admin: listar configurações de um campeonato
 router.get('/configs', async (req, res) => {
     const { championship } = req.query;
     const configs = await db_1.prisma.repescagemConfig.findMany({
@@ -47,7 +47,7 @@ router.get('/configs', async (req, res) => {
     });
     res.json(configs);
 });
-// NOVO — Admin: criar configuração (não abre votação, só prepara)
+// NOVO - Admin: criar configuração (não abre votação, só prepara)
 router.post('/config', async (req, res) => {
     const { championship, phase, maxRepescados, votingDurationSeconds } = req.body;
     if (!championship || !phase || !maxRepescados) {
@@ -66,7 +66,7 @@ router.post('/config', async (req, res) => {
     });
     res.status(201).json(config);
 });
-// NOVO — Admin: editar configuração (só antes de ser iniciada pelo Moderador)
+// NOVO - Admin: editar configuração (só antes de ser iniciada pelo Moderador)
 router.put('/config/:id', async (req, res) => {
     const id = Number(req.params.id);
     const { maxRepescados, votingDurationSeconds } = req.body;
@@ -87,8 +87,8 @@ router.put('/config/:id', async (req, res) => {
     });
     res.json(config);
 });
-// NOVO — Admin: apagar configuração não usada
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// NOVO - Admin: apagar configuração não usada
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/config/:id', async (req, res) => {
     const id = Number(req.params.id);
     const existing = await db_1.prisma.repescagemConfig.findUnique({ where: { id } });
@@ -103,7 +103,7 @@ router.delete('/config/:id', async (req, res) => {
     await db_1.prisma.repescagemConfig.update({ where: { id }, data: { deletedAt: new Date() } });
     res.status(204).send();
 });
-// NOVO — usado pelo backend/Moderador: existe uma configuração por iniciar
+// NOVO - usado pelo backend/Moderador: existe uma configuração por iniciar
 // para esta fase deste campeonato?
 router.get('/for-phase', async (req, res) => {
     const { championship, phase } = req.query;
@@ -192,7 +192,7 @@ router.post('/:id/generate-bracket', async (req, res) => {
     let selected = ranked.slice(0, config.maxRepescados).map((r) => r.team);
     const syntheticChampionship = `${config.championship}__repescagem__fase${config.phase}`;
     // Reset de um chaveamento sintético derivado, sempre recalculado do
-    // zero — intencionalmente hard-delete/deleteMany, não é uma entidade
+    // zero - intencionalmente hard-delete/deleteMany, não é uma entidade
     // que o utilizador "apaga" manualmente através de um botão.
     await db_1.prisma.bracketMatch.deleteMany({ where: { championship: syntheticChampionship } });
     if (selected.length % 2 !== 0 && selected.length > 1) {

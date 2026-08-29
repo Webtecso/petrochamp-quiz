@@ -80,7 +80,7 @@ async function removeModerator(id: string): Promise<void> {
   }
 }
 
-// NOVO — editar áreas de um moderador secundário já existente, inline.
+// NOVO - editar áreas de um moderador secundário já existente, inline.
 async function toggleExistingArea(m: Moderator, area: string): Promise<void> {
   if (m.role !== 'secundario') return
   const nextAreas = m.areas.includes(area) ? m.areas.filter((a) => a !== area) : [...m.areas, area]

@@ -2,7 +2,7 @@ import { prisma } from '../db'
 
 export type ChampionshipType = 'universitario' | 'ensino_medio' | 'exibicao'
 
-// CORRIGIDO — 'category' vem diretamente do Prisma (Team.category é
+// CORRIGIDO - 'category' vem diretamente do Prisma (Team.category é
 // String no schema.prisma, sem enum), por isso é sempre um string
 // genérico em runtime, não necessariamente um dos 3 valores de
 // ChampionshipType. Forçar o tipo estrito aqui causava erro de
@@ -121,7 +121,7 @@ export interface RepescagemRevealState {
 // União de 'stage' alargada com 'battleEnded' (tela "A batalha
 // terminou!" mostrada na Projeção antes do ranking normal de fim de
 // ronda de Quiz) e 'presentationRanking' (tela de notas de apresentação,
-// sem AVANÇA/ELIMINADA, exclusiva da fase apresentacao_quiz — ver
+// sem AVANÇA/ELIMINADA, exclusiva da fase apresentacao_quiz - ver
 // checkAllJurorsSubmitted em socket/index.ts).
 export interface PhaseFlowState {
   stage:
@@ -185,7 +185,7 @@ export interface PhaseRankingReveal {
 export type PublicVotingStatus = 'idle' | 'starting' | 'online' | 'failed'
 
 export interface LiveState {
-  // CORRIGIDO — 'championship' recebe diretamente payload.championship
+  // CORRIGIDO - 'championship' recebe diretamente payload.championship
   // (string) em moderator:selectChampionship, vindo do frontend sem
   // validação de enum nesse ponto. Relaxado para string | null, igual ao
   // que já acontece com Team.category acima, pela mesma razão.
@@ -241,7 +241,7 @@ export interface LiveState {
 
   presentationFlow: PresentationFlowState
   presentationPhaseScores: RankingEntry[]
-  // Notas de apresentação transportadas para a ronda de Quiz seguinte —
+  // Notas de apresentação transportadas para a ronda de Quiz seguinte -
   // ver CarriedPresentationScoreEntry acima.
   carriedPresentationScores: CarriedPresentationScoreEntry[]
 

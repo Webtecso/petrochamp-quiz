@@ -54,7 +54,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 })
 
-// CORRIGIDO — soft delete (ver nota em questions.ts)
+// CORRIGIDO - soft delete (ver nota em questions.ts)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {

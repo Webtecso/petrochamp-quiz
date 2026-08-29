@@ -52,7 +52,7 @@ function optionClass(label: string): string {
 </script>
 
 <template>
-  <!-- AUMENTADO — px-4 py-6 gap-4 fixos trocados por clamp() em vw/vh,
+  <!-- AUMENTADO - px-4 py-6 gap-4 fixos trocados por clamp() em vw/vh,
        para o padding/gap gerais da tela acompanharem o tamanho real
        do dispositivo (telemóvel pequeno vs tablet grande). -->
   <div class="min-h-screen bg-petro-bg flex flex-col px-[clamp(1rem,4vw,2.5rem)] py-[clamp(1.2rem,3vh,2.5rem)] gap-[clamp(0.75rem,2vh,1.5rem)]">
@@ -60,7 +60,7 @@ function optionClass(label: string): string {
       <LogoMark size="sm" />
     </div>
 
-    <!-- AUMENTADO — text-xs fixo trocado por clamp(). -->
+    <!-- AUMENTADO - text-xs fixo trocado por clamp(). -->
     <header class="flex items-center justify-between text-[clamp(0.7rem,2.2vw,0.95rem)] text-gray-400">
       <span>{{ teamName }} <span class="text-gray-300">vs {{ opponentName }}</span></span>
       <span class="flex items-center gap-1">
@@ -69,7 +69,7 @@ function optionClass(label: string): string {
     </header>
 
     <div v-if="!myQuestion" class="flex-1 flex flex-col items-center justify-center gap-3 text-center">
-      <!-- AUMENTADO — text-sm fixo trocado por clamp(). -->
+      <!-- AUMENTADO - text-sm fixo trocado por clamp(). -->
       <p class="text-[clamp(0.85rem,2.6vw,1.15rem)] text-gray-400">A aguardar o moderador iniciar a pergunta...</p>
     </div>
 
@@ -78,7 +78,7 @@ function optionClass(label: string): string {
         <TimerRing :seconds="store.timeLeft" />
       </div>
 
-      <!-- AUMENTADO — text-xs, px-3 py-1 e o texto de espera (text-[11px])
+      <!-- AUMENTADO - text-xs, px-3 py-1 e o texto de espera (text-[11px])
            fixos trocados por clamp(). -->
       <div class="text-center flex flex-col items-center gap-1">
         <span
@@ -100,7 +100,7 @@ function optionClass(label: string): string {
         </template>
       </div>
 
-      <!-- AUMENTADO — max-h-40 fixo trocado por clamp() em vh, para a
+      <!-- AUMENTADO - max-h-40 fixo trocado por clamp() em vh, para a
            imagem crescer em tablets/ecrãs maiores. -->
       <img
         v-if="myQuestion.imageUrl"
@@ -109,10 +109,10 @@ function optionClass(label: string): string {
         class="w-full max-h-[clamp(10rem,28vh,20rem)] object-cover rounded-xl"
       />
 
-      <!-- AUMENTADO — text-base fixo trocado por clamp(). -->
+      <!-- AUMENTADO - text-base fixo trocado por clamp(). -->
       <h2 class="text-[clamp(1.05rem,3.4vw,1.6rem)] font-semibold text-center">{{ myQuestion.text }}</h2>
 
-      <!-- AUMENTADO — gap-3, px-4 py-3 e o círculo da letra (w-7 h-7,
+      <!-- AUMENTADO - gap-3, px-4 py-3 e o círculo da letra (w-7 h-7,
            text-xs) fixos trocados por clamp(). -->
       <div class="flex flex-col gap-[clamp(0.6rem,1.8vh,1rem)]">
         <button
@@ -131,7 +131,7 @@ function optionClass(label: string): string {
       </div>
     </template>
 
-    <!-- AUMENTADO — text-xs e o placar (font-bold, sem tamanho definido
+    <!-- AUMENTADO - text-xs e o placar (font-bold, sem tamanho definido
          antes, herdava o base) trocados por clamp(). -->
     <div class="mt-auto pt-4 flex items-center justify-center gap-[clamp(1.2rem,5vw,2.5rem)] text-center">
       <div>

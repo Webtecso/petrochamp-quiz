@@ -55,7 +55,7 @@ const presentationPhases = computed(() =>
 
 // A fase atualmente selecionada, para decidir se mostramos a secção de
 // criação manual de duplas (só faz sentido em Apresentação sem
-// eliminação — ver nota em routes/presentation.ts POST /duplas).
+// eliminação - ver nota em routes/presentation.ts POST /duplas).
 const selectedPhase = computed(() =>
   phasesStore.phases.find((p) => p.id === selectedPhaseId.value) ?? null
 )
@@ -66,15 +66,15 @@ const canCreateManualDuplas = computed(
 
 const totalCriteriaPoints = computed(() => criteria.value.reduce((sum, c) => sum + c.maxPoints, 0))
 
-// CORRIGIDO — antes filtrava só as equipas já usadas nesta fase (como
+// CORRIGIDO - antes filtrava só as equipas já usadas nesta fase (como
 // Equipa A), mas não filtrava por categoria/campeonato. Isso fazia com
 // que, ao selecionar por exemplo "Ensino Médio" no dropdown de cima,
 // aparecessem no formulário também equipas de "Universitário" e
-// "Exibição" — dados de campeonatos diferentes misturados no mesmo
+// "Exibição" - dados de campeonatos diferentes misturados no mesmo
 // dropdown. Agora só entram equipas cuja `category` é igual ao
 // `selectedChampionship` atualmente escolhido, exatamente como o
 // fluxo automático (bracketLive.ts generate) já filtra por
-// `category: championship` ao gerar o chaveamento — mantém os dois
+// `category: championship` ao gerar o chaveamento - mantém os dois
 // caminhos (manual e automático) consistentes entre si.
 const teamsWithoutDupla = computed(() => {
   const usedAsA = new Set(duplas.value.map((d) => d.teamAId))
@@ -115,7 +115,7 @@ async function loadAll(): Promise<void> {
 // Força uma sincronização com o Cloud (POST /api/sync/run) e só depois
 // recarrega os dados desta view. Se o backend não tiver CLOUD_API_URL
 // configurado, o sync simplesmente não corre (ran: false) e seguimos só
-// com o refresh local — não é tratado como erro.
+// com o refresh local - não é tratado como erro.
 async function manualRefresh(): Promise<void> {
   refreshing.value = true
   errorMsg.value = ''
@@ -130,7 +130,7 @@ async function manualRefresh(): Promise<void> {
 }
 
 // Sempre que o backend emitir 'config:updated' para 'presentation', 'bracket'
-// ou 'phases', recarrega os dados desta view — assim não é preciso reabrir
+// ou 'phases', recarrega os dados desta view - assim não é preciso reabrir
 // o app para ver o que mudou no outro lado (local ↔ cloud).
 function onConfigUpdated(payload: { type: string; championship?: string | null }): void {
   if (payload.type === 'presentation' || payload.type === 'bracket' || payload.type === 'phases') {
@@ -142,7 +142,7 @@ onMounted(async () => {
   await teamsStore.fetchTeams()
   await loadPhases()
   // No build Admin Cloud, connectSocket() devolve null (o backend Cloud não
-  // tem Socket.io por design) — o optional chaining evita que isso rebente.
+  // tem Socket.io por design) - o optional chaining evita que isso rebente.
   const socket = connectSocket()
   socket?.on('config:updated', onConfigUpdated)
 })
@@ -243,7 +243,7 @@ async function removeCriteria(id: string): Promise<void> {
 }
 
 function teamName(id: string | null): string {
-  if (!id) return '—'
+  if (!id) return '-'
   return teamsStore.teamById(id)?.name ?? '?'
 }
 
@@ -347,7 +347,7 @@ async function removeDocument(id: string): Promise<void> {
         </select>
       </div>
       <p v-if="!presentationPhases.length" class="text-xs text-amber-600 mt-2">
-        Nenhuma fase deste campeonato está configurada como "Apresentação" ou "Apresentação + Quiz" — vai a
+        Nenhuma fase deste campeonato está configurada como "Apresentação" ou "Apresentação + Quiz" - vai a
         Admin → Fases primeiro e muda o Tipo de Fase.
       </p>
     </div>
@@ -367,7 +367,7 @@ async function removeDocument(id: string): Promise<void> {
     <div v-if="selectedPhaseId && canCreateManualDuplas" class="bg-white rounded-2xl shadow p-6">
       <h2 class="font-semibold text-petro-primary mb-1">Criar Dupla Manualmente</h2>
       <p class="text-xs text-gray-400 mb-4">
-        Esta fase é "Apresentação sem eliminação" — não está ligada a um Chaveamento, por isso as duplas têm de
+        Esta fase é "Apresentação sem eliminação" - não está ligada a um Chaveamento, por isso as duplas têm de
         ser criadas aqui manualmente. Só aparecem equipas da categoria "{{ championshipOptions.find(o => o.value === selectedChampionship)?.label }}". A Equipa B é opcional (deixa em branco para uma apresentação individual).
       </p>
 
@@ -382,7 +382,7 @@ async function removeDocument(id: string): Promise<void> {
         <div>
           <label class="text-[10px] text-gray-400 block mb-1">Equipa B (opcional)</label>
           <select v-model="newDuplaTeamBId" class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full">
-            <option value="">— Nenhuma —</option>
+            <option value="">- Nenhuma -</option>
             <option
               v-for="t in teamsWithoutDupla.filter((x) => x.id !== newDuplaTeamAId)"
               :key="t.id"
@@ -433,9 +433,9 @@ async function removeDocument(id: string): Promise<void> {
       </p>
 
       <div v-if="!duplas.length" class="text-xs text-gray-400">
-        <template v-if="canCreateManualDuplas">Nenhuma dupla ainda — usa o formulário acima para criar.</template>
+        <template v-if="canCreateManualDuplas">Nenhuma dupla ainda - usa o formulário acima para criar.</template>
         <template v-else>
-          Nenhuma dupla ainda — gera o Chaveamento em Admin → Chaveamento para esta fase ficar preenchida
+          Nenhuma dupla ainda - gera o Chaveamento em Admin → Chaveamento para esta fase ficar preenchida
           automaticamente.
         </template>
       </div>
