@@ -47,7 +47,7 @@ function choose(mode: DeviceMode): void {
     <LogoMark size="lg" />
     <div class="text-center">
       <h1 class="text-2xl font-bold text-petro-primary">Como as equipas vão responder hoje?</h1>
-      <p class="text-sm text-gray-400 mt-1">Rede local do evento - sem necessidade de internet</p>
+      <p class="text-sm text-gray-600 mt-1">Rede local do evento - sem necessidade de internet</p>
     </div>
 
     <div class="grid grid-cols-2 gap-6 w-full max-w-2xl">
@@ -57,7 +57,7 @@ function choose(mode: DeviceMode): void {
       >
         <div class="text-4xl">📱</div>
         <div class="font-semibold text-lg">Com Dispositivos das Equipas</div>
-        <p class="text-xs text-gray-400">
+        <p class="text-xs text-gray-600">
           Cada equipa responde no seu próprio telemóvel/tablet, ligado ao Wi-Fi do evento.
         </p>
       </button>
@@ -68,7 +68,7 @@ function choose(mode: DeviceMode): void {
       >
         <div class="text-4xl">🎤</div>
         <div class="font-semibold text-lg">Sem Dispositivos</div>
-        <p class="text-xs text-gray-400">
+        <p class="text-xs text-gray-600">
           Equipas respondem em voz alta; o moderador confirma quem acertou no painel.
         </p>
       </button>

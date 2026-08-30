@@ -11,7 +11,7 @@ const router = useRouter()
     <LogoMark size="lg" />
     <div class="text-center">
       <h1 class="text-2xl font-bold text-petro-primary">Como vais usar este aparelho?</h1>
-      <p class="text-sm text-gray-400 mt-1">Escolhe o teu papel nesta sessão</p>
+      <p class="text-sm text-gray-600 mt-1">Escolhe o teu papel nesta sessão</p>
     </div>
 
     <div class="grid grid-cols-2 gap-4 w-full max-w-sm">
@@ -21,7 +21,7 @@ const router = useRouter()
       >
         <div class="text-3xl">🎛️</div>
         <div class="font-semibold">Moderador</div>
-        <p class="text-[11px] text-gray-400">Painel completo - campeonato, equipas, pontuação, pódio</p>
+        <p class="text-[11px] text-gray-600">Painel completo - campeonato, equipas, pontuação, pódio</p>
       </button>
 
       <button
@@ -30,7 +30,7 @@ const router = useRouter()
       >
         <div class="text-3xl">🎮</div>
         <div class="font-semibold">Jogador</div>
-        <p class="text-[11px] text-gray-400">Entrar numa partida com código</p>
+        <p class="text-[11px] text-gray-600">Entrar numa partida com código</p>
       </button>
 
       <button

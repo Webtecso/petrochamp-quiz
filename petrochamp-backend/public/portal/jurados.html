@@ -367,12 +367,7 @@
   function isPresentationPhase() {
     return currentPhaseRecord?.type === 'apresentacao' || currentPhaseRecord?.type === 'apresentacao_quiz'
   }
-
-  // NOVO - evita reconstruir a área de notas de apresentação enquanto o
-  // jurado está a meio de escrever num desses campos. Sem isto, qualquer
-  // state:sync a chegar do servidor (broadcast periódico do timer, outra
-  // ação de outro jurado, etc.) reconstruía o innerHTML todo e perdia o
-  // foco/valor que o jurado ainda estava a digitar antes de confirmar.
+  
   function isEditingPresentationScore() {
     const active = document.activeElement
     return !!active && active.classList?.contains('pres-score-input')

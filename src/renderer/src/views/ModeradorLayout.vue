@@ -42,16 +42,10 @@ function confirmReset(): void {
   }
 }
 
-// NOVO - este layout é o pai persistente de toda a área /moderador/*,
-// por isso é o sítio certo para garantir que, assim que o moderador
-// entra nesta secção da app, tentamos reidratar a sessão a partir do
-// código guardado em localStorage (ver stores/moderator.ts). Isto cobre
-// o caso de um restart completo da app (Electron reiniciado, F5, etc.)
-// em que a store nasce do zero mas o backend continua vivo - sem isto,
-// o socket ficava ligado sem nunca reenviar 'moderator:register', e o
-// backend bloqueava silenciosamente qualquer ação restrita por área
-// (ex: Avançar Apresentação) mesmo sendo o moderador Principal, até
-// alguém voltar a passar manualmente pelo ecrã de login.
+// Não reativamos a sessão do moderador ao abrir o layout. O login continua
+// a ser explícito para evitar entrar direto no perfil principal gravado em
+// localStorage sem autenticação. A reconexão do socket continua tratada pela
+// store após um login válido.
 onMounted(() => {
   moderatorStore.initFromStorage()
 })

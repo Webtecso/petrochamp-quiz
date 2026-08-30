@@ -42,6 +42,18 @@ export const brackets: ChampionshipBracket[] = [
     finalMatch: { id: 'em-final' }
   },
   {
+    championship: 'exibicao',
+    title: 'Batalha de Exibição · Final',
+    rounds: [
+      {
+        name: 'Final',
+        leftMatches: [{ id: 'ex-q1' }],
+        rightMatches: []
+      }
+    ],
+    finalMatch: { id: 'ex-final' }
+  },
+  {
     championship: 'universitario',
     title: 'Campeonato Universitário · Quartas de Final',
     rounds: [

@@ -42,7 +42,7 @@ async function testAndSave(): Promise<void> {
     <LogoMark size="lg" />
     <div class="text-center">
       <h1 class="text-2xl font-bold text-petro-primary">Ligar ao computador do Moderador</h1>
-      <p class="text-sm text-gray-400 mt-1 max-w-xs mx-auto">
+      <p class="text-sm text-gray-600 mt-1 max-w-xs mx-auto">
         Introduz o IP mostrado no computador que está a correr o Petrochamp (ex.: 192.168.1.10)
       </p>
     </div>

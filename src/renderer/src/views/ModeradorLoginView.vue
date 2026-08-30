@@ -28,9 +28,6 @@ async function submit(): Promise<void> {
   router.push('/moderador/campeonato')
 }
 
-function skipLogin(): void {
-  router.push('/moderador/campeonato')
-}
 </script>
 
 <template>
@@ -38,7 +35,7 @@ function skipLogin(): void {
     <LogoMark size="lg" />
     <div class="text-center">
       <h1 class="text-2xl font-bold text-petro-primary">Entrar como Moderador</h1>
-      <p class="text-sm text-gray-400 mt-1">Introduz o código dado pelo Administrador</p>
+      <p class="text-sm text-gray-600 mt-1">Introduz o código dado pelo Administrador</p>
     </div>
 
     <div class="w-full max-w-sm bg-white rounded-2xl shadow p-6 flex flex-col gap-4">
@@ -58,9 +55,6 @@ function skipLogin(): void {
         @click="submit"
       >
         {{ loading ? 'A entrar...' : 'Entrar' }}
-      </button>
-      <button class="text-xs text-gray-400 underline" @click="skipLogin">
-        Continuar sem login (modo aberto/teste)
       </button>
     </div>
   </div>

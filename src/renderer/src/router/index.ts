@@ -8,6 +8,7 @@ import ModeradorLayout from '../views/ModeradorLayout.vue'
 import AppEntryView from '../views/AppEntryView.vue'
 import ServerConfigView from '../views/ServerConfigView.vue'
 import ModeSelectView from '../views/ModeSelectView.vue'
+import { useModeratorStore } from '../stores/moderator'
 import CampeonatoSelectView from '../views/CampeonatoSelectView.vue'
 import ModeradorBracketView from '../views/ModeradorBracketView.vue'
 import EquipasSelectView from '../views/EquipasSelectView.vue'
@@ -176,8 +177,15 @@ async function resumeRoute(store: ReturnType<typeof useCampeonatoStore>): Promis
 const RESUME_PATHS = ['/moderador', '/moderador/campeonato']
 
 router.beforeEach(async (to, from) => {
+  const moderatorStore = useModeratorStore()
+
   if (!isLocalAccess && !to.path.startsWith('/admin')) {
     return isAdminLoggedIn() ? '/admin' : '/admin/login'
+  }
+
+  const isModeratorArea = to.path.startsWith('/moderador') && to.path !== '/moderador/login'
+  if (isModeratorArea && !moderatorStore.isLoggedIn) {
+    return '/moderador/login'
   }
 
   const store = useCampeonatoStore()

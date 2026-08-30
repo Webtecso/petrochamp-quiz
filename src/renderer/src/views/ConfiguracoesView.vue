@@ -38,8 +38,8 @@ async function changeServer(): Promise<void> {
     <div class="max-w-md mx-auto bg-white rounded-xl shadow p-6 flex flex-col gap-6">
       <div v-if="isNative" class="rounded-xl px-4 py-3 bg-petro-primary/5 border border-petro-primary/20 flex items-center justify-between gap-3">
         <div>
-          <p class="text-xs font-semibold text-gray-600">Servidor ligado</p>
-          <p class="text-[11px] text-gray-400 break-all">{{ getBackendUrl() }}</p>
+          <p class="text-xs font-semibold text-gray-700">Servidor ligado</p>
+          <p class="text-[11px] text-gray-600 break-all">{{ getBackendUrl() }}</p>
         </div>
         <button
           class="text-xs font-semibold text-petro-primary underline shrink-0"
@@ -80,7 +80,7 @@ async function changeServer(): Promise<void> {
           class="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-petro-primary"
           @change="settings.setQuestionTime(Number(($event.target as HTMLInputElement).value))"
         />
-        <p class="text-xs text-gray-400 mt-1">Também disponível, com mais opções, no Painel do Administrador.</p>
+        <p class="text-xs text-gray-600 mt-1">Também disponível, com mais opções, no Painel do Administrador.</p>
       </div>
 
       <div>
