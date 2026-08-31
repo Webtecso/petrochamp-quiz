@@ -310,7 +310,8 @@
     const code = document.getElementById('codeInput').value.trim().toUpperCase()
     document.getElementById('registerError').classList.add('hidden')
 
-    if (!name) { showError('Introduz o teu nome.'); return }
+    // Nome é opcional no servidor (o código identifica o jurado).
+    // Aceitamos avançar apenas com o código.
     if (!code) { showError('Introduz o código de jurado.'); return }
 
     socket.emit('juror:register', { code }, (res) => {
@@ -319,7 +320,7 @@
         return
       }
       jurorId = res.jurorId
-      jurorName = name
+      jurorName = name || ''
       document.getElementById('registerCard').classList.add('hidden')
       const welcome = document.getElementById('welcomeMsg')
       welcome.innerHTML = `Bem-vindo(a), <b>${jurorName}</b>`
@@ -403,21 +404,6 @@
     }
   }
 
-  // ==================== MODO BATALHA (Quiz) ====================
-
-  // CORRIGIDO - bug principal: selectedItemId era reposto à força para a
-  // primeira pergunta analítica em TODO fetchQuizItems, que corria a cada
-  // render() (ou seja, a cada segundo via state:sync). Isso impedia:
-  //   1. Avaliar qualquer pergunta que não a primeira - o dropdown
-  //      revertia sozinho antes do jurado conseguir preencher/submeter.
-  //   2. Depois de submeter a primeira (que ficava desativada), o jurado
-  //      ficava preso nela, sem conseguir sequer chegar às restantes.
-  //
-  // Agora: o fetch ao servidor e a reconstrução do <select> só acontecem
-  // quando a fase muda (quizItemsFetchedForPhase !== phase); e
-  // selectedItemId só é reposto por omissão se ainda não houver nenhuma
-  // seleção válida (nula, ou a apontar para um item que já não existe) -
-  // nunca se o jurado já tiver escolhido outra pergunta válida.
   async function fetchQuizItems(phase) {
     if (quizItemsFetchedForPhase !== phase) {
       const res = await fetch(`${backendUrl}/api/evaluation-items?phase=${phase}`)
@@ -430,9 +416,9 @@
       select.innerHTML = openItems
         .map((i) => `<option value="${i.id}">Analítica · ${i.maxPoints} pts</option>`)
         .join('')
-      select.onchange = (e) => {
+      select.onchange = async (e) => {
         selectedItemId = e.target.value
-      await renderQuizScores()
+        await renderQuizScores()
       }
     }
 

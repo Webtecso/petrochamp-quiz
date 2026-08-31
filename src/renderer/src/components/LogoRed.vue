@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import fullLogo from '../assets/branding/logo-full.png'
-import iconLogo from '../assets/branding/logo-icon.png'
 import whiteBoxLogo from '../assets/logo-petrochamp.png'
 const props = withDefaults(
   defineProps<{
@@ -21,7 +19,7 @@ const sizeClamp = {
   md: 'clamp(6rem, 10vw, 9.75rem)',
   lg: 'clamp(8rem, 13vw, 12.5rem)'
 }[props.size]
-const resolvedLogo = props.iconOnly ? iconLogo : props.theme === 'dark' ? whiteBoxLogo : fullLogo
+const resolvedLogo = whiteBoxLogo
 </script>
 <template>
   <div

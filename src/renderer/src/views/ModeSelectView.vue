@@ -9,7 +9,7 @@ import { useSettingsStore } from '../stores/settings'
 import { usePhasesStore } from '../stores/phases'
 import { useJuradosStore } from '../stores/jurados'
 import { useModeratorStore } from '../stores/moderator'
-import LogoMark from '../components/LogoMark.vue'
+import LogoRed from '@renderer/components/LogoRed.vue'
 
 const router = useRouter()
 const modeStore = useModeStore()
@@ -23,16 +23,6 @@ function choose(mode: DeviceMode): void {
   useJuradosStore().listenToServer()
   useTeamsStore().fetchTeams()
   useQuizContentStore().fetchQuestions(campeonatoStore.championship ?? undefined)
-  // CORRIGIDO - chamava fetchEvaluationItems() sem argumento nenhum. O
-  // store trata "sem championship" como "esvazia a lista inteira"
-  // (this.evaluationItems = []), por isso sempre que se escolhia o modo
-  // do dispositivo (o que acontece cada vez que se entra neste ecrã), a
-  // lista de perguntas de avaliação em memória ficava vazia até a
-  // próxima view a repor com o championship certo - dando a falsa
-  // impressão de que as perguntas tinham sido apagadas, quando na
-  // verdade só desapareciam do estado local (nada era tocado no
-  // backend). Agora passa o championship atual da store do campeonato,
-  // tal como as outras views que chamam a mesma função.
   useQuizContentStore().fetchEvaluationItems(campeonatoStore.championship ?? undefined)
   useSettingsStore().fetchSettings()
   usePhasesStore().fetchPhases()
@@ -44,7 +34,7 @@ function choose(mode: DeviceMode): void {
 
 <template>
   <div class="flex-1 flex flex-col items-center justify-center gap-10 px-10 py-12">
-    <LogoMark size="lg" />
+    <LogoRed size="lg" />
     <div class="text-center">
       <h1 class="text-2xl font-bold text-petro-primary">Como as equipas vão responder hoje?</h1>
       <p class="text-sm text-gray-600 mt-1">Rede local do evento - sem necessidade de internet</p>

@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { connectSocket } from '../services/socket'
 import { useModeratorStore } from '../stores/moderator'
-import LogoMark from '../components/LogoMark.vue'
+import LogoRed from '@renderer/components/LogoRed.vue'
 
 const router = useRouter()
 const moderatorStore = useModeratorStore()
@@ -32,7 +32,7 @@ async function submit(): Promise<void> {
 
 <template>
   <div class="flex-1 flex flex-col items-center justify-center gap-8 px-10 py-12">
-    <LogoMark size="lg" />
+    <LogoRed size="lg" />
     <div class="text-center">
       <h1 class="text-2xl font-bold text-petro-primary">Entrar como Moderador</h1>
       <p class="text-sm text-gray-600 mt-1">Introduz o código dado pelo Administrador</p>

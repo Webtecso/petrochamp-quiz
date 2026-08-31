@@ -95,12 +95,8 @@ onMounted(() => {
         >
           Jurados
         </button>
-        <!-- Botão sempre disponível (mesmo com batalha em curso, já que
-             não navega para lado nenhum, só abre um modal por cima) para
-             o moderador partilhar rapidamente o link/QR do portal remoto
-             dos jurados com quem precisar de entrar. -->
         <button
-          class="px-3 py-1 rounded-lg text-xs bg-petro-gold/20 text-petro-gold hover:bg-petro-gold/30 transition font-semibold"
+          class="px-3 py-1 rounded-lg text-xs bg-amber-400 text-petro-dark hover:bg-petro-gold/30 transition font-semibold"
           @click="showPortalModal = true"
         >
           📡 Portal Jurados
