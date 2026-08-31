@@ -53,17 +53,24 @@ function jurorsAllowedFor(item: EvaluationItem | undefined): typeof jurados.juro
 }
 
 const newJurorName = ref('')
+const newJurorCode = ref('')
 const registerError = ref('')
 
 async function addJuror(): Promise<void> {
   if (jurados.jurors.length >= settings.maxJurors) return
-  const result = await jurados.registerJuror(newJurorName.value)
+  const code = (newJurorCode.value || '').trim().toUpperCase()
+  if (!code) {
+    registerError.value = 'Introduz o código do jurado.'
+    return
+  }
+  const result = await jurados.registerJuror(code)
   if (!result.success) {
     registerError.value = result.error || 'Falha ao registar jurado.'
     return
   }
   registerError.value = ''
   newJurorName.value = ''
+  newJurorCode.value = ''
 }
 
 // ==================== Notas Iniciais ====================
@@ -266,7 +273,13 @@ const presentationStageLabel = computed(() => {
       <input
         v-model="newJurorName"
         type="text"
-        placeholder="Nome do jurado"
+        placeholder="Nome do jurado (opcional)"
+        class="border border-white/20 rounded-lg px-3 py-2 text-sm bg-transparent text-white"
+      />
+      <input
+        v-model="newJurorCode"
+        type="text"
+        placeholder="Código do jurado (4 dígitos)"
         class="border border-white/20 rounded-lg px-3 py-2 text-sm bg-transparent text-white"
       />
       <button class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold" @click="addJuror">

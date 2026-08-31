@@ -110,7 +110,7 @@ function optionClass(label: string): string {
         v-if="myQuestion.imageUrl"
         :src="myQuestion.imageUrl"
         alt="Imagem da pergunta"
-        class="w-full max-h-[clamp(10rem,28vh,20rem)] object-cover rounded-xl"
+        class="w-full max-h-[clamp(10rem,28vh,20rem)] object-contain rounded-xl"
       />
 
       <!-- AUMENTADO - text-base fixo trocado por clamp(). -->
