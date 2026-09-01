@@ -3,17 +3,34 @@ import LogoMark from './LogoMark.vue'
 import BracketRoundColumn from './BracketRoundColumn.vue'
 import BracketConnector from './BracketConnector.vue'
 import type { BracketRound, BracketMatch } from '../data/bracket'
+import whiteBoxLogo from '../assets/4.png'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     rounds?: BracketRound[]
     finalMatch?: BracketMatch
     title: string
+    theme?: 'light' | 'dark'
+    size?: 'sm' | 'md' | 'lg'
+    iconOnly?: boolean
   }>(),
   {
-    rounds: () => []
+    rounds: () => [],
+    theme: 'light',
+    size: 'md',
+    iconOnly: false
   }
 )
+
+
+const sizeClass = { sm: 'h-8', md: 'h-12', lg: 'h-20' }[props.size]
+
+const sizeClamp = {
+  sm: 'clamp(3.5rem, 6vw, 5.5rem)',
+  md: 'clamp(6rem, 10vw, 9.75rem)',
+  lg: 'clamp(8rem, 13vw, 12.5rem)'
+}[props.size]
+const resolvedLogo = whiteBoxLogo
 </script>
 
 <template>
@@ -22,7 +39,7 @@ withDefaults(
       <LogoMark theme="light" size="md" />
       <!-- AUMENTADO - limites do clamp() alargados para o título do
            chaveamento crescer mais em ecrãs grandes. -->
-      <h1 class="text-[clamp(1.3rem,2.4vw,3rem)] font-semibold text-gray-700 mt-1">{{ title }}</h1>
+      <h1 class="text-[clamp(1.3rem,2.4vw,3rem)] font-semibold text-white mt-1">{{ title }}</h1>
     </div>
 
     <!-- AUMENTADO - altura do chaveamento aumentada (mínimo e máximo),
@@ -36,7 +53,13 @@ withDefaults(
 
       <div class="flex flex-col items-center gap-[clamp(0.75rem,1.5vh,1.5rem)] px-4 shrink-0">
         <!-- AUMENTADO - troféu e rótulo "FINAL" maiores. -->
-        <div class="trophy-glow text-[clamp(3rem,6vw,7.5rem)]">🏆</div>
+        <img
+          :src="resolvedLogo"
+          alt="Petrochamp"
+          :class="sizeClass"
+          :style="`height: ${sizeClamp} !important; width: auto !important;`"
+        />
+
         <div class="text-[clamp(0.95rem,1.5vw,1.6rem)] font-semibold text-petro-primary tracking-widest">FINAL</div>
         <div class="flex flex-col gap-[clamp(0.5rem,1vh,1rem)]">
           <!-- AUMENTADO - cartões dos finalistas maiores (padding, texto
