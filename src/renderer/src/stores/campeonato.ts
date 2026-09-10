@@ -347,17 +347,41 @@ export const useCampeonatoStore = defineStore('campeonato', {
     continueAfterRepescagem() {
       getSocket().emit('moderator:continueAfterRepescagem')
     },
-    advancePhase() {
-      getSocket().emit('moderator:advancePhase')
+    advancePhase(force = false): Promise<{ success: boolean; error?: string } | void> {
+      return new Promise((resolve) => {
+        getSocket().emit('moderator:advancePhase', { force }, (res?: { success?: boolean; error?: string }) => {
+          const safeRes: { success: boolean; error?: string } =
+            res && typeof res.success === 'boolean'
+              ? { success: res.success, error: res.error }
+              : { success: true }
+          resolve(safeRes)
+        })
+      })
     },
     showPartners() {
       getSocket().emit('moderator:showPartners')
     },
-    startNextPhase() {
-      getSocket().emit('moderator:startNextPhase')
+    startNextPhase(force = false): Promise<{ success: boolean; error?: string } | void> {
+      return new Promise((resolve) => {
+        getSocket().emit('moderator:startNextPhase', { force }, (res?: { success?: boolean; error?: string }) => {
+          const safeRes: { success: boolean; error?: string } =
+            res && typeof res.success === 'boolean'
+              ? { success: res.success, error: res.error }
+              : { success: true }
+          resolve(safeRes)
+        })
+      })
     },
-    finalizeChampionship() {
-      getSocket().emit('moderator:finalizeChampionship')
+    finalizeChampionship(force = false): Promise<{ success: boolean; error?: string } | void> {
+      return new Promise((resolve) => {
+        getSocket().emit('moderator:finalizeChampionship', { force }, (res?: { success?: boolean; error?: string }) => {
+          const safeRes: { success: boolean; error?: string } =
+            res && typeof res.success === 'boolean'
+              ? { success: res.success, error: res.error }
+              : { success: true }
+          resolve(safeRes)
+        })
+      })
     },
     resetChampionship() {
       getSocket().emit('moderator:resetChampionship')

@@ -58,10 +58,22 @@ function showTransition(): void {
   store.showPhaseTransition()
 }
 
-function advance(): void {
+async function advance(): Promise<void> {
   store.hidePodium()
-  store.advancePhase()
+  const res: any = await store.advancePhase(true)
+  if (res && res.success === false) {
+    window.alert(res.error || 'Não foi possível avançar de fase forçadamente.')
+    return
+  }
   router.push('/moderador/equipas')
+}
+
+async function forceFinalizeChampionship(): Promise<void> {
+  const res: any = await store.finalizeChampionship(true)
+  if (res && res.success === false) {
+    window.alert(res.error || 'Não foi possível finalizar o campeonato forçadamente.')
+    return
+  }
 }
 </script>
 
@@ -118,7 +130,7 @@ function advance(): void {
           v-if="store.podiumReveal.finalRankingVisible"
           class="bg-amber-500 text-white rounded-lg px-6 py-3 font-semibold disabled:opacity-60"
           :disabled="store.championReveal.active"
-          @click="store.finalizeChampionship()"
+          @click="forceFinalizeChampionship"
         >
           {{ store.championReveal.active ? 'Campeonato finalizado ✓' : '🏁 Finalizar Campeonato' }}
         </button>

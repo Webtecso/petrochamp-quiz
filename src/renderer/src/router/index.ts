@@ -133,7 +133,13 @@ async function resumeRoute(store: ReturnType<typeof useCampeonatoStore>): Promis
     return '/moderador/podio'
   }
 
-  // 2. Transições e Animações (Intro de Quiz, Ranking, Suspense, Repescagem)
+  // 2. Estados de transição: para fase composta apresentação+quiz, o
+  // ranking genérico só é válido depois do Quiz terminar; antes disso,
+  // o sistema deve continuar na tela de apresentação ou voltar ao quiz.
+  if (store.phaseFlow.stage === 'presentationRanking') {
+    return '/moderador/apresentacao'
+  }
+
   if (
     ['ranking', 'partnersPending', 'partners', 'webtec', 'organizer', 'suspense', 'quizIntro', 'repescagem'].includes(
       store.phaseFlow.stage

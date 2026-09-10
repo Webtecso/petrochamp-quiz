@@ -31,7 +31,9 @@ defineProps<{
 
     <TimerRing :seconds="timeLeft" class="mb-6" />
 
-    <img v-if="imageUrl" :src="imageUrl" alt="Imagem da pergunta" class="w-full max-h-[60vh] object-contain rounded-xl mb-4" />
+    <div v-if="imageUrl" class="mb-4 overflow-hidden rounded-xl border border-gray-100 bg-gray-50 w-full h-[clamp(220px,35vh,420px)]">
+      <img :src="imageUrl" alt="Imagem da pergunta" class="block w-full h-full object-cover object-center" />
+    </div>
 
     <h2 class="text-lg font-semibold mb-6">{{ questionText }}</h2>
 

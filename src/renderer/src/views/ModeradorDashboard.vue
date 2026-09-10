@@ -36,17 +36,34 @@ watch(
 )
 
 watch(
+  () => store.championship,
+  async (newChampionship, oldChampionship) => {
+    if (!newChampionship || newChampionship === oldChampionship) return
+
+    await phasesStore.fetchPhases(newChampionship)
+    await quizContent.fetchQuestions(newChampionship)
+    await quizContent.fetchEvaluationItems(newChampionship)
+    await tiebreakQuestions.fetchQuestions(newChampionship)
+    if (redirectIfPresentationPhase()) return
+  },
+  { immediate: true }
+)
+
+watch(
   () => store.phase,
   async (newPhase, oldPhase) => {
-    if (newPhase !== oldPhase) {
-      await phasesStore.fetchPhases(store.championship ?? undefined)
-      await quizContent.fetchQuestions(store.championship ?? undefined)
-      await quizContent.fetchEvaluationItems(store.championship ?? undefined)
-      await tiebreakQuestions.fetchQuestions(store.championship ?? undefined)
-      if (redirectIfPresentationPhase()) return
+    if (newPhase === oldPhase || !store.championship) return
+
+    await phasesStore.fetchPhases(store.championship)
+    await quizContent.fetchQuestions(store.championship)
+    await quizContent.fetchEvaluationItems(store.championship)
+    await tiebreakQuestions.fetchQuestions(store.championship)
+    if (redirectIfPresentationPhase()) return
+    if (!store.teamA || !store.teamB) {
       router.replace('/moderador/equipas')
     }
-  }
+  },
+  { immediate: true }
 )
 
 onMounted(async () => {

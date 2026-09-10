@@ -173,6 +173,9 @@ watch(
 )
 
 const analyticAllowedJurors = computed(() => jurorsAllowedFor(activeAnalyticItem.value))
+const missingAnalyticJurors = computed(() =>
+  analyticAllowedJurors.value.filter((juror) => !jurorHasSubmittedAnalytic(juror.id))
+)
 
 function jurorHasSubmittedAnalytic(jurorId: string): boolean {
   return store.analyticEvaluation.jurorsSubmitted.includes(jurorId)
@@ -203,9 +206,16 @@ function submitAnalyticEvaluation(jurorId: string): void {
 
 const allAnalyticJurorsSubmitted = computed(() => {
   if (!activeAnalyticItemId.value || !analyticCriteria.value.length) return false
-  const expected = store.analyticEvaluation.expectedJurorCount
-  return expected > 0 && store.analyticEvaluation.jurorsSubmitted.length >= expected
+  const allowed = analyticAllowedJurors.value
+  if (allowed.length === 0) return false
+  return allowed.every((juror) => jurorHasSubmittedAnalytic(juror.id))
 })
+
+const canAdvanceAnalyticEvaluation = computed(() => allAnalyticJurorsSubmitted.value)
+
+function advanceAnalyticEvaluation(): void {
+  if (!canAdvanceAnalyticEvaluation.value) return
+}
 
 // ==================== Apresentação de Projetos ====================
 
@@ -295,14 +305,23 @@ const presentationStageLabel = computed(() => {
       v-if="activeAnalyticItem && analyticCriteria.length"
       class="w-full max-w-4xl bg-petro-card p-6 rounded-2xl flex flex-col gap-4 border border-white/10"
     >
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-3">
         <h3 class="text-lg font-bold text-white">{{ activeAnalyticItem.text }}</h3>
-        <span v-if="allAnalyticJurorsSubmitted" class="text-xs text-emerald-400 font-medium">
-          ✓ Todos os jurados avaliaram
-        </span>
-        <span v-else class="text-xs text-amber-400">
-          {{ store.analyticEvaluation.jurorsSubmitted.length }} de {{ store.analyticEvaluation.expectedJurorCount }} jurados avaliaram
-        </span>
+        <div class="flex items-center gap-3">
+          <span v-if="allAnalyticJurorsSubmitted" class="text-xs text-emerald-400 font-medium">
+            ✓ Todos os jurados avaliaram
+          </span>
+          <span v-else class="text-xs text-amber-400">
+            {{ missingAnalyticJurors.length }} de {{ analyticAllowedJurors.length }} jurados por confirmar
+          </span>
+          <button
+            v-if="canAdvanceAnalyticEvaluation"
+            class="px-4 py-1.5 rounded-lg bg-petro-primary text-white font-semibold text-xs"
+            @click="advanceAnalyticEvaluation"
+          >
+            Avançar
+          </button>
+        </div>
       </div>
 
       <div v-for="juror in analyticAllowedJurors" :key="juror.id" class="border border-white/10 rounded-xl p-4 flex flex-col gap-3">

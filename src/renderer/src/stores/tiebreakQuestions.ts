@@ -24,7 +24,11 @@ export const useTiebreakQuestionsStore = defineStore('tiebreakQuestions', {
   }),
   getters: {
     questionsForPhase: (state) => {
-      return (phase: number): TiebreakQuestion[] => state.questions.filter((q) => q.phase === phase)
+      return (phase: number): TiebreakQuestion[] => {
+        const exact = state.questions.filter((q) => q.phase === phase)
+        if (exact.length > 0) return exact
+        return state.questions
+      }
     }
   },
   actions: {

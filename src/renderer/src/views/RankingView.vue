@@ -1,14 +1,27 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useTeamsStore } from '../stores/teams'
+import { usePhasesStore } from '../stores/phases'
 import PhaseRankingBoard from '../components/PhaseRankingBoard.vue'
 
+const router = useRouter()
 const store = useCampeonatoStore()
 const teamsStore = useTeamsStore()
+const phasesStore = usePhasesStore()
 
-onMounted(() => {
-  teamsStore.fetchTeams()
+const currentPhaseType = computed(
+  () => phasesStore.phases.find((p) => Number(p.order) === Number(store.phase))?.type ?? null
+)
+
+onMounted(async () => {
+  await phasesStore.fetchPhases(store.championship ?? undefined)
+  await teamsStore.fetchTeams()
+
+  if (currentPhaseType.value === 'apresentacao_quiz' && store.phaseFlow.stage !== 'ranking') {
+    router.replace('/moderador/apresentacao')
+  }
 })
 
 function toggleShowOnScreen(): void {
@@ -33,6 +46,11 @@ function toggleShowOnScreen(): void {
       </button>
     </div>
 
-    <PhaseRankingBoard :rankings="store.phaseRankings ?? []" :eliminated-team-ids="store.eliminatedTeamIds ?? []" />
+    <PhaseRankingBoard
+      :rankings="store.phaseRankings ?? []"
+      :eliminated-team-ids="store.eliminatedTeamIds ?? []"
+      :phase-type="currentPhaseType"
+      :phase-flow-stage="store.phaseFlow.stage"
+    />
   </div>
 </template>

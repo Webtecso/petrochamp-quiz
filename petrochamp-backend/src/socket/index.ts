@@ -1319,8 +1319,12 @@ export function registerSocketHandlers(io: Server): void {
       }, seconds * 1000)
     })
 
-    socket.on('moderator:startNextPhase', async () => {
-      if (liveState.phaseFlow.stage !== 'suspense') return
+    socket.on('moderator:startNextPhase', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
+      const force = Boolean(payload?.force)
+      if (!force && liveState.phaseFlow.stage !== 'suspense') {
+        callback?.({ success: false, error: 'A fase seguinte só pode avançar quando está em suspense.' })
+        return
+      }
       const questionTime = await getQuestionTimeSeconds()
       const totalPhases = await getTotalPhases()
       if (liveState.phase < totalPhases) liveState.phase += 1
@@ -1335,6 +1339,7 @@ export function registerSocketHandlers(io: Server): void {
       resetMatch(questionTime)
       await refreshExpectedJurorCount()
       broadcast()
+      callback?.({ success: true })
     })
 
     socket.on('moderator:confirmQuizIntro', async () => {
@@ -1354,9 +1359,14 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('moderator:advancePhase', async () => {
+    socket.on('moderator:advancePhase', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
+      const force = Boolean(payload?.force)
       const questionTime = await getQuestionTimeSeconds()
       const totalPhases = await getTotalPhases()
+      if (!force && liveState.phase >= totalPhases) {
+        callback?.({ success: false, error: 'Já está na última fase do campeonato.' })
+        return
+      }
       if (liveState.phase < totalPhases) liveState.phase += 1
       liveState.phaseRankings = []
       liveState.usedQuestionIds = []
@@ -1370,6 +1380,7 @@ export function registerSocketHandlers(io: Server): void {
       resetMatch(questionTime)
       await refreshExpectedJurorCount()
       broadcast()
+      callback?.({ success: true })
     })
 
     socket.on('moderator:resetChampionship', async () => {
@@ -1539,11 +1550,21 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('moderator:finalizeChampionship', async () => {
-      if (!liveState.championship) return
+    socket.on('moderator:finalizeChampionship', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
+      const force = Boolean(payload?.force)
+      if (!liveState.championship) {
+        callback?.({ success: false, error: 'Nenhum campeonato ativo para finalizar.' })
+        return
+      }
       const totalPhases = await getTotalPhases()
-      if (liveState.phase !== totalPhases) return
-      if (!liveState.podiumReveal.finalRankingVisible) return
+      if (!force && liveState.phase !== totalPhases) {
+        callback?.({ success: false, error: 'Só é possível finalizar na última fase.' })
+        return
+      }
+      if (!force && !liveState.podiumReveal.finalRankingVisible) {
+        callback?.({ success: false, error: 'O ranking final ainda não está visível.' })
+        return
+      }
 
       const matches = await prisma.matchHistory.findMany({
         where: { championship: liveState.championship, editionName: liveState.editionName }
@@ -1602,6 +1623,7 @@ export function registerSocketHandlers(io: Server): void {
       resetMatch(questionTime)
 
       broadcast()
+      callback?.({ success: true })
     })
 
     socket.on('moderator:showPhaseTransition', () => {

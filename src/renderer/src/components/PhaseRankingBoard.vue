@@ -6,6 +6,8 @@ import TeamAvatar from './TeamAvatar.vue'
 const props = defineProps<{
   rankings: { teamId: string; name: string; institution: string; score: number }[]
   eliminatedTeamIds: string[]
+  phaseType?: string | null
+  phaseFlowStage?: string | null
 }>()
 
 const teamsStore = useTeamsStore()
@@ -16,6 +18,9 @@ function logoFor(teamId: string): string | undefined {
 
 const ranked = computed(() => [...props.rankings].sort((a, b) => b.score - a.score))
 const maxScore = computed(() => Math.max(...props.rankings.map((t) => t.score), 1))
+const shouldHideDuringPresentationRanking = computed(
+  () => props.phaseType === 'apresentacao_quiz' && props.phaseFlowStage === 'presentationRanking'
+)
 
 const medalStyles = [
   'bg-gradient-to-br from-yellow-300 to-yellow-500 text-white',
@@ -38,7 +43,14 @@ function isEliminated(teamId: string): boolean {
 </script>
 
 <template>
-  <div v-if="!ranked.length" class="text-center text-[clamp(0.9rem,1.2vw,1.3rem)] text-gray-400 max-w-md mx-auto">
+  <div
+    v-if="shouldHideDuringPresentationRanking"
+    class="text-center text-[clamp(0.9rem,1.2vw,1.3rem)] text-gray-400 max-w-md mx-auto"
+  >
+    A fase de apresentação + quiz está a calcular as notas finais. O ranking do quiz só aparece quando a fase for concluída.
+  </div>
+
+  <div v-else-if="!ranked.length" class="text-center text-[clamp(0.9rem,1.2vw,1.3rem)] text-gray-400 max-w-md mx-auto">
     Ainda não há partidas concluídas nesta fase. O ranking aparece aqui assim que a primeira partida terminar.
   </div>
 

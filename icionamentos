@@ -1,0 +1,31 @@
+[33m88ad54a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: update podium component styles for improved responsiveness and adjust juror registration button label
+[33m980433c[m feat(tournament-bracket): enhance component with theme support, size options, and logo integration
+[33m20fc27c[m feat: add LogoRed component with responsive sizing and theme support
+[33m5b98c5f[m feat(jurados): add juror code input and validation to juror registration
+[33mcb33ea2[m feat: update UI styles for improved readability and consistency across views
+[33md18117f[m feat: implement analytic evaluation system, enhance UI components, and improve database handling
+[33md854e30[m feat(quiz): ampliar logotipos de parceiros, exibir imagens das perguntas, aceitar ≥2 opções, adicionar pontuação analítica de jurados
+[33m55f3c03[m fix: corrige tipo do id em phases (string cuid, nao number)
+[33m352b9f6[m fix: corrige validacao de perguntas, auto-confirmacao de avaliacoes de juri e outros ajustes do dia
+[33mdd00672[m Corrige contrato de sync (model/data) para bater certo com o SyncService
+[33m9fed37c[m fix: aumenta limite do express.json para 15mb e corrige soft-delete em jurors/teams/presentation
+[33m4af5dbd[m fix: ModeSelectView não esvazia mais evaluationItems ao trocar de modo
+[33m653a677[m fix: SyncService correto no index.ts e upload em base64
+[33m2b9c191[m feat: adiciona soft delete (deletedAt) e otimiza sync do socket
+[33m81ff6b1[m Dimensionamento responsivo (clamp/vw/vh) nos ecras de projecao: chaveamento, ranking, podio
+[33m4cf295b[m Destaca portal de jurados (link+QR) no ecra inicial e no layout do Moderador
+[33m40b88a0[m Adiciona deteção dinâmica de IP local e rota /api/network-info para o portal de jurados
+[33m966b93f[m Corrigir generateJurorCode: 4 digitos numericos, igual ao backend local
+[33mfcf988a[m fix: adicionar fallback e logs na remocao de duplas
+[33mfad2253[m CI: atualiza Node para v22 (exigido pelo Capacitor CLI 8+)
+[33m379f2b1[m CI: usa Swift Package Manager em vez de CocoaPods (Capacitor 8+)
+[33m4692e9c[m Limpa ficheiros indevidos do repositório (lixo de terminal, submódulo vazio, .env)
+[33md2840af[m Adiciona plataforma iOS, corrige sync mobile/Android e bugs de phaseId
+[33m94e0b5b[m CI: pular typecheck no build web (só para gerar o bundle)
+[33m7ef701a[m CI: pular typecheck no build web (só para gerar o bundle)
+[33m93d1b3c[m Adiciona configuração de build iOS no Codemagic
+[33m7e2863a[m fix: implement sync push and pull routes
+[33m355e522[m feat: adiciona autenticacao admin, permissoes de moderador e sincronizacao de configs
+[33m49507f0[m Resolve conflito em ProjecaoView mantendo versão local
+[33m17c95b0[m fix(projecao): remove camadas semi-transparentes para fundo nítido
+[33m5b78ac7[m First commit

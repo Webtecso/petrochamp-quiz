@@ -114,7 +114,7 @@ onMounted(() => {
           :disabled="battleInProgress"
           @click="go('/admin')"
         >
-          ⚙ Admin
+          Admin
         </button>
         <span v-if="moderatorStore.isLoggedIn" class="text-[11px] text-white/70 px-2 flex items-center gap-1">
           👤 {{ moderatorStore.session?.name }}

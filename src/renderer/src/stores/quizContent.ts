@@ -33,13 +33,27 @@ export const useQuizContentStore = defineStore('quizContent', {
   }),
   getters: {
     questionsForPhase: (state) => {
-      return (phase: number): QuizQuestion[] => state.questions.filter((q) => q.phase === phase)
+      return (phase: number): QuizQuestion[] => {
+        const exact = state.questions.filter((q) => q.phase === phase)
+        if (exact.length > 0) return exact
+
+        // Algumas fases compostas (ex.: apresentacao_quiz) podem avançar
+        // o estado do frontend para um número de fase que não bate
+        // exatamente com o campo `question.phase` gravado na base de dados.
+        // Em vez de deixar a UI em vazio, usamos a lista completa da
+        // competição como fallback até ao frontend ajustar a fase real.
+        return state.questions
+      }
     },
     itemsForPhase: (state) => {
       return (phase: number): EvaluationItem[] => state.evaluationItems.filter((i) => i.phase === phase)
     },
     tiebreakQuestionsForPhase: (state) => {
-      return (phase: number): TiebreakQuestion[] => state.tiebreakQuestions.filter((q) => q.phase === phase)
+      return (phase: number): TiebreakQuestion[] => {
+        const exact = state.tiebreakQuestions.filter((q) => q.phase === phase)
+        if (exact.length > 0) return exact
+        return state.tiebreakQuestions
+      }
     },
     // NOVO
     criteriaForItem: (state) => {
