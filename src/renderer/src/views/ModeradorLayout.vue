@@ -42,10 +42,6 @@ function confirmReset(): void {
   }
 }
 
-// Não reativamos a sessão do moderador ao abrir o layout. O login continua
-// a ser explícito para evitar entrar direto no perfil principal gravado em
-// localStorage sem autenticação. A reconexão do socket continua tratada pela
-// store após um login válido.
 onMounted(() => {
   moderatorStore.initFromStorage()
 })

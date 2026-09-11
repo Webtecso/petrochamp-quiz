@@ -127,14 +127,46 @@ async function getPresentationTeamIds(phaseId: string): Promise<string[]> {
 }
 
 async function getExpectedJurorCount(phaseId: string): Promise<number> {
-  const authCount = await prisma.phaseJurorAuthorization.count({ where: { phaseId } })
+  const authCount = await prisma.phaseJurorAuthorization.count({
+    where: { phaseId, deletedAt: null }
+  })
   if (authCount > 0) return authCount
-  return prisma.juror.count()
+  return prisma.juror.count({ where: { deletedAt: null } })
 }
 
 async function refreshExpectedJurorCount(): Promise<void> {
   const phaseConfig = await getCurrentPhaseConfig()
   liveState.expectedJurorCount = phaseConfig ? await getExpectedJurorCount(phaseConfig.id) : 0
+}
+
+function clearActiveChampionshipState(): void {
+  liveState.championship = null
+  liveState.editionName = null
+  liveState.phase = 1
+  liveState.teamA = null
+  liveState.teamB = null
+  liveState.phaseRankings = []
+  liveState.championshipRankings = []
+  liveState.championshipStartedAt = null
+  liveState.eliminatedTeamIds = []
+  liveState.phaseRankingReveal = { visible: false }
+  liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+  liveState.presentationPhaseScores = []
+  liveState.carriedPresentationScores = []
+  liveState.jurors = []
+  liveState.jurorEntries = []
+  resetPresentationFlow()
+  liveState.bracketVisible = false
+  liveState.podium.active = false
+  liveState.podiumReveal = {
+    stage: 'idle',
+    countdownValue: 0,
+    suspensePhrase: null,
+    finalRankingVisible: false
+  }
+  liveState.phaseTransition = { stage: 'idle' }
+  liveState.expectedJurorCount = 0
+  liveState.championReveal = { active: false, teamName: null, logoUrl: null }
 }
 
 async function startPostRoundSequence(): Promise<void> {
@@ -1552,17 +1584,22 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on('moderator:finalizeChampionship', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
       const force = Boolean(payload?.force)
+      const isMediumSchool = liveState.championship === 'ensino_medio'
       if (!liveState.championship) {
         callback?.({ success: false, error: 'Nenhum campeonato ativo para finalizar.' })
         return
       }
       const totalPhases = await getTotalPhases()
-      if (!force && liveState.phase !== totalPhases) {
-        callback?.({ success: false, error: 'Só é possível finalizar na última fase.' })
+      const isLastPhase = liveState.phase >= totalPhases
+      const canFinalizeByState = force || isMediumSchool || isLastPhase || liveState.podiumReveal.finalRankingVisible
+
+      if (!canFinalizeByState) {
+        callback?.({ success: false, error: 'O ranking final ainda não está visível.' })
         return
       }
-      if (!force && !liveState.podiumReveal.finalRankingVisible) {
-        callback?.({ success: false, error: 'O ranking final ainda não está visível.' })
+
+      if (!force && !isMediumSchool && !isLastPhase) {
+        callback?.({ success: false, error: 'Só é possível finalizar na última fase.' })
         return
       }
 
@@ -1597,28 +1634,7 @@ export function registerSocketHandlers(io: Server): void {
         logoUrl: championLogoUrl
       }
 
-      liveState.championship = null
-      liveState.editionName = null
-      liveState.phase = 1
-      liveState.phaseRankings = []
-      liveState.championshipRankings = []
-      liveState.championshipStartedAt = null
-      liveState.eliminatedTeamIds = []
-      liveState.phaseRankingReveal = { visible: false }
-      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
-      liveState.presentationPhaseScores = []
-      liveState.carriedPresentationScores = []
-      resetPresentationFlow()
-      liveState.bracketVisible = false
-      liveState.podium.active = false
-      liveState.podiumReveal = {
-        stage: 'idle',
-        countdownValue: 0,
-        suspensePhrase: null,
-        finalRankingVisible: false
-      }
-      liveState.phaseTransition = { stage: 'idle' }
-      liveState.expectedJurorCount = 0
+      clearActiveChampionshipState()
       const questionTime = await getQuestionTimeSeconds()
       resetMatch(questionTime)
 
@@ -1878,7 +1894,7 @@ export function registerSocketHandlers(io: Server): void {
       async (payload: { code: string }, callback?: (res: unknown) => void) => {
         const code = (payload.code || '').trim().toUpperCase()
         const juror = await prisma.juror.findUnique({ where: { code } })
-        if (!juror) {
+        if (!juror || juror.deletedAt) {
           callback?.({ success: false, error: 'Código de jurado inválido.' })
           return
         }
@@ -1886,7 +1902,7 @@ export function registerSocketHandlers(io: Server): void {
         const phaseConfig = await getCurrentPhaseConfig()
         if (phaseConfig) {
           const authRows = await prisma.phaseJurorAuthorization.findMany({
-            where: { phaseId: phaseConfig.id }
+            where: { phaseId: phaseConfig.id, deletedAt: null }
           })
           if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
             callback?.({
@@ -1923,7 +1939,7 @@ export function registerSocketHandlers(io: Server): void {
       'moderator:registerJurorLocally',
       async (payload: { jurorId: string }, callback?: (res: unknown) => void) => {
         const juror = await prisma.juror.findUnique({ where: { id: payload.jurorId } })
-        if (!juror) {
+        if (!juror || juror.deletedAt) {
           callback?.({ success: false, error: 'Jurado não encontrado.' })
           return
         }
@@ -1931,7 +1947,7 @@ export function registerSocketHandlers(io: Server): void {
         const phaseConfig = await getCurrentPhaseConfig()
         if (phaseConfig) {
           const authRows = await prisma.phaseJurorAuthorization.findMany({
-            where: { phaseId: phaseConfig.id }
+            where: { phaseId: phaseConfig.id, deletedAt: null }
           })
           if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
             callback?.({

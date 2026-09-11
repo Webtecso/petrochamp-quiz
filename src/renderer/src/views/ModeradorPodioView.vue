@@ -29,7 +29,8 @@ watch(
   }
 )
 
-const isLastPhase = computed(() => store.phase === phasesStore.totalPhases)
+const currentBracketRound = computed(() => phasesStore.phaseOrderToBracketRound(store.phase))
+const isLastPhase = computed(() => currentBracketRound.value === liveBracketStore.totalRounds)
 
 const championId = computed(() => {
   if (!liveBracketStore.matches.length) return null
@@ -41,6 +42,25 @@ const championId = computed(() => {
 const canShowChampions = computed(
   () => isLastPhase.value && !!championId.value && store.phaseFlow.stage === 'organizer'
 )
+
+const canFinalizeChampionship = computed(() => {
+  if (!store.podiumReveal.finalRankingVisible || store.championReveal.active) return false
+  if (store.championship === 'ensino_medio') return true
+  return canShowChampions.value
+})
+
+const canAdvanceToNextPhase = computed(
+  () => !!store.championship && store.phase < phasesStore.totalPhases && !store.championReveal.active
+)
+
+function confirmReset(): void {
+  const message = 'Tem certeza que deseja finalizar o campeonato?'
+  const ok = confirm(message)
+  if (ok) {
+    store.abandonChampionship()
+    router.push('/moderador/modo')
+  }
+}
 
 const waitingForInstitutional = computed(
   () => isLastPhase.value && !!championId.value && store.phaseFlow.stage !== 'organizer'
@@ -68,13 +88,13 @@ async function advance(): Promise<void> {
   router.push('/moderador/equipas')
 }
 
-async function forceFinalizeChampionship(): Promise<void> {
-  const res: any = await store.finalizeChampionship(true)
-  if (res && res.success === false) {
-    window.alert(res.error || 'Não foi possível finalizar o campeonato forçadamente.')
-    return
-  }
-}
+// async function forceFinalizeChampionship(): Promise<void> {
+//   const res: any = await store.finalizeChampionship(true)
+//   if (res && res.success === false) {
+//     window.alert(res.error || 'Não foi possível finalizar o campeonato forçadamente.')
+//     return
+//   }
+// }
 </script>
 
 <template>
@@ -126,11 +146,13 @@ async function forceFinalizeChampionship(): Promise<void> {
         >
           Mostrar Ranking Final na Projeção
         </button>
+
+        <!-- @click="forceFinalizeChampionship" -->
         <button
           v-if="store.podiumReveal.finalRankingVisible"
           class="bg-amber-500 text-white rounded-lg px-6 py-3 font-semibold disabled:opacity-60"
-          :disabled="store.championReveal.active"
-          @click="forceFinalizeChampionship"
+          :disabled="!canFinalizeChampionship"
+          @click="confirmReset"
         >
           {{ store.championReveal.active ? 'Campeonato finalizado ✓' : '🏁 Finalizar Campeonato' }}
         </button>
@@ -154,7 +176,7 @@ async function forceFinalizeChampionship(): Promise<void> {
       </div>
 
       <button
-        v-if="store.phase < phasesStore.totalPhases"
+        v-if="canAdvanceToNextPhase"
         class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold"
         @click="advance"
       >
