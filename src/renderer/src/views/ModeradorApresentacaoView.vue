@@ -6,6 +6,7 @@ import { useJuradosStore } from '../stores/jurados'
 import { usePhasesStore } from '../stores/phases'
 import { useTeamsStore } from '../stores/teams'
 import { getBackendUrl } from '../services/backendConfig'
+import { PowerPointViewer, type PowerPointViewerExpose } from 'pptx-vue-viewer'
 
 interface Dupla {
   id: number
@@ -18,7 +19,8 @@ interface Dupla {
 
 interface DocumentInfo {
   id: number
-  slides: { order: number; imageUrl: string }[]
+  fileUrl: string
+  fileName: string
 }
 
 const router = useRouter()
@@ -33,6 +35,14 @@ if (!store.championship) {
 
 const duplas = ref<Dupla[]>([])
 const documentsMap = ref<Record<string, DocumentInfo>>({})
+
+const viewerContent = ref<Uint8Array | undefined>(undefined)
+const viewerRef = ref<PowerPointViewerExpose>()
+const viewerLoading = ref(false)
+
+// Ações do viewer só podem ser feitas via ribbon reduzida - o moderador
+// nunca deve editar, partilhar ou exportar o ficheiro a partir daqui.
+const VIEWER_HIDDEN_ACTIONS = ['share', 'broadcast', 'insert', 'collaboration', 'edit', 'save', 'export', 'print'] as const
 
 const currentPhaseRecord = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
 const isPresentationPhase = computed(
@@ -58,7 +68,7 @@ async function loadDocuments(): Promise<void> {
   const docs: (DocumentInfo & { duplaId: number; teamId: string })[] = await res.json()
   const map: Record<string, DocumentInfo> = {}
   for (const d of docs) {
-    if (d.slides.length) map[`${d.duplaId}:${d.teamId}`] = { id: d.id, slides: d.slides }
+    map[`${d.duplaId}:${d.teamId}`] = { id: d.id, fileUrl: d.fileUrl, fileName: d.fileName }
   }
   documentsMap.value = map
 }
@@ -82,6 +92,77 @@ function teamName(id: string): string {
 
 function docFor(duplaId: number, teamId: string): DocumentInfo | undefined {
   return documentsMap.value[`${duplaId}:${teamId}`]
+}
+
+async function loadPptxContent(fileUrl: string): Promise<void> {
+  viewerLoading.value = true
+  viewerContent.value = undefined
+  try {
+    const res = await fetch(`${getBackendUrl()}${fileUrl}`)
+    viewerContent.value = new Uint8Array(await res.arrayBuffer())
+  } finally {
+    viewerLoading.value = false
+  }
+}
+
+const activeDocument = computed(() => {
+  if (!store.presentationFlow.duplaId || !store.presentationFlow.teamId) return undefined
+  return docFor(store.presentationFlow.duplaId, store.presentationFlow.teamId)
+})
+
+// Sempre que entra em apresentação com documento, carrega o .pptx.
+watch(
+  () => [store.presentationFlow.stage, activeDocument.value?.id] as const,
+  async ([stage]) => {
+    if (
+      stage === 'presenting' &&
+      store.presentationFlow.presentationMode === 'document' &&
+      activeDocument.value
+    ) {
+      await loadPptxContent(activeDocument.value.fileUrl)
+    }
+  },
+  { immediate: true }
+)
+
+// Liga o modo de apresentação (animações/transições nativas) assim que o
+// viewer estiver montado com conteúdo carregado.
+function onViewerMounted(): void {
+  viewerRef.value?.setMode('present')
+}
+
+// A fonte de verdade do slide atual é o backend (currentPage via socket,
+// distribuído a todos os ecrãs por state:sync). Este watcher reage a
+// QUALQUER mudança - vinda do próprio moderador ou de outro ecrã - e
+// manda o viewer local saltar/animar até lá.
+watch(
+  () => store.presentationFlow.currentPage,
+  (page) => {
+    if (viewerRef.value && viewerContent.value) {
+      viewerRef.value.goTo(page - 1)
+    }
+  }
+)
+
+// Rede de segurança: se alguém navegar dentro do próprio widget (thumbnail,
+// atalho de teclado) sem passar pelo socket, repõe o slide oficial - assim
+// este ecrã nunca fica dessincronizado do telão/jurados.
+function onActiveSlideChange(index: number): void {
+  const expected = store.presentationFlow.currentPage - 1
+  if (index !== expected) {
+    viewerRef.value?.goTo(expected)
+  }
+}
+
+function requestNextPage(): void {
+  const total = viewerRef.value?.getSlideCount() ?? Infinity
+  if (store.presentationFlow.currentPage >= total) return
+  store.nextPresentationPage()
+}
+
+function requestPrevPage(): void {
+  if (store.presentationFlow.currentPage <= 1) return
+  store.prevPresentationPage()
 }
 
 const availableItems = computed(() => {
@@ -179,7 +260,7 @@ function goNext(): void {
           </div>
 
           <div v-if="pendingDocument" class="bg-petro-primary/5 border border-petro-primary/20 rounded-xl px-4 py-3 text-sm">
-            📄 {{ pendingDocument.slides.length }} slides disponíveis
+            📄 {{ pendingDocument.fileName }}
           </div>
           <p v-else class="text-xs text-gray-400">Documento não carregado</p>
 
@@ -231,21 +312,39 @@ function goNext(): void {
         <p class="text-lg font-bold text-petro-primary mb-1">{{ store.presentationFlow.teamName }}</p>
         <p class="text-sm text-gray-500 mb-4">Tema: {{ store.presentationFlow.theme }}</p>
 
+        <!-- Viewer do .pptx -->
+        <div v-if="store.presentationFlow.presentationMode === 'document'" class="mb-4">
+          <div v-if="viewerLoading" class="bg-gray-100 rounded-lg h-96 flex items-center justify-center text-sm text-gray-500">
+            A carregar apresentação...
+          </div>
+          <PowerPointViewer
+            v-else-if="viewerContent"
+            ref="viewerRef"
+            :content="viewerContent"
+            :can-edit="false"
+            :hidden-actions="VIEWER_HIDDEN_ACTIONS"
+            style="height: 55vh"
+            class="rounded-lg overflow-hidden"
+            @vue:mounted="onViewerMounted"
+            @active-slide-change="onActiveSlideChange"
+          />
+        </div>
+
         <!-- Controlos de página/slide, só em modo documento -->
         <div v-if="store.presentationFlow.presentationMode === 'document'" class="flex items-center justify-center gap-4 mb-4">
           <button
             class="bg-petro-dark text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40"
             :disabled="store.presentationFlow.currentPage <= 1"
-            @click="store.prevPresentationPage()"
+            @click="requestPrevPage()"
           >
             ◀ Anterior
           </button>
           <span class="text-sm font-semibold text-gray-600">
-            Slide {{ store.presentationFlow.currentPage }} / {{ store.presentationFlow.slides.length }}
+            Slide {{ store.presentationFlow.currentPage }} / {{ viewerRef?.getSlideCount() ?? '?' }}
           </span>
           <button
             class="bg-petro-dark text-white rounded-lg px-4 py-2 text-sm font-semibold"
-            @click="store.nextPresentationPage()"
+            @click="requestNextPage()"
           >
             Próxima ▶
           </button>

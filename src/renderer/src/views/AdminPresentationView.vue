@@ -5,6 +5,7 @@ import { useTeamsStore } from '../stores/teams'
 import { getBackendUrl } from '../services/backendConfig'
 import { adminFetch } from '../services/adminAuth'
 import { connectSocket } from '../services/socket'
+import { PowerPointViewer } from 'pptx-vue-viewer'
 import type { ChampionshipType } from '../stores/campeonato'
 
 interface Dupla {
@@ -22,12 +23,8 @@ interface Criteria {
 }
 interface DocumentInfo {
   id: string
-  slides: { order: number; imageUrl: string }[]
-}
-interface PendingSlide {
-  file: File
-  order: number
-  previewUrl: string
+  fileUrl: string
+  fileName: string
 }
 
 const phasesStore = usePhasesStore()
@@ -41,7 +38,15 @@ const documentsMap = ref<Record<string, DocumentInfo>>({})
 const errorMsg = ref('')
 const uploadingKey = ref<string | null>(null)
 const refreshing = ref(false)
-const pendingByTeam = ref<Record<string, PendingSlide[]>>({})
+
+const previewOpenKey = ref<string | null>(null)
+const previewContent = ref<Record<string, Uint8Array>>({})
+const previewLoadingKey = ref<string | null>(null)
+const previewErrorKey = ref<string | null>(null)
+
+// Pré-visualização é só leitura - o admin não deve conseguir editar,
+// partilhar ou exportar o ficheiro a partir daqui.
+const PREVIEW_HIDDEN_ACTIONS = ['share', 'broadcast', 'insert', 'collaboration', 'edit', 'save', 'export', 'print'] as const
 
 const championshipOptions: { value: ChampionshipType; label: string }[] = [
   { value: 'universitario', label: 'Universitário' },
@@ -107,7 +112,7 @@ async function loadAll(): Promise<void> {
   const docs: (DocumentInfo & { duplaId: string; teamId: string })[] = await documentsRes.json()
   const map: Record<string, DocumentInfo> = {}
   for (const d of docs) {
-    if (d.slides.length) map[`${d.duplaId}:${d.teamId}`] = { id: d.id, slides: d.slides }
+    map[`${d.duplaId}:${d.teamId}`] = { id: d.id, fileUrl: d.fileUrl, fileName: d.fileName }
   }
   documentsMap.value = map
 }
@@ -251,75 +256,76 @@ function docFor(duplaId: string, teamId: string): DocumentInfo | undefined {
   return documentsMap.value[`${duplaId}:${teamId}`]
 }
 
-function extractOrderClient(filename: string, fallbackIndex: number): number {
-  const match = filename.match(/(\d+)(?=\.[^.]*$)/)
-  if (match) return Number(match[1])
-  return 100000 + fallbackIndex
+async function togglePreview(duplaId: string, teamId: string): Promise<void> {
+  const key = `${duplaId}:${teamId}`
+
+  // já está aberto - fecha
+  if (previewOpenKey.value === key) {
+    previewOpenKey.value = null
+    return
+  }
+
+  const doc = docFor(duplaId, teamId)
+  if (!doc) return
+
+  previewOpenKey.value = key
+  previewErrorKey.value = null
+
+  // já carregado antes (ex: reabrir) - não busca de novo
+  if (previewContent.value[key]) return
+
+  previewLoadingKey.value = key
+  try {
+    const res = await fetch(`${getBackendUrl()}${doc.fileUrl}`)
+    if (!res.ok) throw new Error()
+    previewContent.value[key] = new Uint8Array(await res.arrayBuffer())
+  } catch {
+    previewErrorKey.value = key
+    previewOpenKey.value = null
+  } finally {
+    previewLoadingKey.value = null
+  }
 }
 
-function onFilesSelected(duplaId: string, teamId: string, event: Event): void {
+async function onPptxSelected(duplaId: string, teamId: string, event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  if (!files.length) return
+  const file = input.files?.[0]
+  if (!file) return
 
-  const invalid = files.some((f) => f.type !== 'image/png' && f.type !== 'image/jpeg')
-  if (invalid) {
-    errorMsg.value = 'Só são aceites imagens PNG ou JPEG.'
+  if (!file.name.toLowerCase().endsWith('.pptx')) {
+    errorMsg.value = 'Só são aceites ficheiros .pptx.'
     input.value = ''
     return
   }
 
-  const indexed = files
-    .map((file, i) => ({ file, order: extractOrderClient(file.name, i) }))
-    .sort((a, b) => a.order - b.order)
-    .map((x, i) => ({ file: x.file, order: i + 1, previewUrl: URL.createObjectURL(x.file) }))
-
-  pendingByTeam.value[`${duplaId}:${teamId}`] = indexed
-  input.value = ''
-}
-
-function movePending(key: string, index: number, direction: -1 | 1): void {
-  const list = pendingByTeam.value[key]
-  const target = index + direction
-  if (!list || target < 0 || target >= list.length) return
-  const [item] = list.splice(index, 1)
-  list.splice(target, 0, item)
-  list.forEach((s, i) => (s.order = i + 1))
-}
-
-function removePendingSlide(key: string, index: number): void {
-  pendingByTeam.value[key]?.splice(index, 1)
-}
-
-async function confirmUpload(duplaId: string, teamId: string): Promise<void> {
   const key = `${duplaId}:${teamId}`
-  const list = pendingByTeam.value[key]
-  if (!list?.length) return
   errorMsg.value = ''
   uploadingKey.value = key
   try {
     const formData = new FormData()
     formData.append('duplaId', duplaId)
     formData.append('teamId', teamId)
-    for (const s of list) {
-      formData.append('files', s.file)
-      formData.append('orders', String(s.order))
-    }
+    formData.append('file', file)
     const res = await adminFetch('/api/presentation-documents', { method: 'POST', body: formData })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      throw new Error(data.error)
+      throw new Error(data.error || 'Falha ao enviar o ficheiro.')
     }
-    delete pendingByTeam.value[key]
+    delete previewContent.value[key]
+    if (previewOpenKey.value === key) previewOpenKey.value = null
     await loadAll()
   } catch (e) {
-    errorMsg.value = e instanceof Error && e.message ? e.message : 'Falha ao enviar as imagens.'
+    errorMsg.value = e instanceof Error && e.message ? e.message : 'Falha ao enviar o ficheiro.'
   } finally {
     uploadingKey.value = null
+    input.value = ''
   }
 }
 
-async function removeDocument(id: string): Promise<void> {
+async function removeDocument(id: string, duplaId: string, teamId: string): Promise<void> {
+  const key = `${duplaId}:${teamId}`
+  delete previewContent.value[key]
+  if (previewOpenKey.value === key) previewOpenKey.value = null
   await adminFetch(`/api/presentation-documents/${id}`, { method: 'DELETE' })
   await loadAll()
 }
@@ -423,12 +429,12 @@ async function removeDocument(id: string): Promise<void> {
       <h2 class="font-semibold text-petro-primary mb-2">Duplas, Temas e Documentos</h2>
       <p class="text-xs text-gray-400 mb-4">
         <template v-if="canCreateManualDuplas">
-          Duplas criadas manualmente acima. Aqui editas o tema de cada equipa, carregas os slides/critérios, ou
+          Duplas criadas manualmente acima. Aqui editas o tema de cada equipa, carregas o ficheiro .pptx/critérios, ou
           removes uma dupla.
         </template>
         <template v-else>
           As duplas são geradas automaticamente ao criares o Chaveamento em Admin → Chaveamento. Aqui só editas o
-          tema de cada equipa, e carregas os slides/critérios.
+          tema de cada equipa, e carregas o ficheiro .pptx/critérios.
         </template>
       </p>
 
@@ -475,45 +481,44 @@ async function removeDocument(id: string): Promise<void> {
             <span class="text-xs">{{ teamName(d.teamAId) }}</span>
             <div class="flex items-center gap-2">
               <span v-if="docFor(d.id, d.teamAId)" class="text-[10px] text-petro-primary bg-petro-primary/10 px-2 py-1 rounded-full">
-                📄 {{ docFor(d.id, d.teamAId)!.slides.length }} slides
+                📄 {{ docFor(d.id, d.teamAId)!.fileName }}
               </span>
-              <button v-if="docFor(d.id, d.teamAId)" class="text-[10px] text-red-400 underline" @click="removeDocument(docFor(d.id, d.teamAId)!.id)">
+              <button
+                v-if="docFor(d.id, d.teamAId)"
+                class="text-[10px] text-petro-primary underline"
+                @click="togglePreview(d.id, d.teamAId)"
+              >
+                {{ previewOpenKey === `${d.id}:${d.teamAId}` ? 'Fechar' : 'Pré-visualizar' }}
+              </button>
+              <button v-if="docFor(d.id, d.teamAId)" class="text-[10px] text-red-400 underline" @click="removeDocument(docFor(d.id, d.teamAId)!.id, d.id, d.teamAId)">
                 Remover
               </button>
               <label class="text-[10px] bg-petro-dark text-white px-2 py-1 rounded-lg cursor-pointer">
-                Upload slides
-                <input type="file" accept="image/png,image/jpeg" multiple class="hidden" @change="onFilesSelected(d.id, d.teamAId, $event)" />
+                {{ uploadingKey === `${d.id}:${d.teamAId}` ? 'A enviar...' : 'Upload .pptx' }}
+                <input type="file" accept=".pptx" class="hidden" @change="onPptxSelected(d.id, d.teamAId, $event)" />
               </label>
             </div>
           </div>
-
-          <div v-if="pendingByTeam[`${d.id}:${d.teamAId}`]" class="mt-2 flex flex-wrap gap-2">
-            <div
-              v-for="(s, i) in pendingByTeam[`${d.id}:${d.teamAId}`]"
-              :key="s.previewUrl"
-              class="relative w-20 border border-gray-200 rounded-lg overflow-hidden bg-white"
-            >
-              <img :src="s.previewUrl" class="w-full h-14 object-cover" />
-              <div class="flex items-center justify-between px-1 py-0.5 text-[9px] bg-gray-100">
-                <span>#{{ s.order }}</span>
-                <div class="flex gap-1">
-                  <button @click="movePending(`${d.id}:${d.teamAId}`, i, -1)">◀</button>
-                  <button @click="movePending(`${d.id}:${d.teamAId}`, i, 1)">▶</button>
-                  <button class="text-red-500" @click="removePendingSlide(`${d.id}:${d.teamAId}`, i)">✕</button>
-                </div>
-              </div>
-            </div>
-            <button
-              class="self-end bg-petro-primary text-white rounded-lg px-3 py-2 text-xs font-semibold"
-              :disabled="uploadingKey === `${d.id}:${d.teamAId}`"
-              @click="confirmUpload(d.id, d.teamAId)"
-            >
-              {{ uploadingKey === `${d.id}:${d.teamAId}` ? 'A enviar...' : 'Confirmar Ordem e Enviar' }}
-            </button>
-          </div>
         </div>
 
-        <!-- Equipa B -->
+        <!-- Pré-visualização Equipa A -->
+        <div v-if="previewOpenKey === `${d.id}:${d.teamAId}`" class="bg-white border-2 border-petro-primary/20 rounded-lg p-4 mb-2">
+          <div v-if="previewLoadingKey === `${d.id}:${d.teamAId}`" class="bg-gray-100 rounded-lg h-96 flex items-center justify-center text-sm text-gray-500">
+            A carregar pré-visualização...
+          </div>
+          <div v-else-if="previewErrorKey === `${d.id}:${d.teamAId}`" class="bg-red-50 rounded-lg p-4 text-center text-sm text-red-600">
+            Falha ao carregar o ficheiro.
+          </div>
+          <PowerPointViewer
+            v-else-if="previewContent[`${d.id}:${d.teamAId}`]"
+            :content="previewContent[`${d.id}:${d.teamAId}`]"
+            :can-edit="false"
+            :hidden-actions="PREVIEW_HIDDEN_ACTIONS"
+            style="height: 45vh"
+            class="rounded-lg overflow-hidden"
+          />
+        </div>
+
         <div v-if="d.teamBId" class="bg-gray-50 rounded-lg px-3 py-2 mb-2">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-[10px] text-gray-400">Tema:</span>
@@ -536,41 +541,41 @@ async function removeDocument(id: string): Promise<void> {
             <span class="text-xs">{{ teamName(d.teamBId) }}</span>
             <div class="flex items-center gap-2">
               <span v-if="docFor(d.id, d.teamBId)" class="text-[10px] text-petro-primary bg-petro-primary/10 px-2 py-1 rounded-full">
-                📄 {{ docFor(d.id, d.teamBId)!.slides.length }} slides
+                📄 {{ docFor(d.id, d.teamBId)!.fileName }}
               </span>
-              <button v-if="docFor(d.id, d.teamBId)" class="text-[10px] text-red-400 underline" @click="removeDocument(docFor(d.id, d.teamBId)!.id)">
+              <button
+                v-if="docFor(d.id, d.teamBId)"
+                class="text-[10px] text-petro-primary underline"
+                @click="togglePreview(d.id, d.teamBId!)"
+              >
+                {{ previewOpenKey === `${d.id}:${d.teamBId}` ? 'Fechar' : 'Pré-visualizar' }}
+              </button>
+              <button v-if="docFor(d.id, d.teamBId)" class="text-[10px] text-red-400 underline" @click="removeDocument(docFor(d.id, d.teamBId)!.id, d.id, d.teamBId!)">
                 Remover
               </button>
               <label class="text-[10px] bg-petro-dark text-white px-2 py-1 rounded-lg cursor-pointer">
-                Upload slides
-                <input type="file" accept="image/png,image/jpeg" multiple class="hidden" @change="onFilesSelected(d.id, d.teamBId!, $event)" />
+                {{ uploadingKey === `${d.id}:${d.teamBId}` ? 'A enviar...' : 'Upload .pptx' }}
+                <input type="file" accept=".pptx" class="hidden" @change="onPptxSelected(d.id, d.teamBId!, $event)" />
               </label>
             </div>
           </div>
 
-          <div v-if="pendingByTeam[`${d.id}:${d.teamBId}`]" class="mt-2 flex flex-wrap gap-2">
-            <div
-              v-for="(s, i) in pendingByTeam[`${d.id}:${d.teamBId}`]"
-              :key="s.previewUrl"
-              class="relative w-20 border border-gray-200 rounded-lg overflow-hidden bg-white"
-            >
-              <img :src="s.previewUrl" class="w-full h-14 object-cover" />
-              <div class="flex items-center justify-between px-1 py-0.5 text-[9px] bg-gray-100">
-                <span>#{{ s.order }}</span>
-                <div class="flex gap-1">
-                  <button @click="movePending(`${d.id}:${d.teamBId}`, i, -1)">◀</button>
-                  <button @click="movePending(`${d.id}:${d.teamBId}`, i, 1)">▶</button>
-                  <button class="text-red-500" @click="removePendingSlide(`${d.id}:${d.teamBId}`, i)">✕</button>
-                </div>
-              </div>
+          <!-- Pré-visualização Equipa B -->
+          <div v-if="previewOpenKey === `${d.id}:${d.teamBId}`" class="bg-white border-2 border-petro-primary/20 rounded-lg p-4 mt-2">
+            <div v-if="previewLoadingKey === `${d.id}:${d.teamBId}`" class="bg-gray-100 rounded-lg h-96 flex items-center justify-center text-sm text-gray-500">
+              A carregar pré-visualização...
             </div>
-            <button
-              class="self-end bg-petro-primary text-white rounded-lg px-3 py-2 text-xs font-semibold"
-              :disabled="uploadingKey === `${d.id}:${d.teamBId}`"
-              @click="confirmUpload(d.id, d.teamBId!)"
-            >
-              {{ uploadingKey === `${d.id}:${d.teamBId}` ? 'A enviar...' : 'Confirmar Ordem e Enviar' }}
-            </button>
+            <div v-else-if="previewErrorKey === `${d.id}:${d.teamBId}`" class="bg-red-50 rounded-lg p-4 text-center text-sm text-red-600">
+              Falha ao carregar o ficheiro.
+            </div>
+            <PowerPointViewer
+              v-else-if="previewContent[`${d.id}:${d.teamBId}`]"
+              :content="previewContent[`${d.id}:${d.teamBId}`]"
+              :can-edit="false"
+              :hidden-actions="PREVIEW_HIDDEN_ACTIONS"
+              style="height: 45vh"
+              class="rounded-lg overflow-hidden"
+            />
           </div>
         </div>
       </div>

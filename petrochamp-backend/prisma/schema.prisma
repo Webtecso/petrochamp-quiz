@@ -369,29 +369,17 @@ model EvaluationCriteriaScore {
 }
 
 model PresentationDocument {
-  id        String              @id @default(cuid())
+  id        String    @id @default(cuid())
   phaseId   String
   duplaId   String
   teamId    String
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  fileUrl   String
+  fileName  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  slides    PresentationSlide[]
-
   @@unique([duplaId, teamId])
-}
-
-model PresentationSlide {
-  id         String               @id @default(cuid())
-  documentId String
-  order      Int
-  imageUrl   String
-  updatedAt  DateTime             @updatedAt
-  deletedAt  DateTime?
-  document   PresentationDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  @@unique([documentId, order])
 }
 
 model Moderator {

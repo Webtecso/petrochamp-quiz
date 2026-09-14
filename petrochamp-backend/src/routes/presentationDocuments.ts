@@ -8,12 +8,15 @@ import { emitConfigUpdated } from '../socket/configEvents'
 
 const router = Router()
 
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 80 },
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype !== 'image/png' && file.mimetype !== 'image/jpeg') {
-      cb(new Error('Só são aceites imagens PNG ou JPEG (exportadas do PowerPoint como imagens).'))
+    const isPptx = file.mimetype === PPTX_MIME || file.originalname.toLowerCase().endsWith('.pptx')
+    if (!isPptx) {
+      cb(new Error('Só são aceites ficheiros .pptx.'))
       return
     }
     cb(null, true)
@@ -21,12 +24,6 @@ const upload = multer({
 })
 
 const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads', 'presentations')
-
-function extractOrder(filename: string, fallbackIndex: number): number {
-  const match = filename.match(/(\d+)(?=\.[^.]*$)/)
-  if (match) return Number(match[1])
-  return 100000 + fallbackIndex
-}
 
 // GET /api/presentation-documents
 router.get('/', async (req, res) => {
@@ -37,19 +34,12 @@ router.get('/', async (req, res) => {
       teamId?: string
     }
 
-    const where: any = { deletedAt: null } // NOVO
+    const where: any = { deletedAt: null }
     if (phaseId) where.phaseId = phaseId
     if (duplaId) where.duplaId = duplaId
     if (teamId) where.teamId = teamId
 
-    const docs = await prisma.presentationDocument.findMany({
-      where,
-      include: {
-        slides: {
-          orderBy: { order: 'asc' }
-        }
-      }
-    })
+    const docs = await prisma.presentationDocument.findMany({ where })
 
     return res.json(docs)
   } catch (error: any) {
@@ -58,15 +48,13 @@ router.get('/', async (req, res) => {
 })
 
 // POST /api/presentation-documents
-router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
+router.post('/', requireAdmin, upload.single('file'), async (req, res) => {
   try {
     const { duplaId, teamId } = req.body as { duplaId?: string; teamId?: string }
-    const files = req.files as Express.Multer.File[] | undefined
+    const file = req.file
 
-    if (!duplaId || !teamId || !files || !files.length) {
-      return res
-        .status(400)
-        .json({ error: 'duplaId, teamId e pelo menos uma imagem são obrigatórios.' })
+    if (!duplaId || !teamId || !file) {
+      return res.status(400).json({ error: 'duplaId, teamId e um ficheiro .pptx são obrigatórios.' })
     }
 
     const dupla = await prisma.presentationDupla.findUnique({ where: { id: duplaId } })
@@ -74,88 +62,53 @@ router.post('/', requireAdmin, upload.array('files'), async (req, res) => {
       return res.status(400).json({ error: 'Esta equipa não pertence a esta dupla.' })
     }
 
-    const ordersRaw = req.body.orders as string | string[] | undefined
-    let explicitOrders: number[] | null = null
-    if (ordersRaw) {
-      const arr = Array.isArray(ordersRaw) ? ordersRaw : [ordersRaw]
-      if (arr.length === files.length) {
-        explicitOrders = arr.map(Number)
-      }
-    }
-
-    const indexed = files.map((file, i) => ({
-      file,
-      order: explicitOrders ? explicitOrders[i] : extractOrder(file.originalname, i)
-    }))
-    indexed.sort((a, b) => a.order - b.order)
-
     const folder = path.join(UPLOADS_ROOT, dupla.phaseId, teamId)
     await fs.mkdir(folder, { recursive: true })
 
     const existing = await prisma.presentationDocument.findUnique({
-      where: { duplaId_teamId: { duplaId, teamId } },
-      include: { slides: true }
+      where: { duplaId_teamId: { duplaId, teamId } }
     })
 
-    if (existing) {
-      // Ficheiros físicos: continuam a ser apagados do disco imediatamente
+    if (existing?.fileUrl) {
+      // Ficheiro físico anterior: continua a ser apagado do disco imediatamente
       // - isso é local a esta máquina, não precisa (nem faz sentido)
       // sincronizar entre admin local e admin cloud.
-      for (const slide of existing.slides) {
-        await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
-      }
-      await prisma.presentationSlide.deleteMany({ where: { documentId: existing.id } })
+      await fs.unlink(path.join(__dirname, '..', '..', existing.fileUrl)).catch(() => {})
     }
+
+    const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    await fs.writeFile(path.join(folder, safeName), file.buffer)
+    const fileUrl = `/uploads/presentations/${dupla.phaseId}/${teamId}/${safeName}`
 
     const doc = await prisma.presentationDocument.upsert({
       where: { duplaId_teamId: { duplaId, teamId } },
-      update: { deletedAt: null },
-      create: { phaseId: dupla.phaseId, duplaId, teamId }
-    })
-
-    let order = 1
-    for (const { file } of indexed) {
-      const safeName = `${Date.now()}-${order}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-      await fs.writeFile(path.join(folder, safeName), file.buffer)
-      const imageUrl = `/uploads/presentations/${dupla.phaseId}/${teamId}/${safeName}`
-
-      await prisma.presentationSlide.create({
-        data: { documentId: doc.id, order, imageUrl }
-      })
-      order += 1
-    }
-
-    const full = await prisma.presentationDocument.findUnique({
-      where: { id: doc.id },
-      include: { slides: { orderBy: { order: 'asc' } } }
+      update: { deletedAt: null, fileUrl, fileName: file.originalname },
+      create: { phaseId: dupla.phaseId, duplaId, teamId, fileUrl, fileName: file.originalname }
     })
 
     emitConfigUpdated('presentation')
-    return res.status(201).json(full)
+    return res.status(201).json(doc)
   } catch (error: any) {
-    return res.status(400).json({ error: error?.message || 'Falha ao enviar as imagens.' })
+    return res.status(400).json({ error: error?.message || 'Falha ao enviar o ficheiro.' })
   }
 })
 
 // DELETE /api/presentation-documents/:id
-// CORRIGIDO - soft delete no registo (ver nota em questions.ts); os
-// ficheiros físicos das slides continuam a ser apagados do disco de
-// imediato, já que isso é local e não passa pelo sync.
+// Soft delete no registo (ver nota em questions.ts); o ficheiro físico
+// continua a ser apagado do disco de imediato, já que isso é local e
+// não passa pelo sync.
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params
 
-    const doc = await prisma.presentationDocument.findUnique({
-      where: { id },
-      include: { slides: true }
-    })
+    const doc = await prisma.presentationDocument.findUnique({ where: { id } })
 
     if (!doc) {
       return res.status(404).json({ error: 'Documento não encontrado.' })
     }
 
-    for (const slide of doc.slides) {
-      await fs.unlink(path.join(__dirname, '..', '..', slide.imageUrl)).catch(() => {})
+    if (doc.fileUrl) {
+      await fs.unlink(path.join(__dirname, '..', '..', doc.fileUrl)).catch(() => {})
     }
 
     await prisma.presentationDocument.update({ where: { id }, data: { deletedAt: new Date() } })

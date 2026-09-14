@@ -88,11 +88,6 @@ export interface PresentationCriteriaScoreEntry {
   score: number
 }
 
-export interface PresentationSlideInfo {
-  order: number
-  imageUrl: string
-}
-
 export interface PresentationFlowState {
   stage: 'idle' | 'countdown' | 'presenting' | 'concluded'
   duplaId: number | null
@@ -105,7 +100,6 @@ export interface PresentationFlowState {
   jurorsSubmitted: string[]
   allJurorsSubmitted: boolean
   presentationMode: 'standard' | 'document'
-  slides: PresentationSlideInfo[]
   currentPage: number
 }
 
@@ -199,7 +193,6 @@ function defaultPresentationFlow(): PresentationFlowState {
     jurorsSubmitted: [],
     allJurorsSubmitted: false,
     presentationMode: 'standard',
-    slides: [],
     currentPage: 1
   }
 }
