@@ -9,3 +9,4 @@ petrochamp-backend/uploads/
 petrochamp-admin-cloud/
 .env.admin-cloud
 .db
+echo "dist/" >> .gitignore

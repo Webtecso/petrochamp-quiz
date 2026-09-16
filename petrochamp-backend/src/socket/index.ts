@@ -1659,87 +1659,182 @@ export function registerSocketHandlers(io: Server): void {
     socket.on(
       'moderator:startPresentation',
       async (payload: { duplaId: string; teamId: string; useDocument?: boolean }) => {
-        const phaseConfig = await getCurrentPhaseConfig()
-        if (
-          !phaseConfig ||
-          (phaseConfig.type !== 'apresentacao' && phaseConfig.type !== 'apresentacao_quiz')
-        )
-          return
-        if (liveState.presentationFlow.stage !== 'idle') return
-        if (liveState.presentationFlow.presentedTeamIds.includes(payload.teamId)) return
-        liveState.bracketVisible = false
+        try {
+          const phaseConfig = await getCurrentPhaseConfig()
 
-        const dupla = await prisma.presentationDupla.findUnique({ where: { id: payload.duplaId } })
-        if (!dupla || (dupla.teamAId !== payload.teamId && dupla.teamBId !== payload.teamId)) return
-
-        const team = await prisma.team.findUnique({ where: { id: payload.teamId } })
-        if (!team) return
-
-        let presentationMode: 'standard' | 'document' = 'standard'
-        let slides: { order: number; imageUrl: string }[] = []
-
-        if (payload.useDocument) {
-          const doc = await prisma.presentationDocument.findUnique({
-            where: { duplaId_teamId: { duplaId: payload.duplaId, teamId: payload.teamId } },
-            include: { slides: { orderBy: { order: 'asc' } } }
-          })
-          if (doc && doc.slides.length > 0) {
-            presentationMode = 'document'
-            slides = doc.slides.map((s) => ({ order: s.order, imageUrl: s.imageUrl }))
+          if (
+            !phaseConfig ||
+            (phaseConfig.type !== 'apresentacao' &&
+              phaseConfig.type !== 'apresentacao_quiz')
+          ) {
+            return
           }
+
+          if (liveState.presentationFlow.stage !== 'idle') return
+
+          if (
+            liveState.presentationFlow.presentedTeamIds.includes(
+              payload.teamId
+            )
+          ) {
+            return
+          }
+
+          liveState.bracketVisible = false
+
+          const dupla = await prisma.presentationDupla.findUnique({
+            where: {
+              id: payload.duplaId
+            }
+          })
+
+          if (
+            !dupla ||
+            (dupla.teamAId !== payload.teamId &&
+              dupla.teamBId !== payload.teamId)
+          ) {
+            return
+          }
+
+          const team = await prisma.team.findUnique({
+            where: {
+              id: payload.teamId
+            }
+          })
+
+          if (!team) return
+
+
+          let presentationMode: 'standard' | 'document' = 'standard'
+
+          if (payload.useDocument) {
+            const doc = await prisma.presentationDocument.findUnique({
+              where: {
+                duplaId_teamId: {
+                  duplaId: payload.duplaId,
+                  teamId: payload.teamId
+                }
+              }
+            })
+
+            if (doc && !doc.deletedAt) {
+              presentationMode = 'document'
+            }
+          }
+
+          const minutes = phaseConfig.presentationMinutes ?? 10
+
+          const presentedTeamIds =
+            liveState.presentationFlow.presentedTeamIds
+
+          liveState.presentationFlow = {
+            stage: 'countdown',
+
+            duplaId: payload.duplaId,
+
+            teamId: team.id,
+
+            teamName: team.name,
+
+            theme:
+              payload.teamId === dupla.teamAId
+                ? dupla.themeA
+                : dupla.themeB ?? dupla.themeA,
+
+            timeLeft: minutes * 60,
+
+            presentedTeamIds,
+
+            criteriaScores: [],
+
+            jurorsSubmitted: [],
+
+            allJurorsSubmitted: false,
+
+            presentationMode,
+
+            currentPage: 1
+          }
+
+          await refreshExpectedJurorCount()
+
+          broadcast()
+
+          startCountdown(10, async () => {
+            if (liveState.presentationFlow.teamId !== team.id) {
+              return
+            }
+
+            liveState.presentationFlow.stage = 'presenting'
+
+            broadcast()
+          })
+        } catch (error) {
+          console.error(
+            '[moderator:startPresentation] Erro ao iniciar apresentação:',
+            error
+          )
         }
-
-        const minutes = phaseConfig.presentationMinutes ?? 10
-        const presentedTeamIds = liveState.presentationFlow.presentedTeamIds
-
-        liveState.presentationFlow = {
-          stage: 'countdown',
-          duplaId: payload.duplaId,
-          teamId: team.id,
-          teamName: team.name,
-          theme: payload.teamId === dupla.teamAId ? dupla.themeA : (dupla.themeB ?? dupla.themeA),
-          timeLeft: minutes * 60,
-          presentedTeamIds,
-          criteriaScores: [],
-          jurorsSubmitted: [],
-          allJurorsSubmitted: false,
-          presentationMode,
-          slides,
-          currentPage: 1
-        }
-        await refreshExpectedJurorCount()
-        broadcast()
-
-        startCountdown(10, async () => {
-          if (liveState.presentationFlow.teamId !== team.id) return
-          liveState.presentationFlow.stage = 'presenting'
-        })
       }
     )
 
     socket.on('moderator:finishPresentation', async () => {
-      if (liveState.presentationFlow.stage !== 'presenting') return
-      if (liveState.presentationFlow.timeLeft > 0) return
+      if (liveState.presentationFlow.stage !== 'presenting') {
+        return
+      }
+
+      if (liveState.presentationFlow.timeLeft > 0) {
+        return
+      }
+
       liveState.presentationFlow.stage = 'concluded'
+
       const teamId = liveState.presentationFlow.teamId
-      if (teamId && !liveState.presentationFlow.presentedTeamIds.includes(teamId)) {
+
+      if (
+        teamId &&
+        !liveState.presentationFlow.presentedTeamIds.includes(teamId)
+      ) {
         liveState.presentationFlow.presentedTeamIds.push(teamId)
       }
+
       await checkAllJurorsSubmitted(broadcast)
+
       broadcast()
     })
+
 
     socket.on('moderator:presentationNextPage', () => {
       const flow = liveState.presentationFlow
       if (flow.stage !== 'presenting' || flow.presentationMode !== 'document') return
-      flow.currentPage = Math.min(flow.currentPage + 1, flow.slides.length || flow.currentPage)
+      if (flow.totalPages > 0 && flow.currentPage >= flow.totalPages) return
+      flow.currentPage += 1
       broadcast()
     })
 
+    socket.on('presentation:setSlideCount', (payload: { count: number }) => {
+      const n = Math.floor(Number(payload?.count) || 0)
+      if (n <= 0) return
+      const flow = liveState.presentationFlow
+      if (flow.stage !== 'presenting' && flow.stage !== 'countdown') return
+      flow.totalPages = n
+      if (flow.currentPage > n) flow.currentPage = n
+      broadcast()
+    })
+
+
     socket.on('moderator:presentationPrevPage', () => {
       const flow = liveState.presentationFlow
-      if (flow.stage !== 'presenting' || flow.presentationMode !== 'document') return
+
+      if (
+        flow.stage !== 'presenting' ||
+        flow.presentationMode !== 'document'
+      ) {
+        return
+      }
+
       flow.currentPage = Math.max(1, flow.currentPage - 1)
+
       broadcast()
     })
 
@@ -1869,23 +1964,41 @@ export function registerSocketHandlers(io: Server): void {
       if (
         liveState.presentationFlow.stage !== 'concluded' ||
         !liveState.presentationFlow.allJurorsSubmitted
-      )
+      ) {
         return
+      }
+
+      const presentedTeamIds =
+        liveState.presentationFlow.presentedTeamIds
+
       liveState.presentationFlow = {
         stage: 'idle',
+
         duplaId: null,
+
         teamId: null,
+
         teamName: null,
+
         theme: null,
+
         timeLeft: 0,
-        presentedTeamIds: liveState.presentationFlow.presentedTeamIds,
+
+        presentedTeamIds,
+
         criteriaScores: [],
+
         jurorsSubmitted: [],
+
         allJurorsSubmitted: false,
+
         presentationMode: 'standard',
-        slides: [],
+
         currentPage: 1
       }
+
+      liveState.bracketVisible = true
+
       broadcast()
     })
 

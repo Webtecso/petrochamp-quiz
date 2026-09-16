@@ -106,16 +106,7 @@ const isLocalAccess =
   !window.location.protocol.startsWith('http') ||
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1'
-
-// NOVO - cache simples em memória do resultado de checkAdminConfigured().
-// Depois de confirmarmos que HÁ password configurada, esse facto nunca
-// deixa de ser verdade durante a vida da aplicação (só ficaria falso de
-// novo se a BD fosse apagada, o que implica reiniciar a app de qualquer
-// forma). Isto evita fazer um pedido de rede a cada navegação para dentro
-// da área /admin. Enquanto ainda não sabemos (null) ou sabemos que NÃO
-// está configurado (false), voltamos a perguntar ao servidor a cada
-// navegação - é barato e garante que assim que o setup for concluído
-// nesta mesma sessão, a próxima navegação já reconhece isso.
+  
 let adminConfiguredCache: boolean | null = null
 
 async function isAdminConfigured(): Promise<boolean> {

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../node_modules/pptx-vue-viewer/dist";
 
 @theme {
   --color-petro-dark: #4a0f1c;

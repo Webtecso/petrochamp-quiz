@@ -101,6 +101,7 @@ export interface PresentationFlowState {
   allJurorsSubmitted: boolean
   presentationMode: 'standard' | 'document'
   currentPage: number
+  totalPages: number
 }
 
 export interface AnalyticCriteriaScoreEntry {
@@ -288,6 +289,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
       getSocket().on('state:sync', (incoming: LiveState) => {
         this.$patch((state) => {
           Object.assign(state, incoming)
+          if (incoming.presentationFlow) {
+            state.presentationFlow = { ...incoming.presentationFlow }
+          }
         })
       })
     },

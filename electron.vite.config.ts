@@ -11,18 +11,17 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
-    // NOVO - base relativa ('./') em vez da absoluta por defeito ('/').
-    // Sem isto, o index.html gerado referencia os ficheiros como
-    // "/assets/..." - funciona quando o site vive na raiz do domínio, mas
-    // parte (404) quando é servido de uma subpasta, como o Admin Cloud no
-    // Hostinger (ex: petrochamp.com/admin_quiz/). Com caminhos relativos,
-    // funciona em qualquer subpasta, e continua a funcionar normalmente no
-    // Electron/backend local (que também serve a partir da raiz).
+    optimizeDeps: {
+      include: ['jszip', 'fast-xml-parser', 'vue-i18n', 'pptx-vue-viewer'],
+      needsInterop: ['jszip'],
+    },
     base: './',
     resolve: {
-      alias: {
-        '@renderer': resolve('src/renderer/src')
-      }
+      alias: [
+        { find: 'jszip', replacement: 'jszip/lib/index.js' },
+        { find: '@renderer', replacement: resolve('src/renderer/src') },
+        { find: /pptx-vue-viewer\.css$/, replacement: resolve('src/renderer/empty.css') }
+      ]
     },
     plugins: [vue(), tailwindcss()],
     server: {

@@ -29,7 +29,6 @@ const SYNC_TABLES = [
   'repescagemVote',
   'presentationScore',
   'presentationDocument',
-  'presentationSlide',
   'matchHistory',
   'championshipHistory'
 ] as const

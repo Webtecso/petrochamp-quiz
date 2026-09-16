@@ -1,26 +1,28 @@
 import './assets/main.css'
-
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
+import { translationsEn, keyToLabel } from 'pptx-vue-viewer/i18n'
 import { Capacitor } from '@capacitor/core'
 import App from './App.vue'
 import router from './router'
 import { initApp } from './services/appInit'
 import { loadSavedBackendHost } from './services/serverConfig'
 
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  fallbackLocale: 'en',
+  messages: { en: translationsEn },
+  missing: (_locale, key) => keyToLabel(key),
+})
+
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
+app.use(i18n)
 app.mount('#app')
 
-// Build isolada do Admin Cloud (servida estaticamente fora do Electron,
-// ex: Hostinger), identificada pela mesma variável de ambiente que já
-// usamos em backendConfig.ts. Esta build só mostra o Admin - nunca o
-// Moderador/Projeção - por isso não precisa de nenhuma ligação Socket.io
-// (isso é só do campeonato em tempo real, que vive no backend Local/LAN).
-// Sem esta verificação, o main.ts tentava sempre abrir uma ligação
-// Socket.io ao backend Cloud (que nem tem Socket.io), gerando centenas de
-// tentativas falhadas em loop.
 const isAdminCloudBuild = !!(import.meta.env.VITE_CLOUD_API_URL as string | undefined)
 
 if (isAdminCloudBuild) {

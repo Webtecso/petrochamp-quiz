@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useQuizContentStore } from '../stores/quizContent'
 import { useSettingsStore } from '../stores/settings'
@@ -24,6 +24,7 @@ import EventOrganizerPresentation from '../components/EventOrganizerPresentation
 import PhaseRankingBoard from '../components/PhaseRankingBoard.vue'
 import PresentationRankingBoard from '../components/PresentationRankingBoard.vue'
 import projectionBg from '../assets/projecao-bg.jpg'
+import { PowerPointViewer, type PowerPointViewerExpose } from 'pptx-vue-viewer'
 
 const store = useCampeonatoStore()
 const quizContent = useQuizContentStore()
@@ -32,6 +33,31 @@ const phasesStore = usePhasesStore()
 const liveBracketStore = useLiveBracketStore()
 const suspensePhrases = useSuspensePhrasesStore()
 const repescagemStore = useRepescagemStore()
+
+const stageOuterRef = ref<HTMLElement | null>(null)
+const stageWidth = ref(0)
+const stageHeight = ref(0)
+
+let stageResizeObserver: ResizeObserver | null = null
+let resizeRaf = 0
+
+function recomputeStageSize(): void {
+  const el = stageOuterRef.value
+  if (!el) return
+  const cw = el.clientWidth
+  const ch = el.clientHeight
+  if (cw <= 0 || ch <= 0) return
+
+  // Preenche 100% do espaço disponível, sem manter aspect ratio.
+  stageWidth.value = cw
+  stageHeight.value = ch
+}
+
+function scheduleRecompute(): void {
+  if (resizeRaf) cancelAnimationFrame(resizeRaf)
+  resizeRaf = requestAnimationFrame(recomputeStageSize)
+}
+// ── fim stage responsivo ──────────────────────────────────────────────
 
 const championshipLabels: Record<string, string> = {
   universitario: 'Campeonato Universitário',
@@ -45,15 +71,221 @@ onMounted(async () => {
     startConfigSync()
     await quizContent.fetchQuestions(store.championship ?? undefined)
     await quizContent.fetchEvaluationItems(store.championship ?? undefined)
-    await quizContent.fetchTiebreakQuestions(store.championship ?? undefined) // NOVO
+    await quizContent.fetchTiebreakQuestions(store.championship ?? undefined)
     await settings.fetchSettings()
     await phasesStore.fetchPhases(store.championship ?? undefined)
+    await loadDocuments()
     await suspensePhrases.fetchPhrases()
     if (store.championship) await liveBracketStore.fetchBracket(store.championship)
   } catch (err) {
     console.error('Erro ao carregar dados na Projeção:', err)
   }
+
+  await nextTick()
+  if (stageOuterRef.value) {
+    stageResizeObserver = new ResizeObserver(() => scheduleRecompute())
+    stageResizeObserver.observe(stageOuterRef.value)
+    recomputeStageSize()
+  }
+  window.addEventListener('resize', scheduleRecompute)
 })
+
+onUnmounted(() => {
+  stageResizeObserver?.disconnect()
+  window.removeEventListener('resize', scheduleRecompute)
+  if (resizeRaf) cancelAnimationFrame(resizeRaf)
+})
+
+interface DocumentInfo {
+  id: number
+  fileUrl: string
+  fileName: string
+}
+
+const documentsMap = ref<Record<string, DocumentInfo>>({})
+const viewerContent = ref<Uint8Array | undefined>(undefined)
+const viewerRef = ref<PowerPointViewerExpose>()
+const viewerLoading = ref(false)
+const projSlideCount = ref(0)
+const projActiveSlideIndex = ref(0)
+const viewerError = ref<string | null>(null)
+
+async function loadDocuments(): Promise<void> {
+  if (!currentPhaseFull.value) {
+    documentsMap.value = {}
+    return
+  }
+  const res = await fetch(`${getBackendUrl()}/api/presentation-documents?phaseId=${currentPhaseFull.value.id}`)
+  const docs: (DocumentInfo & { duplaId: number; teamId: string })[] = await res.json()
+  const map: Record<string, DocumentInfo> = {}
+  for (const d of docs) map[`${d.duplaId}:${d.teamId}`] = { id: d.id, fileUrl: d.fileUrl, fileName: d.fileName }
+  documentsMap.value = map
+}
+
+function docFor(duplaId: number, teamId: string): DocumentInfo | undefined {
+  return documentsMap.value[`${duplaId}:${teamId}`]
+}
+
+const activeDocument = computed(() => {
+  if (!store.presentationFlow.duplaId || !store.presentationFlow.teamId) return undefined
+  return docFor(store.presentationFlow.duplaId, store.presentationFlow.teamId)
+})
+
+const loadedDocId = ref<number | null>(null)
+let loadSeq = 0
+
+watch(
+  [
+    () => store.presentationFlow.stage,
+    () => store.presentationFlow.presentationMode,
+    () => activeDocument.value?.id ?? null,
+  ],
+  async ([stage, mode, docId]) => {
+    if (stage !== 'presenting' || mode !== 'document' || !docId || !activeDocument.value) {
+      if (stage !== 'presenting') {
+        loadedDocId.value = null
+        viewerContent.value = undefined
+      }
+      return
+    }
+
+    if (loadedDocId.value === docId && viewerContent.value) return
+
+    const seq = ++loadSeq
+    loadedDocId.value = docId
+    viewerLoading.value = true
+    viewerError.value = null
+
+    try {
+      const url = `${getBackendUrl()}${activeDocument.value.fileUrl}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`Falha ao carregar .pptx (HTTP ${res.status}) em ${url}`)
+      const bytes = new Uint8Array(await res.arrayBuffer())
+      if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+        throw new Error('Ficheiro recebido não parece ser um .pptx válido (não é um ZIP)')
+      }
+      if (seq !== loadSeq) return
+      viewerContent.value = bytes
+    } catch (err) {
+      if (seq !== loadSeq) return
+      console.error('Erro ao carregar apresentação:', err)
+      viewerError.value = err instanceof Error ? err.message : 'Erro desconhecido'
+      loadedDocId.value = null
+    } finally {
+      if (seq === loadSeq) viewerLoading.value = false
+    }
+  },
+  { immediate: true }
+)
+
+function applyPageToViewer(page: number): void {
+  const viewer = viewerRef.value as any
+  if (!viewer || !viewerContent.value) {
+    return
+  }
+
+  const target = Math.max(0, (page ?? 1) - 1)
+
+  try {
+    // NÃO chamar setMode('present') — isso isola a navegação numa layer própria
+    if (typeof viewer.setActiveSlideIndex === 'function') {
+      viewer.setActiveSlideIndex(target)
+    } else if (typeof viewer.goTo === 'function') {
+      viewer.goTo(target)
+    }
+
+    const active =
+      typeof viewer.getActiveSlideIndex === 'function'
+        ? viewer.getActiveSlideIndex()
+        : null
+
+    projActiveSlideIndex.value = active ?? target
+  } catch (e) {
+    console.error('[proj] apply failed', e)
+  }
+}
+
+function onProjViewerMounted(): void {
+  nextTick(() => {
+    try {
+      if (typeof viewerRef.value?.setMode === 'function') {
+        const mode = viewerRef.value.getMode?.()
+        if (mode === 'present') {
+          viewerRef.value.setMode('preview')
+        }
+      }
+      projSlideCount.value = viewerRef.value?.getSlideCount() ?? 0
+      applyPageToViewer(store.presentationFlow.currentPage)
+      // garante que o viewer recalcula o próprio layout assim que monta,
+      // já dentro da caixa de tamanho correto (stageWidth/stageHeight).
+      notifyViewerResize()
+    } catch (e) {
+      console.warn('[proj] mounted', e)
+    }
+  })
+}
+
+// Tenta avisar o PowerPointViewer que o seu container mudou de tamanho,
+// experimentando os nomes de método mais comuns para este tipo de API.
+// Se nenhum existir, não faz nada (fail-safe).
+function notifyViewerResize(): void {
+  const viewer = viewerRef.value as any
+  if (!viewer) return
+  try {
+    if (typeof viewer.resize === 'function') viewer.resize()
+    else if (typeof viewer.refit === 'function') viewer.refit()
+    else if (typeof viewer.relayout === 'function') viewer.relayout()
+    else if (typeof viewer.fitToContainer === 'function') viewer.fitToContainer()
+  } catch (e) {
+    console.warn('[proj] notifyViewerResize failed', e)
+  }
+}
+
+// Sempre que a caixa do stage mudar de tamanho (resize da janela,
+// maximizar, mudar de monitor), reaplica a página atual e avisa o
+// viewer para recalcular a escala interna.
+watch([stageWidth, stageHeight], () => {
+  nextTick(() => {
+    notifyViewerResize()
+    applyPageToViewer(store.presentationFlow.currentPage)
+  })
+})
+
+watch(
+  () => store.presentationFlow.currentPage,
+  (page) => applyPageToViewer(page)
+)
+
+watch(viewerContent, (bytes) => {
+  if (!bytes) return
+  nextTick(() => {
+    applyPageToViewer(store.presentationFlow.currentPage)
+    notifyViewerResize()
+  })
+})
+
+function onProjSlideCountChange(count: number): void {
+  projSlideCount.value = count
+}
+
+function onProjActiveSlideChange(index: number): void {
+  projActiveSlideIndex.value = index
+}
+
+// se o stage/mode mudar para presenting+document, reaplica
+watch(
+  () =>
+    [
+      store.presentationFlow.stage,
+      store.presentationFlow.presentationMode,
+      store.presentationFlow.currentPage
+    ] as const,
+  ([stage, mode, page]) => {
+    if (stage === 'presenting' && mode === 'document') {
+      nextTick(() => applyPageToViewer(page))
+    }
+  }
+)
 
 watch(
   () => store.bracketVisible,
@@ -69,8 +301,8 @@ watch(
   async (newVal) => {
     if (!newVal) return
     await quizContent.fetchQuestions(newVal)
-    await quizContent.fetchEvaluationItems(newVal) // NOVO - antes só recarregava perguntas normais e de desempate ao trocar de campeonato; itens analíticos ficavam presos ao campeonato anterior.
-    await quizContent.fetchTiebreakQuestions(newVal) // NOVO
+    await quizContent.fetchEvaluationItems(newVal)
+    await quizContent.fetchTiebreakQuestions(newVal)
     await phasesStore.fetchPhases(newVal)
   }
 )
@@ -116,52 +348,23 @@ const bracket = computed<any>(() => {
 })
 
 const phaseQuestions = computed(() => quizContent.questionsForPhase(store.phase))
-// NOVO - pool de itens analíticos da fase atual, paralelo a
-// 'phaseQuestions'. Sem isto não havia nenhuma forma de encontrar o
-// item ativo quando o sorteio caía num item analítico em vez de uma
-// pergunta normal.
 const phaseEvaluationItems = computed(() => quizContent.itemsForPhase(store.phase))
 
 const currentQuizQuestion = computed(() => phaseQuestions.value.find((q) => String(q.id) === String(store.currentQuestionId)))
-// NOVO - item analítico atualmente sorteado, localizado por
-// store.currentAnalyticItemId (espelha liveState.currentAnalyticItemId
-// do backend).
 const currentAnalyticItem = computed(() =>
   phaseEvaluationItems.value.find((i) => i.id === store.currentAnalyticItemId)
 )
 
-// CORRIGIDO - antes 'currentQuestion' só olhava para
-// store.currentQuestionId, que o backend deixa a 'null' sempre que o
-// item sorteado é analítico (currentItemSource === 'analytic'). Como
-// resultado, sempre que calhava uma Pergunta Analítica, o ecrã de
-// batalha ficava totalmente vazio (sem texto, sem opções, sem imagem)
-// - currentQuestion.value era sempre 'undefined' nesse caso. Agora
-// escolhemos a fonte certa consoante store.currentItemSource, e todo o
-// resto do ecrã (texto, imagem, opções de resposta) passa a funcionar
-// igual para os dois tipos de item, porque ambos alimentam o mesmo
-// computed.
 const currentQuestion = computed(() => {
   if (store.currentItemSource === 'analytic') return currentAnalyticItem.value
   return currentQuizQuestion.value
 })
 
-// CORRIGIDO - EvaluationItem usa 'correctIndex' singular (não um array
-// 'correctIndexes' como se assumiu antes), igual a QuizQuestion. Basta
-// ler diretamente.
 const currentQuestionCorrectIndex = computed(() => {
   const q = currentQuestion.value as { correctIndex?: number | null } | undefined
   return typeof q?.correctIndex === 'number' ? q.correctIndex : -1
 })
 
-// NOVO - EvaluationItem não tem um campo 'options' (array) como
-// QuizQuestion; guarda cada opção em campos separados
-// (optionA/B/C/D), e só faz sentido construir a lista quando
-// mode === 'multipla_escolha' - em modo 'aberta' não há opções, a
-// resposta é avaliada manualmente pelos jurados (fluxo já existente via
-// store.awaitingJuryEvaluation). Este computed devolve:
-// - o array de opções da pergunta normal (QuizQuestion.options), OU
-// - as opções montadas do item analítico em 'multipla_escolha', OU
-// - null quando não há opções para mostrar (item analítico 'aberta').
 const currentQuestionOptions = computed((): { label: string; text: string }[] | null => {
   if (store.currentItemSource === 'analytic') {
     const item = currentAnalyticItem.value
@@ -174,15 +377,15 @@ const currentQuestionOptions = computed((): { label: string; text: string }[] | 
   return q?.options ?? null
 })
 
-// NOVO - sinaliza uma pergunta analítica aberta ativa (sem opções, à
-// espera de avaliação dos jurados), para o template mostrar uma
-// mensagem adequada em vez de tentar renderizar <AnswerOptions> sem
-// opções nenhumas.
 const isOpenAnalyticQuestion = computed(
   () => store.currentItemSource === 'analytic' && currentAnalyticItem.value?.mode === 'aberta'
 )
 
 const currentPhaseFull = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
+
+watch(currentPhaseFull, async () => {
+  await loadDocuments()
+})
 
 const isPresentationPhaseNow = computed(
   () => currentPhaseFull.value?.type === 'apresentacao' || currentPhaseFull.value?.type === 'apresentacao_quiz'
@@ -197,27 +400,13 @@ const teamAName = computed(() => store.teamA?.name ?? 'EQUIPA A')
 const teamALogo = computed(() => store.teamA?.logoUrl ?? null)
 const teamBName = computed(() => store.teamB?.name ?? 'EQUIPA B')
 const teamBLogo = computed(() => store.teamB?.logoUrl ?? null)
-// Passa agora a funcionar também para itens analíticos, já que
-// 'currentQuestion' cobre os dois tipos.
 const questionImage = computed(() => (currentQuestion.value as { imageUrl?: string | null } | undefined)?.imageUrl ?? null)
 
-// Pergunta de desempate ativa, espelha currentQuestion mas usa
-// store.tiebreak.currentQuestionId e a lista carregada de TiebreakQuestion.
 const currentTiebreakQuestion = computed(() =>
   quizContent.tiebreakQuestionsForPhase(store.phase).find((q) => String(q.id) === String(store.tiebreak.currentQuestionId))
 )
 const tiebreakQuestionImage = computed(() => currentTiebreakQuestion.value?.imageUrl ?? null)
 
-// CORRIGIDO - caminhos relativos (ex: 'uploads/xxx.jpg') resolviam
-// apenas para '/uploads/xxx.jpg', que o browser interpretava contra a
-// própria origem da Projeção (Vite, porta 5173) - onde esse ficheiro
-// não existe. Ele só existe no backend (porta 4000, onde
-// express.static('/uploads', ...) está montado). Por isso NENHUMA
-// imagem de pergunta, de desempate, ou logo de equipa aparecia, mesmo
-// com o caminho gravado corretamente na base de dados - só as slides
-// de apresentação em modo documento funcionavam, porque já prefixavam
-// com getBackendUrl() à parte. Agora formatImageUrl faz o mesmo para
-// todos os casos relativos.
 function formatImageUrl(url: string | null | undefined): string {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('file://')) {
@@ -230,7 +419,6 @@ function formatImageUrl(url: string | null | undefined): string {
   return `${getBackendUrl()}${path}`
 }
 
-const slideCount = computed(() => Math.max(1, store.presentationFlow.slides?.length ?? 0))
 const startMessage = computed(() => {
   if (!store.championship) return 'A aguardar o início do evento...'
   const base = `A ${championshipLabels[store.championship]} vai começar dentro de momentos...`
@@ -272,7 +460,6 @@ const roundJustEnded = computed(() => {
 
 <template>
   <div class="relative min-h-screen">
-    <!-- Fundo nítido (sem camada por cima) -->
     <div
       class="fixed inset-0 -z-10 bg-cover bg-center"
       :style="{ backgroundImage: `url(${projectionBg})` }"
@@ -284,7 +471,6 @@ const roundJustEnded = computed(() => {
       </div>
     </div>
 
-    <!-- 1. TELA DE ESPERA INICIAL -->
     <div v-if="!store.championship" class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white">
       <div class="text-center flex flex-col items-center">
         <LogoMark class="mb-6" />
@@ -293,7 +479,6 @@ const roundJustEnded = computed(() => {
       </div>
     </div>
 
-    <!-- 2. Tela de Vencedor -->
     <div
       v-else-if="store.championReveal.active"
       class="min-h-screen relative overflow-hidden flex flex-col items-center justify-center gap-8 p-10 text-white champion-reveal"
@@ -319,7 +504,6 @@ const roundJustEnded = computed(() => {
       </p>
     </div>
 
-    <!-- 3. Pódio Ativo -->
     <PodiumScreen
       v-else-if="store.podium.active"
       :phase-number="store.podium.phaseNumber"
@@ -329,7 +513,6 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!-- 4. Revelação do Pódio -->
     <SuspenseScreen
       v-else-if="store.podiumReveal.stage === 'suspense'"
       :message="store.podiumReveal.suspensePhrase ?? 'O momento da verdade chegou...'"
@@ -342,17 +525,6 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!--
-      4.5 Batalha terminou (fim da última pergunta do Quiz de um round).
-      NOVO - o backend passou a mostrar este estado (phaseFlow.stage ===
-      'battleEnded') antes de avançar para ranking/repescagem/parceiros,
-      e só avança quando o moderador confirmar
-      (moderator:continueAfterBattleEnded). Tem de vir ANTES do bloco
-      'ranking' abaixo, porque phaseFlow é o MESMO objeto de estado - se
-      isto não estiver aqui em cima, o v-else-if de 'ranking' nunca
-      dispara mal a fase muda, mas também nunca existe uma janela visual
-      para 'battleEnded' em si.
-    -->
     <div
       v-else-if="store.phaseFlow.stage === 'battleEnded'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
@@ -365,7 +537,6 @@ const roundJustEnded = computed(() => {
       </p>
     </div>
 
-    <!-- 5. Sequência de Fim de Fase -->
     <div
       v-else-if="store.phaseFlow.stage === 'ranking'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
@@ -374,16 +545,6 @@ const roundJustEnded = computed(() => {
       <PhaseRankingBoard :rankings="store.phaseRankings" :eliminated-team-ids="store.eliminatedTeamIds" />
     </div>
 
-    <!--
-      6.75 Ranking pós-apresentações (só fase apresentacao_quiz) - NOVO.
-      Mostra só as notas de apresentação (sem AVANÇA/ELIMINADA), porque
-      nesta fase quem passa só é decidido depois do Quiz, com a média
-      ponderada pelos pesos definidos no Admin (ver finishMatch no
-      backend). Diferente do bloco 5 acima (store.phaseFlow.stage ===
-      'ranking'), que é o ranking real com eliminação, usado só na fase
-      'apresentacao' pura - este bloco nunca reaproveita esse componente,
-      para não mostrar avança/eliminada indevidamente aqui.
-    -->
     <div
       v-else-if="store.phaseFlow.stage === 'presentationRanking'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
@@ -408,7 +569,6 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!-- 5.5 Votação de Repescagem -->
     <SuspenseScreen
       v-else-if="store.repescagemReveal.stage === 'suspense'"
       message="A VOTAÇÃO VAI COMEÇAR - Prepare-se!"
@@ -458,11 +618,9 @@ const roundJustEnded = computed(() => {
       </div>
     </div>
 
-    <!-- 6. Transições de Fase manuais -->
     <PartnerCarousel v-else-if="store.phaseTransition.stage === 'carousel'" transparent />
     <WebtecPresentation v-else-if="store.phaseTransition.stage === 'webtec'" transparent />
 
-    <!-- 6.5 APRESENTAÇÃO DE PROJETOS -->
     <CountdownScreen
       v-else-if="store.presentationFlow.stage === 'countdown'"
       :seconds="store.countdown.value"
@@ -470,22 +628,21 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!-- 6.6 Em apresentação - modo documento -->
     <div
       v-else-if="store.presentationFlow.stage === 'presenting' && store.presentationFlow.presentationMode === 'document'"
-      class="min-h-screen bg-black relative overflow-hidden"
+      class="h-screen w-screen bg-black flex flex-col overflow-hidden pptx-projection"
     >
-      <div class="absolute top-0 inset-x-0 flex items-start justify-between px-6 py-4 bg-black/70 z-20 text-white gap-4">
-        <div class="flex flex-row items-center gap-3 min-w-0">
+      <div class="h-16 shrink-0 flex items-center justify-between px-6 bg-black text-white gap-4 relative z-[40]">
+        <div class="flex items-center gap-3 min-w-0">
           <span
-            class="font-black text-amber-400 uppercase tracking-wide truncate shrink-0"
+            class="font-black text-amber-400 uppercase tracking-wide truncate"
             style="font-size: clamp(1rem, 1.6vw, 1.5rem)"
           >
             {{ store.presentationFlow.teamName }}
           </span>
           <span
             v-if="store.presentationFlow.theme"
-            class="inline-block bg-white/10 text-white/90 rounded-full px-3 py-1 font-semibold truncate min-w-0"
+            class="bg-white/10 rounded-full px-3 py-1 font-semibold truncate"
             style="font-size: clamp(0.7rem, 1.1vw, 0.95rem)"
           >
             {{ store.presentationFlow.theme }}
@@ -493,35 +650,61 @@ const roundJustEnded = computed(() => {
         </div>
         <div class="flex items-center gap-3 shrink-0">
           <span
-            class="bg-amber-500 text-black rounded-full px-4 py-1.5 font-black tracking-wide"
+            class="bg-amber-500 text-black rounded-full px-4 py-1.5 font-black"
             style="font-size: clamp(0.85rem, 1.2vw, 1.1rem)"
           >
-            Slide {{ store.presentationFlow.currentPage }} / {{ store.presentationFlow.slides?.length ?? 0 }}
+            Slide {{ store.presentationFlow.currentPage }}
+            <template v-if="projSlideCount"> / {{ projSlideCount }}</template>
           </span>
           <span
-            class="bg-white text-black rounded-full px-4 py-1.5 font-black tracking-widest tabular-nums"
+            class="bg-white text-black rounded-full px-4 py-1.5 font-black tabular-nums"
             style="font-size: clamp(0.85rem, 1.2vw, 1.1rem)"
           >
-            {{ String(Math.floor(store.presentationFlow.timeLeft / 60)).padStart(2, '0') }}:{{ String(store.presentationFlow.timeLeft % 60).padStart(2, '0') }}
+            {{ String(Math.floor(store.presentationFlow.timeLeft / 60)).padStart(2, '0') }}:{{
+              String(store.presentationFlow.timeLeft % 60).padStart(2, '0')
+            }}
           </span>
         </div>
       </div>
-      <div class="absolute inset-0 pt-20 flex overflow-hidden">
+
+      <div
+        ref="stageOuterRef"
+        class="flex-1 min-h-0 min-w-0 relative overflow-hidden bg-black flex items-center justify-center"
+      >
+        <div v-if="viewerLoading && !viewerContent" class="absolute inset-0 flex items-center justify-center text-white z-10">
+          A carregar apresentação...
+        </div>
+        <div v-else-if="viewerError && !viewerContent" class="absolute inset-0 flex items-center justify-center text-red-400 text-center px-8 z-10">
+          {{ viewerError }}
+        </div>
+
         <div
-          class="shrink-0 flex transition-transform duration-500 ease-in-out"
-          :style="{
-            transform: `translateX(-${(store.presentationFlow.currentPage - 1) * (100 / slideCount)}%)`,
-            width: `${slideCount * 100}%`
-          }"
+          v-if="viewerContent"
+          :style="{ width: stageWidth + 'px', height: stageHeight + 'px' }"
+          style="position: relative; overflow: hidden; background: #000;"
         >
-          <div
-            v-for="s in store.presentationFlow.slides ?? []"
-            :key="s.order"
-            class="h-full flex items-center justify-center shrink-0"
-            :style="{ width: `${100 / slideCount}%` }"
-          >
-            <img :src="`${getBackendUrl()}${s.imageUrl}`" class="max-w-full max-h-full object-contain" />
-          </div>
+          <PowerPointViewer
+            ref="viewerRef"
+            class="pptx-projection-viewer"
+            style="width: 100%; height: 100%;"
+            :content="viewerContent"
+            :can-edit="false"
+            :fit-padding="0"
+            :hidden-actions="[
+              'share',
+              'broadcast',
+              'insert',
+              'collaboration',
+              'edit',
+              'save',
+              'export',
+              'print'
+            ]"
+            :theme="{ colors: { primary: '#d4af37', background: '#000000', foreground: '#ffffff' } }"
+            @vue:mounted="onProjViewerMounted"
+            @slide-count-change="onProjSlideCountChange"
+            @active-slide-change="onProjActiveSlideChange"
+          />
         </div>
       </div>
     </div>
@@ -538,7 +721,6 @@ const roundJustEnded = computed(() => {
       </div>
     </div>
 
-    <!-- 6.7 Apresentação Concluída -->
     <div
       v-else-if="store.presentationFlow.stage === 'concluded'"
       class="min-h-screen flex flex-col items-center justify-center gap-4 p-10 text-white text-center"
@@ -547,14 +729,12 @@ const roundJustEnded = computed(() => {
       <p style="font-size: clamp(1.1rem, 2vw, 1.75rem)">Muito obrigado, {{ store.presentationFlow.teamName }}!</p>
     </div>
 
-    <!-- 6.8 Introdução ao Quiz -->
     <SuspenseScreen
       v-else-if="store.phaseFlow.stage === 'quizIntro'"
       message="Vamos entrar agora para a Batalha de Quiz - as equipas vão disputar para a eliminação!"
       transparent
     />
 
-    <!-- 7. CHAVEAMENTO -->
     <div
       v-else-if="isPhaseBracketVisible"
       class="min-h-screen flex flex-col items-center justify-center gap-8 px-10 py-10 bracket-container"
@@ -575,7 +755,6 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!-- 8.5 Desempate - ativo, com pergunta e respostas em tempo real -->
     <div
       v-else-if="store.tiebreak.active"
       class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container tiebreak-container"
@@ -674,7 +853,6 @@ const roundJustEnded = computed(() => {
       </footer>
     </div>
 
-    <!-- 8. Contagem Regressiva Geral -->
     <CountdownScreen
       v-else-if="store.countdown.active"
       :seconds="store.countdown.value"
@@ -699,17 +877,6 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
-    <!--
-      10. BATALHA ATIVA
-      CORRIGIDO - este bloco antes só renderizava perguntas normais
-      (currentQuestion vinha exclusivamente de store.currentQuestionId).
-      Como 'currentQuestion' agora é um computed unificado (ver script),
-      este MESMO bloco passa a mostrar corretamente também os itens
-      analíticos - o texto, a imagem (agora com formatImageUrl corrigido)
-      e as opções de resposta reaproveitam a mesma estrutura já adaptável
-      (flex + clamp() + object-contain), que redimensiona a caixa central
-      conforme o comprimento do texto e a presença/ausência de imagem.
-    -->
     <div
       v-else-if="isBattleActiveState"
       class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container"
@@ -769,18 +936,6 @@ const roundJustEnded = computed(() => {
                 {{ currentQuestion?.text }}
               </h1>
               <div class="w-full mt-2 text-left">
-                <!--
-                  CORRIGIDO - usava 'currentQuestion.options' diretamente,
-                  mas esse campo só existe em QuizQuestion. Para
-                  EvaluationItem (perguntas analíticas), as opções vêm em
-                  optionA/B/C/D separados, já tratados pelo computed
-                  'currentQuestionOptions' (existia no script mas nunca
-                  tinha sido ligado aqui no template - por isso as
-                  perguntas analíticas nunca apareciam na Projeção).
-                  Para o modo 'aberta' (sem opções, avaliação manual dos
-                  jurados) mostramos uma mensagem em vez de tentar
-                  renderizar opções inexistentes.
-                -->
                 <AnswerOptions
                   v-if="currentQuestion && currentQuestionOptions"
                   :options="currentQuestionOptions"
@@ -1022,5 +1177,84 @@ const roundJustEnded = computed(() => {
 @keyframes championNamePulse {
   0%, 100% { text-shadow: 0 0 20px rgba(251, 191, 36, 0.6); }
   50% { text-shadow: 0 0 40px rgba(251, 191, 36, 1); }
+}
+</style>
+
+<style>
+/* ── Projeção PPTX: ecrã limpo, só o slide ativo ───────────────────── */
+
+body:has(.pptx-projection) {
+  overflow: hidden !important;
+}
+
+.pptx-projection {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+.pptx-projection-viewer {
+  width: 100% !important;
+  height: 100% !important;
+  background: #000 !important;
+}
+
+/* Ribbon / title / status / toolbars */
+.pptx-projection [class*='ribbon'],
+.pptx-projection [class*='Ribbon'],
+.pptx-projection [class*='TitleBar'],
+.pptx-projection [class*='title-bar'],
+.pptx-projection [class*='StatusBar'],
+.pptx-projection [class*='status-bar'],
+.pptx-projection [class*='toolbar'],
+.pptx-projection [class*='Toolbar'],
+.pptx-projection .pptx-vue-presentation-toolbar-slot {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Rail de miniaturas (lista vertical à esquerda) */
+.pptx-projection [class*='SlideRail'],
+.pptx-projection [class*='slide-rail'],
+.pptx-projection [class*='slideRail'],
+.pptx-projection [class*='Thumbnail'],
+.pptx-projection [class*='thumbnail'],
+.pptx-projection aside,
+.pptx-projection nav[class*='rail'] {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Layer de presentation mode (se ainda aparecer) */
+.pptx-vue-presentation {
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1 !important;
+  overflow: hidden !important;
+  background: #000 !important;
+}
+
+.pptx-vue-presentation-frame {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.pptx-vue-presentation-toolbar-slot {
+  display: none !important;
 }
 </style>

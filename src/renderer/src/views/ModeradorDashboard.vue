@@ -92,7 +92,9 @@ const currentQuestion = computed(() => {
 
 const currentAnalyticItem = computed(() => {
   if (store.currentItemSource !== 'analytic' || !store.currentAnalyticItemId) return null
-  return quizContent.evaluationItems.find((i) => i.id === store.currentAnalyticItemId) ?? null
+  const id = String(store.currentAnalyticItemId)
+  // procura em TODOS os itens carregados (não só por fase)
+  return quizContent.evaluationItems.find((i) => String(i.id) === id) ?? null
 })
 
 const activeDisplay = computed(() => {
@@ -105,7 +107,7 @@ const activeDisplay = computed(() => {
     }
   }
   if (currentAnalyticItem.value) {
-    const it = currentAnalyticItem.value
+    const it = currentAnalyticItem.value as any
     return {
       text: it.text,
       options: buildEvaluationItemOptions(it),
@@ -122,7 +124,9 @@ const isAnalyticScopeAll = computed(() => currentAnalyticItem.value?.scope === '
 const usesDevices = computed(() => modeStore.deviceMode === 'com-dispositivos')
 const phaseLabel = computed(() => phasesStore.labelFor(store.phase))
 const phaseConfig = computed(() => phasesStore.configFor(store.phase))
-const currentPhaseFull = computed(() => phasesStore.phases.find((p) => Number(p.order) === Number(store.phase)))
+const currentPhaseFull = computed(() =>
+  phasesStore.phases.find((p) => Number(p.order) === Number(store.phase))
+)
 
 function redirectIfPresentationPhase(): boolean {
   if (store.teamA && store.teamB) return false
@@ -156,7 +160,9 @@ const currentTiebreakQuestion = computed(() =>
   tiebreakPhaseQuestions.value.find((q) => String(q.id) === String(store.tiebreak?.currentQuestionId))
 )
 
-const canFinish = computed(() => roundIsComplete.value && !isTiedUnresolved.value && !store.awaitingJuryEvaluation)
+const canFinish = computed(
+  () => roundIsComplete.value && !isTiedUnresolved.value && !store.awaitingJuryEvaluation
+)
 const dashboardDisabled = computed(() => store.isRunning)
 const isOpenQuestionActive = computed(() => store.currentItemMode === 'aberta')
 
@@ -192,11 +198,17 @@ function finishMatch(): void {
   <div v-if="store.teamA && store.teamB" class="flex-1 flex flex-col bg-petro-bg min-h-screen">
     <header class="flex items-center justify-between px-4 sm:px-8 py-4 bg-white shadow-sm">
       <div class="flex items-center gap-2">
-        <div class="flex items-center gap-2 bg-petro-primary/10 text-petro-primary px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm">
+        <div
+          class="flex items-center gap-2 bg-petro-primary/10 text-petro-primary px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm"
+        >
           FASE {{ store.phase }} <span class="font-normal">{{ phaseLabel.toUpperCase() }}</span>
         </div>
-        <span v-if="isAnalyticActive" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase ml-2">
-          Analítica</span>
+        <span
+          v-if="isAnalyticActive"
+          class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase ml-2"
+        >
+          Analítica
+        </span>
       </div>
       <LogoMark />
       <div class="flex items-center gap-4 text-xs sm:text-sm text-gray-500">
@@ -206,7 +218,10 @@ function finishMatch(): void {
       </div>
     </header>
 
-    <main v-if="!phaseConfig.useQuestions" class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4">
+    <main
+      v-if="!phaseConfig.useQuestions"
+      class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4"
+    >
       <p class="text-gray-500 text-sm max-w-sm">
         Esta fase não usa perguntas automáticas.
         <span v-if="phaseConfig.useJudges">A pontuação é atribuída pelos Jurados.</span>
@@ -222,15 +237,23 @@ function finishMatch(): void {
 
     <template v-else-if="store.tiebreak?.active || store.tiebreak?.pending">
       <div class="flex items-center justify-center py-3 px-4 sm:px-8">
-        <span class="bg-amber-100 text-amber-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wide">
+        <span
+          class="bg-amber-100 text-amber-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wide"
+        >
           ⚔️ Desempate
         </span>
       </div>
-      <main v-if="store.tiebreak.pending" class="flex-1 flex flex-col items-center justify-center gap-3 px-4 sm:px-8 py-6">
+      <main
+        v-if="store.tiebreak.pending"
+        class="flex-1 flex flex-col items-center justify-center gap-3 px-4 sm:px-8 py-6"
+      >
         <div class="text-6xl font-black text-amber-500">{{ store.countdown.value }}</div>
         <p class="text-sm text-amber-600 font-semibold">O desempate vai começar...</p>
       </main>
-      <main v-else-if="currentTiebreakQuestion" class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto">
+      <main
+        v-else-if="currentTiebreakQuestion"
+        class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto"
+      >
         <TeamScoreCard
           :name="store.teamA?.name ?? ''"
           :score="store.teamAScore"
@@ -279,7 +302,9 @@ function finishMatch(): void {
     </template>
 
     <template v-else-if="activeDisplay">
-      <main class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto">
+      <main
+        class="flex-1 flex flex-col lg:flex-row items-stretch lg:items-center justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto min-h-0"
+      >
         <TeamScoreCard
           :name="store.teamA?.name ?? ''"
           :score="store.teamAScore"
@@ -308,7 +333,10 @@ function finishMatch(): void {
           :active="store.activeTeam === 'B' && !store.teamBAnswer"
         />
       </main>
-      <div v-if="isOpenQuestionActive" class="flex items-center justify-center gap-4 py-3 px-4 sm:px-8 border-t border-gray-100">
+      <div
+        v-if="isOpenQuestionActive"
+        class="flex items-center justify-center gap-4 py-3 px-4 sm:px-8 border-t border-gray-100"
+      >
         <button
           v-if="store.isRunning"
           class="bg-amber-500 text-white rounded-lg px-5 py-2.5 text-sm font-semibold shadow"
@@ -316,7 +344,10 @@ function finishMatch(): void {
         >
           ⏹️ Terminar Resposta
         </button>
-        <span v-else-if="store.awaitingJuryEvaluation" class="bg-amber-100 text-amber-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wide">
+        <span
+          v-else-if="store.awaitingJuryEvaluation"
+          class="bg-amber-100 text-amber-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wide"
+        >
           ⏳ A aguardar avaliação dos jurados
         </span>
       </div>
@@ -332,21 +363,44 @@ function finishMatch(): void {
       />
     </template>
 
-    <main v-else class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4">
+    <main
+      v-else
+      class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4"
+    >
       <template v-if="roundIsComplete">
         <p v-if="isTiedUnresolved" class="text-amber-700 text-sm font-semibold max-w-sm">
-          Empate! ({{ store.teamAScore }} - {{ store.teamBScore }}) - dispara o desempate antes de finalizar.
+          Empate! ({{ store.teamAScore }} - {{ store.teamBScore }}) - dispara o desempate antes de
+          finalizar.
         </p>
-        <button v-if="isTiedUnresolved" class="bg-amber-500 text-white rounded-lg px-6 py-3 font-semibold shadow" @click="startTiebreak">
+        <button
+          v-if="isTiedUnresolved"
+          class="bg-amber-500 text-white rounded-lg px-6 py-3 font-semibold shadow"
+          @click="startTiebreak"
+        >
           ⚔️ Iniciar Desempate
         </button>
         <p v-else class="text-gray-500 text-sm max-w-sm">
-          As duas equipas completaram o número de perguntas desta ronda. Já podes finalizar a rodada.
+          As duas equipas completaram o número de perguntas desta ronda. Já podes finalizar a
+          rodada.
         </p>
       </template>
+
+      <!-- CORRIGIDO: distinguir item analítico em falta vs. zero perguntas -->
+      <div
+        v-else-if="store.currentItemSource === 'analytic' && store.currentAnalyticItemId"
+        class="flex flex-col items-center gap-3"
+      >
+        <p class="text-amber-700 text-sm max-w-sm font-semibold">
+          Item analítico ativo (id: {{ store.currentAnalyticItemId }}), mas não foi encontrado no
+          cache local da Fase {{ store.phase }}. Confirma Evaluation Items do tipo «analítica» no
+          Admin e recarrega.
+        </p>
+      </div>
+
       <div v-else class="flex flex-col items-center gap-3">
         <p class="text-gray-400 text-sm max-w-sm">
-          Ainda não há perguntas cadastradas para a Fase {{ store.phase }}. Vai ao Painel do Administrador para adicionar perguntas.
+          Ainda não há perguntas cadastradas para a Fase {{ store.phase }}. Vai ao Painel do
+          Administrador para adicionar perguntas.
         </p>
       </div>
     </main>

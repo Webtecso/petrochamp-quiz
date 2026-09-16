@@ -1,0 +1,2387 @@
+/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
+@layer properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){*,:before,:after,::backdrop{--tw-translate-x:0;--tw-translate-y:0;--tw-translate-z:0;--tw-rotate-x:initial;--tw-rotate-y:initial;--tw-rotate-z:initial;--tw-skew-x:initial;--tw-skew-y:initial;--tw-space-y-reverse:0;--tw-divide-y-reverse:0;--tw-border-style:solid;--tw-leading:initial;--tw-font-weight:initial;--tw-tracking:initial;--tw-ordinal:initial;--tw-slashed-zero:initial;--tw-numeric-figure:initial;--tw-numeric-spacing:initial;--tw-numeric-fraction:initial;--tw-shadow:0 0 #0000;--tw-shadow-color:initial;--tw-shadow-alpha:100%;--tw-inset-shadow:0 0 #0000;--tw-inset-shadow-color:initial;--tw-inset-shadow-alpha:100%;--tw-ring-color:initial;--tw-ring-shadow:0 0 #0000;--tw-inset-ring-color:initial;--tw-inset-ring-shadow:0 0 #0000;--tw-ring-inset:initial;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-offset-shadow:0 0 #0000;--tw-outline-style:solid;--tw-blur:initial;--tw-brightness:initial;--tw-contrast:initial;--tw-grayscale:initial;--tw-hue-rotate:initial;--tw-invert:initial;--tw-opacity:initial;--tw-saturate:initial;--tw-sepia:initial;--tw-drop-shadow:initial;--tw-drop-shadow-color:initial;--tw-drop-shadow-alpha:100%;--tw-drop-shadow-size:initial;--tw-backdrop-blur:initial;--tw-backdrop-brightness:initial;--tw-backdrop-contrast:initial;--tw-backdrop-grayscale:initial;--tw-backdrop-hue-rotate:initial;--tw-backdrop-invert:initial;--tw-backdrop-opacity:initial;--tw-backdrop-saturate:initial;--tw-backdrop-sepia:initial;--tw-duration:initial;--tw-ease:initial;--tw-content:"";--tw-scale-x:1;--tw-scale-y:1;--tw-scale-z:1}}}@layer theme{:root,:host{--font-sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";--font-mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;--color-red-300:oklch(80.8% .114 19.571);--color-red-400:oklch(70.4% .191 22.216);--color-red-500:oklch(63.7% .237 25.331);--color-red-600:oklch(57.7% .245 27.325);--color-red-700:oklch(50.5% .213 27.518);--color-red-900:oklch(39.6% .141 25.723);--color-orange-500:oklch(70.5% .213 47.604);--color-amber-50:oklch(98.7% .022 95.277);--color-amber-100:oklch(96.2% .059 95.617);--color-amber-200:oklch(92.4% .12 95.746);--color-amber-300:oklch(87.9% .169 91.605);--color-amber-400:oklch(82.8% .189 84.429);--color-amber-500:oklch(76.9% .188 70.08);--color-amber-600:oklch(66.6% .179 58.318);--color-amber-700:oklch(55.5% .163 48.998);--color-amber-900:oklch(41.4% .112 45.904);--color-yellow-400:oklch(85.2% .199 91.936);--color-yellow-500:oklch(79.5% .184 86.047);--color-yellow-600:oklch(68.1% .162 75.834);--color-lime-500:oklch(76.8% .233 130.85);--color-green-50:oklch(98.2% .018 155.826);--color-green-300:oklch(87.1% .15 154.449);--color-green-400:oklch(79.2% .209 151.711);--color-green-500:oklch(72.3% .219 149.579);--color-green-600:oklch(62.7% .194 149.214);--color-green-700:oklch(52.7% .154 150.069);--color-green-900:oklch(39.3% .095 152.535);--color-emerald-500:oklch(69.6% .17 162.48);--color-sky-500:oklch(68.5% .169 237.323);--color-blue-300:oklch(80.9% .105 251.813);--color-blue-400:oklch(70.7% .165 254.624);--color-blue-500:oklch(62.3% .214 259.815);--color-purple-50:oklch(97.7% .014 308.299);--color-purple-400:oklch(71.4% .203 305.504);--color-purple-500:oklch(62.7% .265 303.9);--color-purple-600:oklch(55.8% .288 302.321);--color-gray-500:oklch(55.1% .027 264.364);--color-neutral-800:oklch(26.9% 0 none);--color-neutral-900:oklch(20.5% 0 none);--color-black:#000;--color-white:#fff;--spacing:.25rem;--container-md:28rem;--container-5xl:64rem;--text-xs:.75rem;--text-xs--line-height:calc(1 / .75);--text-sm:.875rem;--text-sm--line-height:calc(1.25 / .875);--text-base:1rem;--text-base--line-height:calc(1.5 / 1);--text-lg:1.125rem;--text-lg--line-height:calc(1.75 / 1.125);--text-xl:1.25rem;--text-xl--line-height:calc(1.75 / 1.25);--text-2xl:1.5rem;--text-2xl--line-height:calc(2 / 1.5);--font-weight-normal:400;--font-weight-medium:500;--font-weight-semibold:600;--font-weight-bold:700;--tracking-wide:.025em;--tracking-wider:.05em;--leading-tight:1.25;--leading-snug:1.375;--leading-relaxed:1.625;--radius-sm:calc(var(--pptx-radius,.5rem) - 4px);--radius-md:calc(var(--pptx-radius,.5rem) - 2px);--radius-lg:var(--pptx-radius,.5rem);--radius-xl:calc(var(--pptx-radius,.5rem) + 4px);--radius-2xl:1rem;--ease-in:cubic-bezier(.4, 0, 1, 1);--ease-out:cubic-bezier(0, 0, .2, 1);--ease-in-out:cubic-bezier(.4, 0, .2, 1);--animate-spin:spin 1s linear infinite;--animate-pulse:pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;--animate-bounce:bounce 1s infinite;--blur-sm:8px;--blur-md:12px;--blur-lg:16px;--blur-xl:24px;--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4, 0, .2, 1);--default-font-family:var(--font-sans);--default-mono-font-family:var(--font-mono);--color-background:var(--pptx-background,#030712);--color-foreground:var(--pptx-foreground,#f3f4f6);--color-card:var(--pptx-card,#111827);--color-card-foreground:var(--pptx-card-foreground,#f3f4f6);--color-popover:var(--pptx-popover,#111827);--color-popover-foreground:var(--pptx-popover-foreground,#f3f4f6);--color-primary:var(--pptx-primary,#6366f1);--color-primary-foreground:var(--pptx-primary-foreground,#fff);--color-secondary:var(--pptx-secondary,#1f2937);--color-muted:var(--pptx-muted,#1f2937);--color-muted-foreground:var(--pptx-muted-foreground,#9ca3af);--color-accent:var(--pptx-accent,#1f2937);--color-destructive:var(--pptx-destructive,#ef4444);--color-border:var(--pptx-border,#374151);--color-input:var(--pptx-input,#374151);--color-ring:var(--pptx-ring,#6366f1)}}@layer base{*,:after,:before,::backdrop{box-sizing:border-box;border:0 solid;margin:0;padding:0}::file-selector-button{box-sizing:border-box;border:0 solid;margin:0;padding:0}html,:host{-webkit-text-size-adjust:100%;tab-size:4;line-height:1.5;font-family:var(--default-font-family,-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");font-feature-settings:var(--default-font-feature-settings,normal);font-variation-settings:var(--default-font-variation-settings,normal);-webkit-tap-highlight-color:transparent}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;-webkit-text-decoration:inherit;-webkit-text-decoration:inherit;-webkit-text-decoration:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,samp,pre{font-family:var(--default-mono-font-family,ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);font-feature-settings:var(--default-mono-font-feature-settings,normal);font-variation-settings:var(--default-mono-font-variation-settings,normal);font-size:1em}small{font-size:80%}sub,sup{vertical-align:baseline;font-size:75%;line-height:0;position:relative}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}:-moz-focusring:where(:not(iframe)){outline:auto}progress{vertical-align:baseline}summary{display:list-item}ol,ul,menu{list-style:none}img,svg,video,canvas,audio,iframe,embed,object{vertical-align:middle;display:block}img,video{max-width:100%;height:auto}button,input,select,optgroup,textarea{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}::file-selector-button{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}:where(select:is([multiple],[size])) optgroup{font-weight:bolder}:where(select:is([multiple],[size])) optgroup option{padding-inline-start:20px}::file-selector-button{margin-inline-end:4px}::placeholder{opacity:1}@supports (not ((-webkit-appearance:-apple-pay-button))) or (contain-intrinsic-size:1px){::placeholder{color:currentColor}@supports (color:color-mix(in lab, red, red)){::placeholder{color:color-mix(in oklab, currentcolor 50%, transparent)}}}textarea{resize:vertical}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-date-and-time-value{min-height:1lh;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-datetime-edit{padding-block:0}::-webkit-datetime-edit-year-field{padding-block:0}::-webkit-datetime-edit-month-field{padding-block:0}::-webkit-datetime-edit-day-field{padding-block:0}::-webkit-datetime-edit-hour-field{padding-block:0}::-webkit-datetime-edit-minute-field{padding-block:0}::-webkit-datetime-edit-second-field{padding-block:0}::-webkit-datetime-edit-millisecond-field{padding-block:0}::-webkit-datetime-edit-meridiem-field{padding-block:0}::-webkit-calendar-picker-indicator{line-height:1}:-moz-ui-invalid{box-shadow:none}button,input:where([type=button],[type=reset],[type=submit]){appearance:button}::file-selector-button{appearance:button}::-webkit-inner-spin-button{height:auto}::-webkit-outer-spin-button{height:auto}[hidden]:where(:not([hidden=until-found])){display:none!important}}@layer components;@layer utilities{.pointer-events-auto{pointer-events:auto}.pointer-events-none{pointer-events:none}.collapse{visibility:collapse}.invisible{visibility:hidden}.visible{visibility:visible}.sr-only{clip-path:inset(50%);white-space:nowrap;border-width:0;width:1px;height:1px;margin:-1px;padding:0;position:absolute;overflow:hidden}.absolute{position:absolute}.fixed{position:fixed}.relative{position:relative}.static{position:static}.sticky{position:sticky}.inset-0{inset:0}.inset-x-\[10\%\]{inset-inline:10%}.inset-y-0{inset-block:0}.-top-0\.5{top:calc(var(--spacing) * -.5)}.top-0{top:0}.top-0\.5{top:calc(var(--spacing) * .5)}.top-1{top:var(--spacing)}.top-1\/2{top:50%}.top-2{top:calc(var(--spacing) * 2)}.top-10{top:calc(var(--spacing) * 10)}.top-full{top:100%}.-right-0\.5{right:calc(var(--spacing) * -.5)}.right-0{right:0}.right-0\.5{right:calc(var(--spacing) * .5)}.right-1{right:var(--spacing)}.right-1\/4{right:25%}.right-2{right:calc(var(--spacing) * 2)}.right-3{right:calc(var(--spacing) * 3)}.right-4{right:calc(var(--spacing) * 4)}.bottom-0{bottom:0}.bottom-0\.5{bottom:calc(var(--spacing) * .5)}.bottom-1{bottom:var(--spacing)}.bottom-3{bottom:calc(var(--spacing) * 3)}.bottom-4{bottom:calc(var(--spacing) * 4)}.bottom-6{bottom:calc(var(--spacing) * 6)}.bottom-8{bottom:calc(var(--spacing) * 8)}.bottom-14{bottom:calc(var(--spacing) * 14)}.bottom-full{bottom:100%}.left-0{left:0}.left-0\.5{left:calc(var(--spacing) * .5)}.left-1\/2{left:50%}.left-4{left:calc(var(--spacing) * 4)}.isolate{isolation:isolate}.z-10{z-index:10}.z-20{z-index:20}.z-30{z-index:30}.z-40{z-index:40}.z-50{z-index:50}.z-75{z-index:75}.z-\[2\]{z-index:2}.z-\[5\]{z-index:5}.z-\[45\]{z-index:45}.z-\[49\]{z-index:49}.z-\[60\]{z-index:60}.z-\[70\]{z-index:70}.z-\[75\]{z-index:75}.z-\[76\]{z-index:76}.z-\[77\]{z-index:77}.z-\[80\]{z-index:80}.z-\[90\]{z-index:90}.z-\[100\]{z-index:100}.z-\[101\]{z-index:101}.z-\[120\]{z-index:120}.z-\[200\]{z-index:200}.z-\[1000\]{z-index:1000}.z-\[1090\]{z-index:1090}.z-\[1200\]{z-index:1200}.z-\[1201\]{z-index:1201}.z-\[9999\]{z-index:9999}.z-\[10000\]{z-index:10000}.col-span-2{grid-column:span 2/span 2}.col-span-4{grid-column:span 4/span 4}.row-0{grid-row:0}.container{width:100%}@media (min-width:40rem){.container{max-width:40rem}}@media (min-width:48rem){.container{max-width:48rem}}@media (min-width:64rem){.container{max-width:64rem}}@media (min-width:80rem){.container{max-width:80rem}}@media (min-width:96rem){.container{max-width:96rem}}.-m-px{margin:-1px}.m-0{margin:0}.mx-0\.5{margin-inline:calc(var(--spacing) * .5)}.mx-1{margin-inline:var(--spacing)}.mx-3{margin-inline:calc(var(--spacing) * 3)}.mx-\[3px\]{margin-inline:3px}.mx-auto{margin-inline:auto}.my-1{margin-block:var(--spacing)}.my-auto{margin-block:auto}.-mt-0\.5{margin-top:calc(var(--spacing) * -.5)}.mt-0{margin-top:0}.mt-0\.5{margin-top:calc(var(--spacing) * .5)}.mt-1{margin-top:var(--spacing)}.mt-1\.5{margin-top:calc(var(--spacing) * 1.5)}.mt-2{margin-top:calc(var(--spacing) * 2)}.mt-3{margin-top:calc(var(--spacing) * 3)}.mt-4{margin-top:calc(var(--spacing) * 4)}.mt-5{margin-top:calc(var(--spacing) * 5)}.mt-6{margin-top:calc(var(--spacing) * 6)}.mt-7{margin-top:calc(var(--spacing) * 7)}.mt-8{margin-top:calc(var(--spacing) * 8)}.mt-12{margin-top:calc(var(--spacing) * 12)}.mr-0\.5{margin-right:calc(var(--spacing) * .5)}.mr-1{margin-right:var(--spacing)}.mr-auto{margin-right:auto}.mb-0{margin-bottom:0}.mb-0\.5{margin-bottom:calc(var(--spacing) * .5)}.mb-1{margin-bottom:var(--spacing)}.mb-1\.5{margin-bottom:calc(var(--spacing) * 1.5)}.mb-2{margin-bottom:calc(var(--spacing) * 2)}.mb-3{margin-bottom:calc(var(--spacing) * 3)}.mb-4{margin-bottom:calc(var(--spacing) * 4)}.-ml-1{margin-left:calc(var(--spacing) * -1)}.ml-1{margin-left:var(--spacing)}.ml-2{margin-left:calc(var(--spacing) * 2)}.ml-4{margin-left:calc(var(--spacing) * 4)}.ml-6{margin-left:calc(var(--spacing) * 6)}.ml-7{margin-left:calc(var(--spacing) * 7)}.ml-auto{margin-left:auto}.box-border{box-sizing:border-box}.block{display:block}.contents{display:contents}.flex{display:flex}.grid{display:grid}.hidden{display:none}.inline{display:inline}.inline-block{display:inline-block}.inline-flex{display:inline-flex}.inline-grid{display:inline-grid}.table{display:table}.table-cell{display:table-cell}.aspect-\[16\/9\]{aspect-ratio:16/9}.size-3{width:calc(var(--spacing) * 3);height:calc(var(--spacing) * 3)}.size-6{width:calc(var(--spacing) * 6);height:calc(var(--spacing) * 6)}.size-7{width:calc(var(--spacing) * 7);height:calc(var(--spacing) * 7)}.size-8{width:calc(var(--spacing) * 8);height:calc(var(--spacing) * 8)}.size-10{width:calc(var(--spacing) * 10);height:calc(var(--spacing) * 10)}.size-14{width:calc(var(--spacing) * 14);height:calc(var(--spacing) * 14)}.h-0\.5{height:calc(var(--spacing) * .5)}.h-1{height:var(--spacing)}.h-1\.5{height:calc(var(--spacing) * 1.5)}.h-2{height:calc(var(--spacing) * 2)}.h-2\.5{height:calc(var(--spacing) * 2.5)}.h-3{height:calc(var(--spacing) * 3)}.h-3\.5{height:calc(var(--spacing) * 3.5)}.h-4{height:calc(var(--spacing) * 4)}.h-5{height:calc(var(--spacing) * 5)}.h-6{height:calc(var(--spacing) * 6)}.h-7{height:calc(var(--spacing) * 7)}.h-8{height:calc(var(--spacing) * 8)}.h-9{height:calc(var(--spacing) * 9)}.h-10{height:calc(var(--spacing) * 10)}.h-11{height:calc(var(--spacing) * 11)}.h-12{height:calc(var(--spacing) * 12)}.h-16{height:calc(var(--spacing) * 16)}.h-24{height:calc(var(--spacing) * 24)}.h-48{height:calc(var(--spacing) * 48)}.h-\[0\.5em\]{height:.5em}.h-\[0\.7em\]{height:.7em}.h-\[6px\]{height:6px}.h-\[18px\]{height:18px}.h-\[19px\]{height:19px}.h-\[22px\]{height:22px}.h-\[26px\]{height:26px}.h-\[min\(60vh\,440px\)\]{height:min(60vh,440px)}.h-full{height:100%}.h-px{height:1px}.max-h-24{max-height:calc(var(--spacing) * 24)}.max-h-32{max-height:calc(var(--spacing) * 32)}.max-h-40{max-height:calc(var(--spacing) * 40)}.max-h-48{max-height:calc(var(--spacing) * 48)}.max-h-52{max-height:calc(var(--spacing) * 52)}.max-h-60{max-height:calc(var(--spacing) * 60)}.max-h-64{max-height:calc(var(--spacing) * 64)}.max-h-72{max-height:calc(var(--spacing) * 72)}.max-h-\[22rem\]{max-height:22rem}.max-h-\[38\%\]{max-height:38%}.max-h-\[50vh\]{max-height:50vh}.max-h-\[56vh\]{max-height:56vh}.max-h-\[62px\]{max-height:62px}.max-h-\[85dvh\]{max-height:85dvh}.max-h-\[85vh\]{max-height:85vh}.max-h-\[88vh\]{max-height:88vh}.max-h-\[90vh\]{max-height:90vh}.max-h-\[140px\]{max-height:140px}.max-h-\[240px\]{max-height:240px}.max-h-\[280px\]{max-height:280px}.max-h-\[520px\]{max-height:520px}.max-h-\[min\(64vh\,480px\)\]{max-height:min(64vh,480px)}.min-h-0{min-height:0}.min-h-10{min-height:calc(var(--spacing) * 10)}.min-h-12{min-height:calc(var(--spacing) * 12)}.min-h-20{min-height:calc(var(--spacing) * 20)}.min-h-28{min-height:calc(var(--spacing) * 28)}.min-h-\[1\.5rem\]{min-height:1.5rem}.min-h-\[29px\]{min-height:29px}.min-h-\[36px\]{min-height:36px}.min-h-\[44px\]{min-height:44px}.min-h-\[52px\]{min-height:52px}.min-h-\[56px\]{min-height:56px}.min-h-\[80px\]{min-height:80px}.min-h-\[82px\]{min-height:82px}.min-h-\[280px\]{min-height:280px}.w-0\.5{width:calc(var(--spacing) * .5)}.w-1{width:var(--spacing)}.w-1\.5{width:calc(var(--spacing) * 1.5)}.w-1\/3{width:33.3333%}.w-2{width:calc(var(--spacing) * 2)}.w-2\.5{width:calc(var(--spacing) * 2.5)}.w-3{width:calc(var(--spacing) * 3)}.w-3\.5{width:calc(var(--spacing) * 3.5)}.w-4{width:calc(var(--spacing) * 4)}.w-5{width:calc(var(--spacing) * 5)}.w-6{width:calc(var(--spacing) * 6)}.w-7{width:calc(var(--spacing) * 7)}.w-8{width:calc(var(--spacing) * 8)}.w-9{width:calc(var(--spacing) * 9)}.w-10{width:calc(var(--spacing) * 10)}.w-11{width:calc(var(--spacing) * 11)}.w-12{width:calc(var(--spacing) * 12)}.w-14{width:calc(var(--spacing) * 14)}.w-16{width:calc(var(--spacing) * 16)}.w-20{width:calc(var(--spacing) * 20)}.w-24{width:calc(var(--spacing) * 24)}.w-28{width:calc(var(--spacing) * 28)}.w-32{width:calc(var(--spacing) * 32)}.w-36{width:calc(var(--spacing) * 36)}.w-40{width:calc(var(--spacing) * 40)}.w-44{width:calc(var(--spacing) * 44)}.w-48{width:calc(var(--spacing) * 48)}.w-52{width:calc(var(--spacing) * 52)}.w-56{width:calc(var(--spacing) * 56)}.w-64{width:calc(var(--spacing) * 64)}.w-72{width:calc(var(--spacing) * 72)}.w-80{width:calc(var(--spacing) * 80)}.w-\[0\.5em\]{width:.5em}.w-\[0\.7em\]{width:.7em}.w-\[6px\]{width:6px}.w-\[18px\]{width:18px}.w-\[22px\]{width:22px}.w-\[52px\]{width:52px}.w-\[130px\]{width:130px}.w-\[148px\]{width:148px}.w-\[180px\]{width:180px}.w-\[440px\]{width:440px}.w-\[620px\]{width:620px}.w-\[min\(56rem\,calc\(100\%-2rem\)\)\]{width:min(56rem,100% - 2rem)}.w-\[min\(78vw\,600px\)\]{width:min(78vw,600px)}.w-\[min\(82vw\,600px\)\]{width:min(82vw,600px)}.w-\[min\(90vw\,520px\)\]{width:min(90vw,520px)}.w-\[min\(92vw\,384px\)\]{width:min(92vw,384px)}.w-full{width:100%}.w-max{width:max-content}.w-px{width:1px}.max-w-5xl{max-width:var(--container-5xl)}.max-w-\[10rem\]{max-width:10rem}.max-w-\[55\%\]{max-width:55%}.max-w-\[80\%\]{max-width:80%}.max-w-\[90vw\]{max-width:90vw}.max-w-\[100px\]{max-width:100px}.max-w-\[100vw\]{max-width:100vw}.max-w-\[120px\]{max-width:120px}.max-w-\[140px\]{max-width:140px}.max-w-\[150px\]{max-width:150px}.max-w-\[240px\]{max-width:240px}.max-w-\[320px\]{max-width:320px}.max-w-\[420px\]{max-width:420px}.max-w-\[440px\]{max-width:440px}.max-w-\[540px\]{max-width:540px}.max-w-\[760px\]{max-width:760px}.max-w-\[900px\]{max-width:900px}.max-w-\[min\(92vw\,480px\)\]{max-width:min(92vw,480px)}.max-w-md{max-width:var(--container-md)}.\!min-w-0{min-width:0!important}.min-w-0{min-width:0}.min-w-2{min-width:calc(var(--spacing) * 2)}.min-w-6{min-width:calc(var(--spacing) * 6)}.min-w-7{min-width:calc(var(--spacing) * 7)}.min-w-8{min-width:calc(var(--spacing) * 8)}.min-w-9{min-width:calc(var(--spacing) * 9)}.min-w-14{min-width:calc(var(--spacing) * 14)}.min-w-32{min-width:calc(var(--spacing) * 32)}.min-w-40{min-width:calc(var(--spacing) * 40)}.min-w-\[2\%\]{min-width:2%}.min-w-\[3rem\]{min-width:3rem}.min-w-\[16px\]{min-width:16px}.min-w-\[18rem\]{min-width:18rem}.min-w-\[28px\]{min-width:28px}.min-w-\[44px\]{min-width:44px}.min-w-\[48px\]{min-width:48px}.min-w-\[50px\]{min-width:50px}.min-w-\[120px\]{min-width:120px}.min-w-\[180px\]{min-width:180px}.min-w-\[260px\]{min-width:260px}.min-w-\[280px\]{min-width:280px}.min-w-\[300px\]{min-width:300px}.min-w-\[320px\]{min-width:320px}.min-w-\[360px\]{min-width:360px}.min-w-\[480px\]{min-width:480px}.min-w-full{min-width:100%}.flex-1{flex:1}.flex-\[0_0_18rem\]{flex:0 0 18rem}.flex-\[3\]{flex:3}.flex-\[7\]{flex:7}.flex-none{flex:none}.flex-shrink{flex-shrink:1}.flex-shrink-0{flex-shrink:0}.shrink{flex-shrink:1}.shrink-0{flex-shrink:0}.grow{flex-grow:1}.basis-16{flex-basis:calc(var(--spacing) * 16)}.border-collapse{border-collapse:collapse}.origin-top-left{transform-origin:0 0}.-translate-x-1\/2{--tw-translate-x:calc(calc(1 / 2 * 100%) * -1);translate:var(--tw-translate-x) var(--tw-translate-y)}.translate-x-0\.5{--tw-translate-x:calc(var(--spacing) * .5);translate:var(--tw-translate-x) var(--tw-translate-y)}.translate-x-4{--tw-translate-x:calc(var(--spacing) * 4);translate:var(--tw-translate-x) var(--tw-translate-y)}.translate-x-\[15px\]{--tw-translate-x:15px;translate:var(--tw-translate-x) var(--tw-translate-y)}.-translate-y-1\/2{--tw-translate-y:calc(calc(1 / 2 * 100%) * -1);translate:var(--tw-translate-x) var(--tw-translate-y)}.scale-\[1\.02\]{scale:1.02}.-rotate-90{rotate:-90deg}.rotate-45{rotate:45deg}.rotate-90{rotate:90deg}.rotate-180{rotate:180deg}.-skew-x-12{--tw-skew-x:skewX(calc(12deg * -1));transform:var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,)}.transform{transform:var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,)}.animate-bounce{animation:var(--animate-bounce)}.animate-pulse{animation:var(--animate-pulse)}.animate-spin{animation:var(--animate-spin)}.cursor-col-resize{cursor:col-resize}.cursor-default{cursor:default}.cursor-ew-resize{cursor:ew-resize}.cursor-grab{cursor:grab}.cursor-help{cursor:help}.cursor-move{cursor:move}.cursor-not-allowed{cursor:not-allowed}.cursor-pointer{cursor:pointer}.cursor-row-resize{cursor:row-resize}.touch-none{touch-action:none}.resize{resize:both}.resize-none{resize:none}.resize-y{resize:vertical}.scrollbar-none{scrollbar-width:none}.list-none{list-style-type:none}.\[grid-template-columns\:repeat\(auto-fill\,minmax\(220px\,1fr\)\)\]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}.grid-cols-8{grid-template-columns:repeat(8,minmax(0,1fr))}.grid-cols-\[1fr\,1fr\,auto\]{grid-template-columns:1fr,1fr,auto}.grid-cols-\[1fr_1fr_100px_32px\]{grid-template-columns:1fr 1fr 100px 32px}.grid-cols-\[1fr_120px_90px\]{grid-template-columns:1fr 120px 90px}.grid-cols-\[1fr_auto_auto\]{grid-template-columns:1fr auto auto}.grid-cols-\[48px_82px\]{grid-template-columns:48px 82px}.grid-cols-\[72px_1fr_36px\]{grid-template-columns:72px 1fr 36px}.grid-cols-\[auto_1fr\]{grid-template-columns:auto 1fr}.grid-cols-\[repeat\(auto-fill\,minmax\(150px\,1fr\)\)\]{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.flex-col{flex-direction:column}.flex-nowrap{flex-wrap:nowrap}.flex-wrap{flex-wrap:wrap}.place-items-center{place-items:center}.items-baseline{align-items:baseline}.items-center{align-items:center}.items-end{align-items:flex-end}.items-start{align-items:flex-start}.items-stretch{align-items:stretch}.justify-around{justify-content:space-around}.justify-between{justify-content:space-between}.justify-center{justify-content:center}.justify-end{justify-content:flex-end}.justify-start{justify-content:flex-start}.gap-0{gap:0}.gap-0\.5{gap:calc(var(--spacing) * .5)}.gap-1{gap:var(--spacing)}.gap-1\.5{gap:calc(var(--spacing) * 1.5)}.gap-2{gap:calc(var(--spacing) * 2)}.gap-2\.5{gap:calc(var(--spacing) * 2.5)}.gap-3{gap:calc(var(--spacing) * 3)}.gap-3\.5{gap:calc(var(--spacing) * 3.5)}.gap-4{gap:calc(var(--spacing) * 4)}.gap-5{gap:calc(var(--spacing) * 5)}.gap-6{gap:calc(var(--spacing) * 6)}.gap-\[0\.4em\]{gap:.4em}:where(.space-y-0\.5>:not(:last-child)){--tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * .5) * var(--tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * .5) * calc(1 - var(--tw-space-y-reverse)))}:where(.space-y-1>:not(:last-child)){--tw-space-y-reverse:0;margin-block-start:calc(var(--spacing) * var(--tw-space-y-reverse));margin-block-end:calc(var(--spacing) * calc(1 - var(--tw-space-y-reverse)))}:where(.space-y-1\.5>:not(:last-child)){--tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 1.5) * var(--tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)))}:where(.space-y-2>:not(:last-child)){--tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 2) * var(--tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 2) * calc(1 - var(--tw-space-y-reverse)))}:where(.space-y-3>:not(:last-child)){--tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 3) * var(--tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)))}:where(.space-y-4>:not(:last-child)){--tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 4) * var(--tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-y-reverse)))}:where(.space-y-5>:not(:last-child)){--tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 5) * var(--tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 5) * calc(1 - var(--tw-space-y-reverse)))}.gap-x-1{column-gap:var(--spacing)}.gap-x-2{column-gap:calc(var(--spacing) * 2)}.gap-x-2\.5{column-gap:calc(var(--spacing) * 2.5)}.gap-y-0\.5{row-gap:calc(var(--spacing) * .5)}.gap-y-1{row-gap:var(--spacing)}:where(.divide-y>:not(:last-child)){--tw-divide-y-reverse:0;border-bottom-style:var(--tw-border-style);border-top-style:var(--tw-border-style);border-top-width:calc(1px * var(--tw-divide-y-reverse));border-bottom-width:calc(1px * calc(1 - var(--tw-divide-y-reverse)))}:where(.divide-border>:not(:last-child)){border-color:var(--color-border)}.self-end{align-self:flex-end}.self-start{align-self:flex-start}.self-stretch{align-self:stretch}.truncate{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.overflow-auto{overflow:auto}.overflow-hidden{overflow:hidden}.overflow-visible{overflow:visible}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.overscroll-contain{overscroll-behavior:contain}.rounded{border-radius:.25rem}.rounded-\[3px\]{border-radius:3px}.rounded-full{border-radius:3.40282e38px}.rounded-lg{border-radius:var(--radius-lg)}.rounded-md{border-radius:var(--radius-md)}.rounded-sm{border-radius:var(--radius-sm)}.rounded-xl{border-radius:var(--radius-xl)}.rounded-t-2xl{border-top-left-radius:var(--radius-2xl);border-top-right-radius:var(--radius-2xl)}.rounded-l{border-top-left-radius:.25rem;border-bottom-left-radius:.25rem}.rounded-r{border-top-right-radius:.25rem;border-bottom-right-radius:.25rem}.rounded-r-md{border-top-right-radius:var(--radius-md);border-bottom-right-radius:var(--radius-md)}.rounded-r-none{border-top-right-radius:0;border-bottom-right-radius:0}.border{border-style:var(--tw-border-style);border-width:1px}.border-0{border-style:var(--tw-border-style);border-width:0}.border-2{border-style:var(--tw-border-style);border-width:2px}.border-t{border-top-style:var(--tw-border-style);border-top-width:1px}.border-t-2{border-top-style:var(--tw-border-style);border-top-width:2px}.border-r{border-right-style:var(--tw-border-style);border-right-width:1px}.border-b{border-bottom-style:var(--tw-border-style);border-bottom-width:1px}.border-b-2{border-bottom-style:var(--tw-border-style);border-bottom-width:2px}.\!border-l-0{border-left-style:var(--tw-border-style)!important;border-left-width:0!important}.border-l{border-left-style:var(--tw-border-style);border-left-width:1px}.border-l-2{border-left-style:var(--tw-border-style);border-left-width:2px}.border-l-\[3px\]{border-left-style:var(--tw-border-style);border-left-width:3px}.border-dashed{--tw-border-style:dashed;border-style:dashed}.border-none{--tw-border-style:none;border-style:none}.border-amber-600\/40{border-color:#dd740066}@supports (color:color-mix(in lab, red, red)){.border-amber-600\/40{border-color:color-mix(in oklab, var(--color-amber-600) 40%, transparent)}}.border-amber-600\/50{border-color:#dd740080}@supports (color:color-mix(in lab, red, red)){.border-amber-600\/50{border-color:color-mix(in oklab, var(--color-amber-600) 50%, transparent)}}.border-amber-700\/30{border-color:#b750004d}@supports (color:color-mix(in lab, red, red)){.border-amber-700\/30{border-color:color-mix(in oklab, var(--color-amber-700) 30%, transparent)}}.border-amber-700\/60{border-color:#b7500099}@supports (color:color-mix(in lab, red, red)){.border-amber-700\/60{border-color:color-mix(in oklab, var(--color-amber-700) 60%, transparent)}}.border-black\/10{border-color:#0000001a}@supports (color:color-mix(in lab, red, red)){.border-black\/10{border-color:color-mix(in oklab, var(--color-black) 10%, transparent)}}.border-border,.border-border\/30{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.border-border\/30{border-color:color-mix(in oklab, var(--color-border) 30%, transparent)}}.border-border\/40{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.border-border\/40{border-color:color-mix(in oklab, var(--color-border) 40%, transparent)}}.border-border\/50{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.border-border\/50{border-color:color-mix(in oklab, var(--color-border) 50%, transparent)}}.border-border\/60{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.border-border\/60{border-color:color-mix(in oklab, var(--color-border) 60%, transparent)}}.border-border\/70{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.border-border\/70{border-color:color-mix(in oklab, var(--color-border) 70%, transparent)}}.border-current{border-color:currentColor}.border-destructive\/40{border-color:var(--color-destructive)}@supports (color:color-mix(in lab, red, red)){.border-destructive\/40{border-color:color-mix(in oklab, var(--color-destructive) 40%, transparent)}}.border-foreground{border-color:var(--color-foreground)}.border-green-700\/40{border-color:#00813866}@supports (color:color-mix(in lab, red, red)){.border-green-700\/40{border-color:color-mix(in oklab, var(--color-green-700) 40%, transparent)}}.border-green-700\/60{border-color:#00813899}@supports (color:color-mix(in lab, red, red)){.border-green-700\/60{border-color:color-mix(in oklab, var(--color-green-700) 60%, transparent)}}.border-input{border-color:var(--color-input)}.border-muted-foreground\/70{border-color:var(--color-muted-foreground)}@supports (color:color-mix(in lab, red, red)){.border-muted-foreground\/70{border-color:color-mix(in oklab, var(--color-muted-foreground) 70%, transparent)}}.border-primary,.border-primary\/20{border-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.border-primary\/20{border-color:color-mix(in oklab, var(--color-primary) 20%, transparent)}}.border-primary\/40{border-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.border-primary\/40{border-color:color-mix(in oklab, var(--color-primary) 40%, transparent)}}.border-primary\/60{border-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.border-primary\/60{border-color:color-mix(in oklab, var(--color-primary) 60%, transparent)}}.border-red-500\/30{border-color:#fb2c364d}@supports (color:color-mix(in lab, red, red)){.border-red-500\/30{border-color:color-mix(in oklab, var(--color-red-500) 30%, transparent)}}.border-transparent{border-color:#0000}.border-white{border-color:var(--color-white)}.border-white\/10{border-color:#ffffff1a}@supports (color:color-mix(in lab, red, red)){.border-white\/10{border-color:color-mix(in oklab, var(--color-white) 10%, transparent)}}.border-white\/15{border-color:#ffffff26}@supports (color:color-mix(in lab, red, red)){.border-white\/15{border-color:color-mix(in oklab, var(--color-white) 15%, transparent)}}.border-white\/20{border-color:#fff3}@supports (color:color-mix(in lab, red, red)){.border-white\/20{border-color:color-mix(in oklab, var(--color-white) 20%, transparent)}}.border-t-transparent{border-top-color:#0000}.border-b-border\/60{border-bottom-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.border-b-border\/60{border-bottom-color:color-mix(in oklab, var(--color-border) 60%, transparent)}}.border-l-amber-500{border-left-color:var(--color-amber-500)}.border-l-blue-500{border-left-color:var(--color-blue-500)}.border-l-green-500{border-left-color:var(--color-green-500)}.border-l-red-500{border-left-color:var(--color-red-500)}.border-l-transparent{border-left-color:#0000}.\!bg-amber-600{background-color:var(--color-amber-600)!important}.bg-\[\#c43e1c\]{background-color:#c43e1c}.bg-accent,.bg-accent\/40{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.bg-accent\/40{background-color:color-mix(in oklab, var(--color-accent) 40%, transparent)}}.bg-accent\/60{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.bg-accent\/60{background-color:color-mix(in oklab, var(--color-accent) 60%, transparent)}}.bg-amber-500{background-color:var(--color-amber-500)}.bg-amber-500\/90{background-color:#f99c00e6}@supports (color:color-mix(in lab, red, red)){.bg-amber-500\/90{background-color:color-mix(in oklab, var(--color-amber-500) 90%, transparent)}}.bg-amber-600{background-color:var(--color-amber-600)}.bg-amber-600\/90{background-color:#dd7400e6}@supports (color:color-mix(in lab, red, red)){.bg-amber-600\/90{background-color:color-mix(in oklab, var(--color-amber-600) 90%, transparent)}}.bg-amber-900\/20{background-color:#7b330633}@supports (color:color-mix(in lab, red, red)){.bg-amber-900\/20{background-color:color-mix(in oklab, var(--color-amber-900) 20%, transparent)}}.bg-amber-900\/30{background-color:#7b33064d}@supports (color:color-mix(in lab, red, red)){.bg-amber-900\/30{background-color:color-mix(in oklab, var(--color-amber-900) 30%, transparent)}}.bg-background,.bg-background\/20{background-color:var(--color-background)}@supports (color:color-mix(in lab, red, red)){.bg-background\/20{background-color:color-mix(in oklab, var(--color-background) 20%, transparent)}}.bg-background\/60{background-color:var(--color-background)}@supports (color:color-mix(in lab, red, red)){.bg-background\/60{background-color:color-mix(in oklab, var(--color-background) 60%, transparent)}}.bg-background\/70{background-color:var(--color-background)}@supports (color:color-mix(in lab, red, red)){.bg-background\/70{background-color:color-mix(in oklab, var(--color-background) 70%, transparent)}}.bg-background\/80{background-color:var(--color-background)}@supports (color:color-mix(in lab, red, red)){.bg-background\/80{background-color:color-mix(in oklab, var(--color-background) 80%, transparent)}}.bg-black{background-color:var(--color-black)}.bg-black\/20{background-color:#0003}@supports (color:color-mix(in lab, red, red)){.bg-black\/20{background-color:color-mix(in oklab, var(--color-black) 20%, transparent)}}.bg-black\/30{background-color:#0000004d}@supports (color:color-mix(in lab, red, red)){.bg-black\/30{background-color:color-mix(in oklab, var(--color-black) 30%, transparent)}}.bg-black\/40{background-color:#0006}@supports (color:color-mix(in lab, red, red)){.bg-black\/40{background-color:color-mix(in oklab, var(--color-black) 40%, transparent)}}.bg-black\/50{background-color:#00000080}@supports (color:color-mix(in lab, red, red)){.bg-black\/50{background-color:color-mix(in oklab, var(--color-black) 50%, transparent)}}.bg-black\/60{background-color:#0009}@supports (color:color-mix(in lab, red, red)){.bg-black\/60{background-color:color-mix(in oklab, var(--color-black) 60%, transparent)}}.bg-black\/75{background-color:#000000bf}@supports (color:color-mix(in lab, red, red)){.bg-black\/75{background-color:color-mix(in oklab, var(--color-black) 75%, transparent)}}.bg-black\/80{background-color:#000c}@supports (color:color-mix(in lab, red, red)){.bg-black\/80{background-color:color-mix(in oklab, var(--color-black) 80%, transparent)}}.bg-blue-500\/20{background-color:#3080ff33}@supports (color:color-mix(in lab, red, red)){.bg-blue-500\/20{background-color:color-mix(in oklab, var(--color-blue-500) 20%, transparent)}}.bg-border,.bg-border\/40{background-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.bg-border\/40{background-color:color-mix(in oklab, var(--color-border) 40%, transparent)}}.bg-border\/60{background-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.bg-border\/60{background-color:color-mix(in oklab, var(--color-border) 60%, transparent)}}.bg-card,.bg-card\/40{background-color:var(--color-card)}@supports (color:color-mix(in lab, red, red)){.bg-card\/40{background-color:color-mix(in oklab, var(--color-card) 40%, transparent)}}.bg-card\/95{background-color:var(--color-card)}@supports (color:color-mix(in lab, red, red)){.bg-card\/95{background-color:color-mix(in oklab, var(--color-card) 95%, transparent)}}.bg-current{background-color:currentColor}.bg-destructive\/5{background-color:var(--color-destructive)}@supports (color:color-mix(in lab, red, red)){.bg-destructive\/5{background-color:color-mix(in oklab, var(--color-destructive) 5%, transparent)}}.bg-destructive\/15{background-color:var(--color-destructive)}@supports (color:color-mix(in lab, red, red)){.bg-destructive\/15{background-color:color-mix(in oklab, var(--color-destructive) 15%, transparent)}}.bg-gray-500{background-color:var(--color-gray-500)}.bg-green-400{background-color:var(--color-green-400)}.bg-green-500{background-color:var(--color-green-500)}.bg-green-500\/20{background-color:#00c75833}@supports (color:color-mix(in lab, red, red)){.bg-green-500\/20{background-color:color-mix(in oklab, var(--color-green-500) 20%, transparent)}}.bg-green-500\/60{background-color:#00c75899}@supports (color:color-mix(in lab, red, red)){.bg-green-500\/60{background-color:color-mix(in oklab, var(--color-green-500) 60%, transparent)}}.bg-green-600{background-color:var(--color-green-600)}.bg-green-600\/20{background-color:#00a54433}@supports (color:color-mix(in lab, red, red)){.bg-green-600\/20{background-color:color-mix(in oklab, var(--color-green-600) 20%, transparent)}}.bg-green-700\/80{background-color:#008138cc}@supports (color:color-mix(in lab, red, red)){.bg-green-700\/80{background-color:color-mix(in oklab, var(--color-green-700) 80%, transparent)}}.bg-green-900\/20{background-color:#0d542b33}@supports (color:color-mix(in lab, red, red)){.bg-green-900\/20{background-color:color-mix(in oklab, var(--color-green-900) 20%, transparent)}}.bg-green-900\/30{background-color:#0d542b4d}@supports (color:color-mix(in lab, red, red)){.bg-green-900\/30{background-color:color-mix(in oklab, var(--color-green-900) 30%, transparent)}}.bg-green-900\/40{background-color:#0d542b66}@supports (color:color-mix(in lab, red, red)){.bg-green-900\/40{background-color:color-mix(in oklab, var(--color-green-900) 40%, transparent)}}.bg-lime-500{background-color:var(--color-lime-500)}.bg-muted{background-color:var(--color-muted)}.bg-muted-foreground,.bg-muted-foreground\/40{background-color:var(--color-muted-foreground)}@supports (color:color-mix(in lab, red, red)){.bg-muted-foreground\/40{background-color:color-mix(in oklab, var(--color-muted-foreground) 40%, transparent)}}.bg-muted\/20{background-color:var(--color-muted)}@supports (color:color-mix(in lab, red, red)){.bg-muted\/20{background-color:color-mix(in oklab, var(--color-muted) 20%, transparent)}}.bg-muted\/30{background-color:var(--color-muted)}@supports (color:color-mix(in lab, red, red)){.bg-muted\/30{background-color:color-mix(in oklab, var(--color-muted) 30%, transparent)}}.bg-muted\/40{background-color:var(--color-muted)}@supports (color:color-mix(in lab, red, red)){.bg-muted\/40{background-color:color-mix(in oklab, var(--color-muted) 40%, transparent)}}.bg-muted\/50{background-color:var(--color-muted)}@supports (color:color-mix(in lab, red, red)){.bg-muted\/50{background-color:color-mix(in oklab, var(--color-muted) 50%, transparent)}}.bg-muted\/60{background-color:var(--color-muted)}@supports (color:color-mix(in lab, red, red)){.bg-muted\/60{background-color:color-mix(in oklab, var(--color-muted) 60%, transparent)}}.bg-neutral-800{background-color:var(--color-neutral-800)}.bg-neutral-900\/90{background-color:#171717e6}@supports (color:color-mix(in lab, red, red)){.bg-neutral-900\/90{background-color:color-mix(in oklab, var(--color-neutral-900) 90%, transparent)}}.bg-orange-500{background-color:var(--color-orange-500)}.bg-popover{background-color:var(--color-popover)}.bg-primary,.bg-primary\/5{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.bg-primary\/5{background-color:color-mix(in oklab, var(--color-primary) 5%, transparent)}}.bg-primary\/10{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.bg-primary\/10{background-color:color-mix(in oklab, var(--color-primary) 10%, transparent)}}.bg-primary\/15{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.bg-primary\/15{background-color:color-mix(in oklab, var(--color-primary) 15%, transparent)}}.bg-primary\/20{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.bg-primary\/20{background-color:color-mix(in oklab, var(--color-primary) 20%, transparent)}}.bg-primary\/30{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.bg-primary\/30{background-color:color-mix(in oklab, var(--color-primary) 30%, transparent)}}.bg-primary\/80{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.bg-primary\/80{background-color:color-mix(in oklab, var(--color-primary) 80%, transparent)}}.bg-primary\/90{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.bg-primary\/90{background-color:color-mix(in oklab, var(--color-primary) 90%, transparent)}}.bg-purple-600{background-color:var(--color-purple-600)}.bg-red-400{background-color:var(--color-red-400)}.bg-red-500{background-color:var(--color-red-500)}.bg-red-500\/10{background-color:#fb2c361a}@supports (color:color-mix(in lab, red, red)){.bg-red-500\/10{background-color:color-mix(in oklab, var(--color-red-500) 10%, transparent)}}.bg-red-600{background-color:var(--color-red-600)}.bg-red-600\/20{background-color:#e4001433}@supports (color:color-mix(in lab, red, red)){.bg-red-600\/20{background-color:color-mix(in oklab, var(--color-red-600) 20%, transparent)}}.bg-red-700\/80{background-color:#bf000fcc}@supports (color:color-mix(in lab, red, red)){.bg-red-700\/80{background-color:color-mix(in oklab, var(--color-red-700) 80%, transparent)}}.bg-red-900\/20{background-color:#82181a33}@supports (color:color-mix(in lab, red, red)){.bg-red-900\/20{background-color:color-mix(in oklab, var(--color-red-900) 20%, transparent)}}.bg-red-900\/30{background-color:#82181a4d}@supports (color:color-mix(in lab, red, red)){.bg-red-900\/30{background-color:color-mix(in oklab, var(--color-red-900) 30%, transparent)}}.bg-secondary,.bg-secondary\/30{background-color:var(--color-secondary)}@supports (color:color-mix(in lab, red, red)){.bg-secondary\/30{background-color:color-mix(in oklab, var(--color-secondary) 30%, transparent)}}.bg-secondary\/50{background-color:var(--color-secondary)}@supports (color:color-mix(in lab, red, red)){.bg-secondary\/50{background-color:color-mix(in oklab, var(--color-secondary) 50%, transparent)}}.bg-secondary\/80{background-color:var(--color-secondary)}@supports (color:color-mix(in lab, red, red)){.bg-secondary\/80{background-color:color-mix(in oklab, var(--color-secondary) 80%, transparent)}}.bg-transparent{background-color:#0000}.bg-white{background-color:var(--color-white)}.bg-white\/20{background-color:#fff3}@supports (color:color-mix(in lab, red, red)){.bg-white\/20{background-color:color-mix(in oklab, var(--color-white) 20%, transparent)}}.bg-white\/25{background-color:#ffffff40}@supports (color:color-mix(in lab, red, red)){.bg-white\/25{background-color:color-mix(in oklab, var(--color-white) 25%, transparent)}}.bg-white\/90{background-color:#ffffffe6}@supports (color:color-mix(in lab, red, red)){.bg-white\/90{background-color:color-mix(in oklab, var(--color-white) 90%, transparent)}}.bg-yellow-400{background-color:var(--color-yellow-400)}.bg-yellow-400\/70{background-color:#fac800b3}@supports (color:color-mix(in lab, red, red)){.bg-yellow-400\/70{background-color:color-mix(in oklab, var(--color-yellow-400) 70%, transparent)}}.bg-yellow-500{background-color:var(--color-yellow-500)}.bg-yellow-600{background-color:var(--color-yellow-600)}.mask-repeat{-webkit-mask-repeat:repeat;mask-repeat:repeat}.fill-current{fill:currentColor}.fill-primary\/20{fill:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.fill-primary\/20{fill:color-mix(in oklab, var(--color-primary) 20%, transparent)}}.object-contain{object-fit:contain}.object-cover{object-fit:cover}.p-0{padding:0}.p-0\.5{padding:calc(var(--spacing) * .5)}.p-1{padding:var(--spacing)}.p-1\.5{padding:calc(var(--spacing) * 1.5)}.p-2{padding:calc(var(--spacing) * 2)}.p-2\.5{padding:calc(var(--spacing) * 2.5)}.p-3{padding:calc(var(--spacing) * 3)}.p-4{padding:calc(var(--spacing) * 4)}.p-5{padding:calc(var(--spacing) * 5)}.p-6{padding:calc(var(--spacing) * 6)}.p-7{padding:calc(var(--spacing) * 7)}.p-px{padding:1px}.px-0\.5{padding-inline:calc(var(--spacing) * .5)}.px-1{padding-inline:var(--spacing)}.px-1\.5{padding-inline:calc(var(--spacing) * 1.5)}.px-2{padding-inline:calc(var(--spacing) * 2)}.px-2\.5{padding-inline:calc(var(--spacing) * 2.5)}.px-3{padding-inline:calc(var(--spacing) * 3)}.px-3\.5{padding-inline:calc(var(--spacing) * 3.5)}.px-4{padding-inline:calc(var(--spacing) * 4)}.px-5{padding-inline:calc(var(--spacing) * 5)}.px-6{padding-inline:calc(var(--spacing) * 6)}.px-\[0\.6em\]{padding-inline:.6em}.px-\[clamp\(32px\,4vw\,72px\)\]{padding-inline:clamp(32px,4vw,72px)}.py-0\.5{padding-block:calc(var(--spacing) * .5)}.py-1{padding-block:var(--spacing)}.py-1\.5{padding-block:calc(var(--spacing) * 1.5)}.py-2{padding-block:calc(var(--spacing) * 2)}.py-2\.5{padding-block:calc(var(--spacing) * 2.5)}.py-3{padding-block:calc(var(--spacing) * 3)}.py-3\.5{padding-block:calc(var(--spacing) * 3.5)}.py-4{padding-block:calc(var(--spacing) * 4)}.py-5{padding-block:calc(var(--spacing) * 5)}.py-6{padding-block:calc(var(--spacing) * 6)}.py-8{padding-block:calc(var(--spacing) * 8)}.py-10{padding-block:calc(var(--spacing) * 10)}.py-\[0\.15em\]{padding-block:.15em}.py-\[3px\]{padding-block:3px}.py-px{padding-block:1px}.pt-0\.5{padding-top:calc(var(--spacing) * .5)}.pt-1{padding-top:var(--spacing)}.pt-1\.5{padding-top:calc(var(--spacing) * 1.5)}.pt-2{padding-top:calc(var(--spacing) * 2)}.pt-\[max\(env\(safe-area-inset-top\)\,0px\)\]{padding-top:max(env(safe-area-inset-top), 0px)}.pr-0\.5{padding-right:calc(var(--spacing) * .5)}.pr-1{padding-right:var(--spacing)}.pr-2{padding-right:calc(var(--spacing) * 2)}.pb-1{padding-bottom:var(--spacing)}.pb-2{padding-bottom:calc(var(--spacing) * 2)}.pb-2\.5{padding-bottom:calc(var(--spacing) * 2.5)}.pb-3{padding-bottom:calc(var(--spacing) * 3)}.pb-8{padding-bottom:calc(var(--spacing) * 8)}.pb-\[max\(env\(safe-area-inset-bottom\)\,0px\)\]{padding-bottom:max(env(safe-area-inset-bottom), 0px)}.pl-0\.5{padding-left:calc(var(--spacing) * .5)}.pl-1\.5{padding-left:calc(var(--spacing) * 1.5)}.pl-2{padding-left:calc(var(--spacing) * 2)}.pl-3{padding-left:calc(var(--spacing) * 3)}.pl-4{padding-left:calc(var(--spacing) * 4)}.pl-5{padding-left:calc(var(--spacing) * 5)}.pl-6{padding-left:calc(var(--spacing) * 6)}.pl-8{padding-left:calc(var(--spacing) * 8)}.text-center{text-align:center}.text-left{text-align:left}.text-right{text-align:right}.align-bottom{vertical-align:bottom}.align-middle{vertical-align:middle}.align-top{vertical-align:top}.font-\[Aptos\,Segoe_UI\,sans-serif\]{font-family:Aptos,Segoe UI,sans-serif}.font-mono{font-family:var(--font-mono)}.text-2xl{font-size:var(--text-2xl);line-height:var(--tw-leading,var(--text-2xl--line-height))}.text-base{font-size:var(--text-base);line-height:var(--tw-leading,var(--text-base--line-height))}.text-lg{font-size:var(--text-lg);line-height:var(--tw-leading,var(--text-lg--line-height))}.text-sm{font-size:var(--text-sm);line-height:var(--tw-leading,var(--text-sm--line-height))}.text-xl{font-size:var(--text-xl);line-height:var(--tw-leading,var(--text-xl--line-height))}.text-xs{font-size:var(--text-xs);line-height:var(--tw-leading,var(--text-xs--line-height))}.text-\[0\.85rem\]{font-size:.85rem}.text-\[0\.6875rem\]{font-size:.6875rem}.text-\[0\.8125rem\]{font-size:.8125rem}.text-\[8px\]{font-size:8px}.text-\[9px\]{font-size:9px}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[12px\]{font-size:12px}.text-\[13px\]{font-size:13px}.text-\[15px\]{font-size:15px}.text-\[16px\]{font-size:16px}.text-\[17px\]{font-size:17px}.text-\[24px\]{font-size:24px}.leading-3{--tw-leading:calc(var(--spacing) * 3);line-height:calc(var(--spacing) * 3)}.leading-4{--tw-leading:calc(var(--spacing) * 4);line-height:calc(var(--spacing) * 4)}.leading-5{--tw-leading:calc(var(--spacing) * 5);line-height:calc(var(--spacing) * 5)}.leading-6{--tw-leading:calc(var(--spacing) * 6);line-height:calc(var(--spacing) * 6)}.leading-\[1\.4\]{--tw-leading:1.4;line-height:1.4}.leading-none{--tw-leading:1;line-height:1}.leading-relaxed{--tw-leading:var(--leading-relaxed);line-height:var(--leading-relaxed)}.leading-snug{--tw-leading:var(--leading-snug);line-height:var(--leading-snug)}.leading-tight{--tw-leading:var(--leading-tight);line-height:var(--leading-tight)}.font-bold{--tw-font-weight:var(--font-weight-bold);font-weight:var(--font-weight-bold)}.font-medium{--tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}.font-normal{--tw-font-weight:var(--font-weight-normal);font-weight:var(--font-weight-normal)}.font-semibold{--tw-font-weight:var(--font-weight-semibold);font-weight:var(--font-weight-semibold)}.tracking-wide{--tw-tracking:var(--tracking-wide);letter-spacing:var(--tracking-wide)}.tracking-wider{--tw-tracking:var(--tracking-wider);letter-spacing:var(--tracking-wider)}.text-wrap{text-wrap:wrap}.break-words{overflow-wrap:break-word}.break-all{word-break:break-all}.text-ellipsis{text-overflow:ellipsis}.whitespace-nowrap{white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.\!text-amber-50{color:var(--color-amber-50)!important}.text-amber-50{color:var(--color-amber-50)}.text-amber-100{color:var(--color-amber-100)}.text-amber-200{color:var(--color-amber-200)}.text-amber-200\/80{color:#fee685cc}@supports (color:color-mix(in lab, red, red)){.text-amber-200\/80{color:color-mix(in oklab, var(--color-amber-200) 80%, transparent)}}.text-amber-300{color:var(--color-amber-300)}.text-amber-300\/70{color:#ffd236b3}@supports (color:color-mix(in lab, red, red)){.text-amber-300\/70{color:color-mix(in oklab, var(--color-amber-300) 70%, transparent)}}.text-amber-400{color:var(--color-amber-400)}.text-amber-500{color:var(--color-amber-500)}.text-blue-400{color:var(--color-blue-400)}.text-card-foreground{color:var(--color-card-foreground)}.text-current{color:currentColor}.text-destructive{color:var(--color-destructive)}.text-emerald-500{color:var(--color-emerald-500)}.text-foreground,.text-foreground\/80{color:var(--color-foreground)}@supports (color:color-mix(in lab, red, red)){.text-foreground\/80{color:color-mix(in oklab, var(--color-foreground) 80%, transparent)}}.text-gray-500{color:var(--color-gray-500)}.text-green-50{color:var(--color-green-50)}.text-green-300{color:var(--color-green-300)}.text-green-400{color:var(--color-green-400)}.text-green-500{color:var(--color-green-500)}.text-inherit{color:inherit}.text-input{color:var(--color-input)}.text-muted-foreground,.text-muted-foreground\/50{color:var(--color-muted-foreground)}@supports (color:color-mix(in lab, red, red)){.text-muted-foreground\/50{color:color-mix(in oklab, var(--color-muted-foreground) 50%, transparent)}}.text-muted-foreground\/60{color:var(--color-muted-foreground)}@supports (color:color-mix(in lab, red, red)){.text-muted-foreground\/60{color:color-mix(in oklab, var(--color-muted-foreground) 60%, transparent)}}.text-muted-foreground\/70{color:var(--color-muted-foreground)}@supports (color:color-mix(in lab, red, red)){.text-muted-foreground\/70{color:color-mix(in oklab, var(--color-muted-foreground) 70%, transparent)}}.text-muted-foreground\/80{color:var(--color-muted-foreground)}@supports (color:color-mix(in lab, red, red)){.text-muted-foreground\/80{color:color-mix(in oklab, var(--color-muted-foreground) 80%, transparent)}}.text-popover-foreground{color:var(--color-popover-foreground)}.text-primary{color:var(--color-primary)}.text-primary-foreground{color:var(--color-primary-foreground)}.text-primary\/70{color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.text-primary\/70{color:color-mix(in oklab, var(--color-primary) 70%, transparent)}}.text-purple-50{color:var(--color-purple-50)}.text-purple-400{color:var(--color-purple-400)}.text-red-300{color:var(--color-red-300)}.text-red-400{color:var(--color-red-400)}.text-red-500{color:var(--color-red-500)}.text-sky-500{color:var(--color-sky-500)}.text-white{color:var(--color-white)}.text-white\/50{color:#ffffff80}@supports (color:color-mix(in lab, red, red)){.text-white\/50{color:color-mix(in oklab, var(--color-white) 50%, transparent)}}.text-white\/60{color:#fff9}@supports (color:color-mix(in lab, red, red)){.text-white\/60{color:color-mix(in oklab, var(--color-white) 60%, transparent)}}.text-white\/70{color:#ffffffb3}@supports (color:color-mix(in lab, red, red)){.text-white\/70{color:color-mix(in oklab, var(--color-white) 70%, transparent)}}.text-white\/80{color:#fffc}@supports (color:color-mix(in lab, red, red)){.text-white\/80{color:color-mix(in oklab, var(--color-white) 80%, transparent)}}.text-yellow-400{color:var(--color-yellow-400)}.text-yellow-400\/80{color:#fac800cc}@supports (color:color-mix(in lab, red, red)){.text-yellow-400\/80{color:color-mix(in oklab, var(--color-yellow-400) 80%, transparent)}}.text-yellow-500{color:var(--color-yellow-500)}.capitalize{text-transform:capitalize}.lowercase{text-transform:lowercase}.uppercase{text-transform:uppercase}.italic{font-style:italic}.ordinal{--tw-ordinal:ordinal;font-variant-numeric:var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,) var(--tw-numeric-fraction,)}.tabular-nums{--tw-numeric-spacing:tabular-nums;font-variant-numeric:var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,) var(--tw-numeric-fraction,)}.line-through{text-decoration-line:line-through}.overline{text-decoration-line:overline}.underline{text-decoration-line:underline}.underline-offset-2{text-underline-offset:2px}.placeholder-muted-foreground::placeholder{color:var(--color-muted-foreground)}.accent-\[var\(--pptx-primary\,\#6366f1\)\]{accent-color:var(--pptx-primary,#6366f1)}.accent-primary{accent-color:var(--color-primary)}.opacity-0{opacity:0}.opacity-45{opacity:.45}.opacity-50{opacity:.5}.opacity-60{opacity:.6}.opacity-70{opacity:.7}.opacity-80{opacity:.8}.opacity-85{opacity:.85}.shadow{--tw-shadow:0 1px 3px 0 var(--tw-shadow-color,#0000001a), 0 1px 2px -1px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.shadow-2xl{--tw-shadow:0 25px 50px -12px var(--tw-shadow-color,#00000040);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px var(--tw-shadow-color,#0000001a), 0 4px 6px -4px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 3px 0 var(--tw-shadow-color,#0000001a), 0 1px 2px -1px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.shadow-xl{--tw-shadow:0 20px 25px -5px var(--tw-shadow-color,#0000001a), 0 8px 10px -6px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.shadow\/glow,.shadow\/highlight{--tw-shadow:0 1px 3px 0 var(--tw-shadow-color,#0000001a), 0 1px 2px -1px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.ring,.ring-1{--tw-ring-shadow:var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.ring-primary{--tw-ring-color:var(--color-primary)}.outline{outline-style:var(--tw-outline-style);outline-width:1px}.blur{--tw-blur:blur(8px);filter:var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,)}.drop-shadow{--tw-drop-shadow-size:drop-shadow(0 1px 2px var(--tw-drop-shadow-color,#0000001a)) drop-shadow(0 1px 1px var(--tw-drop-shadow-color,#0000000f));--tw-drop-shadow:drop-shadow(0 1px 2px #0000001a) drop-shadow(0 1px 1px #0000000f);filter:var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,)}.grayscale{--tw-grayscale:grayscale(100%);filter:var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,)}.invert{--tw-invert:invert(100%);filter:var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,)}.sepia{--tw-sepia:sepia(100%);filter:var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,)}.filter{filter:var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,)}.backdrop-blur{--tw-backdrop-blur:blur(8px);-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.backdrop-blur-\[2px\]{--tw-backdrop-blur:blur(2px);-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.backdrop-blur-lg{--tw-backdrop-blur:blur(var(--blur-lg));-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.backdrop-blur-md{--tw-backdrop-blur:blur(var(--blur-md));-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.backdrop-blur-sm{--tw-backdrop-blur:blur(var(--blur-sm));-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.backdrop-blur-xl{--tw-backdrop-blur:blur(var(--blur-xl));-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.backdrop-filter{-webkit-backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,)}.\!transition{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events!important;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function))!important;transition-duration:var(--tw-duration,var(--default-transition-duration))!important}.transition{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-\[width\]{transition-property:width;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-all{transition-property:all;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-colors{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-opacity{transition-property:opacity;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-transform{transition-property:transform,translate,scale,rotate;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.duration-300{--tw-duration:.3s;transition-duration:.3s}.duration-1000{--tw-duration:1s;transition-duration:1s}.ease-in{--tw-ease:var(--ease-in);transition-timing-function:var(--ease-in)}.ease-in-out{--tw-ease:var(--ease-in-out);transition-timing-function:var(--ease-in-out)}.ease-linear{--tw-ease:linear;transition-timing-function:linear}.ease-out{--tw-ease:var(--ease-out);transition-timing-function:var(--ease-out)}.outline-none{--tw-outline-style:none;outline-style:none}.select-all{-webkit-user-select:all;user-select:all}.select-none{-webkit-user-select:none;user-select:none}.\[animation-delay\:-0\.1s\]{animation-delay:-.1s}.\[animation-delay\:-0\.2s\]{animation-delay:-.2s}@media (hover:hover){.group-hover\:block:is(:where(.group):hover *){display:block}.group-hover\:flex:is(:where(.group):hover *){display:flex}.group-hover\:border-border\/40:is(:where(.group):hover *){border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){.group-hover\:border-border\/40:is(:where(.group):hover *){border-color:color-mix(in oklab, var(--color-border) 40%, transparent)}}.group-hover\:bg-blue-400\/60:is(:where(.group):hover *){background-color:#54a2ff99}@supports (color:color-mix(in lab, red, red)){.group-hover\:bg-blue-400\/60:is(:where(.group):hover *){background-color:color-mix(in oklab, var(--color-blue-400) 60%, transparent)}}.group-hover\:opacity-100:is(:where(.group):hover *){opacity:1}}.placeholder\:text-muted-foreground::placeholder,.placeholder\:text-muted-foreground\/60::placeholder{color:var(--color-muted-foreground)}@supports (color:color-mix(in lab, red, red)){.placeholder\:text-muted-foreground\/60::placeholder{color:color-mix(in oklab, var(--color-muted-foreground) 60%, transparent)}}.before\:absolute:before{content:var(--tw-content);position:absolute}.before\:top-1:before{content:var(--tw-content);top:var(--spacing)}.before\:bottom-1:before{content:var(--tw-content);bottom:var(--spacing)}.before\:left-0:before{content:var(--tw-content);left:0}.before\:w-\[3px\]:before{content:var(--tw-content);width:3px}.before\:rounded-r:before{content:var(--tw-content);border-top-right-radius:.25rem;border-bottom-right-radius:.25rem}.before\:bg-primary:before{content:var(--tw-content);background-color:var(--color-primary)}.after\:absolute:after{content:var(--tw-content);position:absolute}.after\:right-0:after{content:var(--tw-content);right:0}.after\:-bottom-px:after{content:var(--tw-content);bottom:-1px}.after\:left-0:after{content:var(--tw-content);left:0}.after\:h-\[2\.5px\]:after{content:var(--tw-content);height:2.5px}.after\:bg-primary:after{content:var(--tw-content);background-color:var(--color-primary)}.last\:border-b-0:last-child{border-bottom-style:var(--tw-border-style);border-bottom-width:0}.last\:pb-0:last-child{padding-bottom:0}.focus-within\:border-ring:focus-within{border-color:var(--color-ring)}@media (hover:hover){.hover\:-translate-y-0\.5:hover{--tw-translate-y:calc(var(--spacing) * -.5);translate:var(--tw-translate-x) var(--tw-translate-y)}.hover\:scale-110:hover{--tw-scale-x:110%;--tw-scale-y:110%;--tw-scale-z:110%;scale:var(--tw-scale-x) var(--tw-scale-y)}.hover\:scale-125:hover{--tw-scale-x:125%;--tw-scale-y:125%;--tw-scale-z:125%;scale:var(--tw-scale-x) var(--tw-scale-y)}.hover\:border-border:hover{border-color:var(--color-border)}.hover\:border-destructive:hover{border-color:var(--color-destructive)}.hover\:border-primary:hover,.hover\:border-primary\/40:hover{border-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.hover\:border-primary\/40:hover{border-color:color-mix(in oklab, var(--color-primary) 40%, transparent)}}.hover\:border-primary\/50:hover{border-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.hover\:border-primary\/50:hover{border-color:color-mix(in oklab, var(--color-primary) 50%, transparent)}}.hover\:\!bg-amber-500:hover{background-color:var(--color-amber-500)!important}.hover\:bg-accent:hover,.hover\:bg-accent\/30:hover{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-accent\/30:hover{background-color:color-mix(in oklab, var(--color-accent) 30%, transparent)}}.hover\:bg-accent\/40:hover{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-accent\/40:hover{background-color:color-mix(in oklab, var(--color-accent) 40%, transparent)}}.hover\:bg-accent\/50:hover{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-accent\/50:hover{background-color:color-mix(in oklab, var(--color-accent) 50%, transparent)}}.hover\:bg-accent\/60:hover{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-accent\/60:hover{background-color:color-mix(in oklab, var(--color-accent) 60%, transparent)}}.hover\:bg-accent\/80:hover{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-accent\/80:hover{background-color:color-mix(in oklab, var(--color-accent) 80%, transparent)}}.hover\:bg-amber-500:hover{background-color:var(--color-amber-500)}.hover\:bg-amber-700\/20:hover{background-color:#b7500033}@supports (color:color-mix(in lab, red, red)){.hover\:bg-amber-700\/20:hover{background-color:color-mix(in oklab, var(--color-amber-700) 20%, transparent)}}.hover\:bg-amber-700\/30:hover{background-color:#b750004d}@supports (color:color-mix(in lab, red, red)){.hover\:bg-amber-700\/30:hover{background-color:color-mix(in oklab, var(--color-amber-700) 30%, transparent)}}.hover\:bg-background:hover{background-color:var(--color-background)}.hover\:bg-destructive\/10:hover{background-color:var(--color-destructive)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-destructive\/10:hover{background-color:color-mix(in oklab, var(--color-destructive) 10%, transparent)}}.hover\:bg-green-500:hover{background-color:var(--color-green-500)}.hover\:bg-green-600:hover{background-color:var(--color-green-600)}.hover\:bg-green-900\/50:hover{background-color:#0d542b80}@supports (color:color-mix(in lab, red, red)){.hover\:bg-green-900\/50:hover{background-color:color-mix(in oklab, var(--color-green-900) 50%, transparent)}}.hover\:bg-muted:hover,.hover\:bg-muted\/50:hover{background-color:var(--color-muted)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-muted\/50:hover{background-color:color-mix(in oklab, var(--color-muted) 50%, transparent)}}.hover\:bg-primary:hover,.hover\:bg-primary\/15:hover{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-primary\/15:hover{background-color:color-mix(in oklab, var(--color-primary) 15%, transparent)}}.hover\:bg-primary\/30:hover{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-primary\/30:hover{background-color:color-mix(in oklab, var(--color-primary) 30%, transparent)}}.hover\:bg-primary\/80:hover{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-primary\/80:hover{background-color:color-mix(in oklab, var(--color-primary) 80%, transparent)}}.hover\:bg-primary\/90:hover{background-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.hover\:bg-primary\/90:hover{background-color:color-mix(in oklab, var(--color-primary) 90%, transparent)}}.hover\:bg-purple-500:hover{background-color:var(--color-purple-500)}.hover\:bg-red-500\/20:hover{background-color:#fb2c3633}@supports (color:color-mix(in lab, red, red)){.hover\:bg-red-500\/20:hover{background-color:color-mix(in oklab, var(--color-red-500) 20%, transparent)}}.hover\:bg-red-600:hover{background-color:var(--color-red-600)}.hover\:bg-red-600\/30:hover{background-color:#e400144d}@supports (color:color-mix(in lab, red, red)){.hover\:bg-red-600\/30:hover{background-color:color-mix(in oklab, var(--color-red-600) 30%, transparent)}}.hover\:bg-red-700:hover{background-color:var(--color-red-700)}.hover\:bg-transparent:hover{background-color:#0000}.hover\:bg-white\/10:hover{background-color:#ffffff1a}@supports (color:color-mix(in lab, red, red)){.hover\:bg-white\/10:hover{background-color:color-mix(in oklab, var(--color-white) 10%, transparent)}}.hover\:bg-white\/20:hover{background-color:#fff3}@supports (color:color-mix(in lab, red, red)){.hover\:bg-white\/20:hover{background-color:color-mix(in oklab, var(--color-white) 20%, transparent)}}.hover\:\!text-destructive:hover{color:var(--color-destructive)!important}.hover\:text-blue-300:hover{color:var(--color-blue-300)}.hover\:text-destructive:hover{color:var(--color-destructive)}.hover\:text-foreground:hover{color:var(--color-foreground)}.hover\:text-muted-foreground:hover{color:var(--color-muted-foreground)}.hover\:text-primary:hover,.hover\:text-primary\/80:hover{color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.hover\:text-primary\/80:hover{color:color-mix(in oklab, var(--color-primary) 80%, transparent)}}.hover\:text-red-300:hover{color:var(--color-red-300)}.hover\:text-red-400:hover{color:var(--color-red-400)}.hover\:text-white:hover{color:var(--color-white)}.hover\:underline:hover{text-decoration-line:underline}.hover\:opacity-80:hover{opacity:.8}.hover\:opacity-90:hover{opacity:.9}.hover\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px var(--tw-shadow-color,#0000001a), 0 4px 6px -4px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.hover\:shadow-md:hover{--tw-shadow:0 4px 6px -1px var(--tw-shadow-color,#0000001a), 0 2px 4px -2px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}}.focus\:border-primary:focus,.focus\:border-primary\/50:focus{border-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.focus\:border-primary\/50:focus{border-color:color-mix(in oklab, var(--color-primary) 50%, transparent)}}.focus\:border-ring:focus{border-color:var(--color-ring)}.focus\:bg-accent:focus,.focus\:bg-accent\/40:focus{background-color:var(--color-accent)}@supports (color:color-mix(in lab, red, red)){.focus\:bg-accent\/40:focus{background-color:color-mix(in oklab, var(--color-accent) 40%, transparent)}}.focus\:ring-1:focus{--tw-ring-shadow:var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.focus\:ring-2:focus{--tw-ring-shadow:var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.focus\:ring-primary:focus,.focus\:ring-primary\/30:focus{--tw-ring-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.focus\:ring-primary\/30:focus{--tw-ring-color:color-mix(in oklab, var(--color-primary) 30%, transparent)}}.focus\:ring-primary\/50:focus{--tw-ring-color:var(--color-primary)}@supports (color:color-mix(in lab, red, red)){.focus\:ring-primary\/50:focus{--tw-ring-color:color-mix(in oklab, var(--color-primary) 50%, transparent)}}.focus\:ring-ring:focus,.focus\:ring-ring\/20:focus{--tw-ring-color:var(--color-ring)}@supports (color:color-mix(in lab, red, red)){.focus\:ring-ring\/20:focus{--tw-ring-color:color-mix(in oklab, var(--color-ring) 20%, transparent)}}.focus\:outline-none:focus{--tw-outline-style:none;outline-style:none}.focus-visible\:bg-muted:focus-visible{background-color:var(--color-muted)}.focus-visible\:ring-2:focus-visible{--tw-ring-shadow:var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}.focus-visible\:ring-ring:focus-visible{--tw-ring-color:var(--color-ring)}.focus-visible\:ring-offset-1:focus-visible{--tw-ring-offset-width:1px;--tw-ring-offset-shadow:var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color)}.focus-visible\:outline:focus-visible{outline-style:var(--tw-outline-style);outline-width:1px}.focus-visible\:outline-2:focus-visible{outline-style:var(--tw-outline-style);outline-width:2px}.focus-visible\:outline-offset-1:focus-visible{outline-offset:1px}.focus-visible\:outline-ring:focus-visible{outline-color:var(--color-ring)}.focus-visible\:outline-none:focus-visible{--tw-outline-style:none;outline-style:none}.active\:scale-90:active{--tw-scale-x:90%;--tw-scale-y:90%;--tw-scale-z:90%;scale:var(--tw-scale-x) var(--tw-scale-y)}.active\:scale-95:active{--tw-scale-x:95%;--tw-scale-y:95%;--tw-scale-z:95%;scale:var(--tw-scale-x) var(--tw-scale-y)}.active\:cursor-grabbing:active{cursor:grabbing}.active\:opacity-70:active{opacity:.7}.active\:opacity-80:active{opacity:.8}@media (hover:hover){.enabled\:hover\:bg-muted:enabled:hover{background-color:var(--color-muted)}.enabled\:hover\:text-foreground:enabled:hover{color:var(--color-foreground)}}.disabled\:cursor-not-allowed:disabled{cursor:not-allowed}.disabled\:text-white\/20:disabled{color:#fff3}@supports (color:color-mix(in lab, red, red)){.disabled\:text-white\/20:disabled{color:color-mix(in oklab, var(--color-white) 20%, transparent)}}.disabled\:opacity-30:disabled{opacity:.3}.disabled\:opacity-35:disabled{opacity:.35}.disabled\:opacity-40:disabled{opacity:.4}.disabled\:opacity-45:disabled{opacity:.45}.disabled\:opacity-50:disabled{opacity:.5}.disabled\:opacity-60:disabled{opacity:.6}@supports ((-webkit-backdrop-filter:var(--tw)) or (backdrop-filter:var(--tw))){.supports-\[backdrop-filter\]\:bg-secondary\/60{background-color:var(--color-secondary)}@supports (color:color-mix(in lab, red, red)){.supports-\[backdrop-filter\]\:bg-secondary\/60{background-color:color-mix(in oklab, var(--color-secondary) 60%, transparent)}}}@media not all and (min-width:48rem){.max-md\:fixed{position:fixed}.max-md\:inset-x-0{inset-inline:0}.max-md\:top-auto{top:auto}.max-md\:bottom-0{bottom:0}.max-md\:flex{display:flex}.max-md\:hidden{display:none}.max-md\:h-6{height:calc(var(--spacing) * 6)}.max-md\:h-11{height:calc(var(--spacing) * 11)}.max-md\:h-\[75dvh\]{height:75dvh}.max-md\:h-\[min\(60dvh\,440px\)\]{height:min(60dvh,440px)}.max-md\:max-h-\[88dvh\]{max-height:88dvh}.max-md\:min-h-0{min-height:0}.max-md\:min-h-\[\.\.\.\]{min-height:...}.max-md\:min-h-\[36px\]{min-height:36px}.max-md\:min-h-\[40px\]{min-height:40px}.max-md\:min-h-\[44px\]{min-height:44px}.max-md\:min-h-\[44px\]\!{min-height:44px!important}.max-md\:w-6{width:calc(var(--spacing) * 6)}.max-md\:w-11{width:calc(var(--spacing) * 11)}.max-md\:w-auto{width:auto}.max-md\:w-full{width:100%}.max-md\:max-w-none{max-width:none}.max-md\:min-w-0{min-width:0}.max-md\:min-w-1{min-width:var(--spacing)}.max-md\:min-w-\[40px\]{min-width:40px}.max-md\:min-w-\[44px\]{min-width:44px}.max-md\:min-w-\[44px\]\!{min-width:44px!important}.max-md\:min-w-\[48px\]{min-width:48px}.max-md\:shrink-0{flex-shrink:0}.max-md\:scrollbar-none{scrollbar-width:none}.max-md\:flex-col{flex-direction:column}.max-md\:flex-row{flex-direction:row}.max-md\:items-center{align-items:center}.max-md\:gap-0{gap:0}.max-md\:gap-1{gap:var(--spacing)}:where(.max-md\:space-y-0>:not(:last-child)){--tw-space-y-reverse:0;margin-block:0}.max-md\:overflow-x-auto{overflow-x:auto}.max-md\:rounded-t-2xl{border-top-left-radius:var(--radius-2xl);border-top-right-radius:var(--radius-2xl)}.max-md\:rounded-b-none{border-bottom-right-radius:0;border-bottom-left-radius:0}.max-md\:border-x-0{border-inline-style:var(--tw-border-style);border-inline-width:0}.max-md\:border-t{border-top-style:var(--tw-border-style);border-top-width:1px}.max-md\:border-r{border-right-style:var(--tw-border-style);border-right-width:1px}.max-md\:border-r-0{border-right-style:var(--tw-border-style);border-right-width:0}.max-md\:border-b{border-bottom-style:var(--tw-border-style);border-bottom-width:1px}.max-md\:border-b-0{border-bottom-style:var(--tw-border-style);border-bottom-width:0}.max-md\:border-b-2{border-bottom-style:var(--tw-border-style);border-bottom-width:2px}.max-md\:border-l-0{border-left-style:var(--tw-border-style);border-left-width:0}.max-md\:p-2{padding:calc(var(--spacing) * 2)}.max-md\:px-1{padding-inline:var(--spacing)}.max-md\:px-3{padding-inline:calc(var(--spacing) * 3)}.max-md\:px-4{padding-inline:calc(var(--spacing) * 4)}.max-md\:py-0{padding-block:0}.max-md\:py-0\.5{padding-block:calc(var(--spacing) * .5)}.max-md\:py-4{padding-block:calc(var(--spacing) * 4)}.max-md\:pt-4{padding-top:calc(var(--spacing) * 4)}.max-md\:pb-\[max\(env\(safe-area-inset-bottom\)\,0px\)\]{padding-bottom:max(env(safe-area-inset-bottom), 0px)}.max-md\:pl-0{padding-left:0}.max-md\:whitespace-nowrap{white-space:nowrap}.max-md\:shadow-2xl{--tw-shadow:0 25px 50px -12px var(--tw-shadow-color,#00000040);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}}@media not all and (min-width:40rem){.max-sm\:hidden{display:none}}@media (min-width:40rem){.sm\:inline{display:inline}.sm\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (min-width:48rem){.md\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}}@media (min-width:64rem){.lg\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}}.\[\&_dd\]\:m-0 dd{margin:0}.\[\&_dd\]\:break-words dd{overflow-wrap:break-word}.\[\&_dt\]\:font-medium dt{--tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}.\[\&_dt\]\:text-muted-foreground dt{color:var(--color-muted-foreground)}.\[\&\>\*\]\:shrink-0>*{flex-shrink:0}}@media (prefers-reduced-motion:reduce){.pptx-vue-viewer *,.pptx-vue-viewer :before,.pptx-vue-viewer :after,.pptx-vue-presentation *,.pptx-vue-presentation :before,.pptx-vue-presentation :after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}.pptx-vue-viewer.pptx-vue-reduced-motion *,.pptx-vue-viewer.pptx-vue-reduced-motion :before,.pptx-vue-viewer.pptx-vue-reduced-motion :after,.pptx-vue-presentation.pptx-vue-reduced-motion *,.pptx-vue-presentation.pptx-vue-reduced-motion :before,.pptx-vue-presentation.pptx-vue-reduced-motion :after,.pptx-reduced-motion *,.pptx-reduced-motion :before,.pptx-reduced-motion :after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}.pptx-vue-viewer.pptx-vue-no-hw-accel *,.pptx-vue-viewer.pptx-vue-no-hw-accel :before,.pptx-vue-viewer.pptx-vue-no-hw-accel :after{will-change:auto!important;backface-visibility:visible!important;perspective:none!important}.pptx-vue-viewer.pptx-vue-compat-display *,.pptx-vue-viewer.pptx-vue-compat-display :before,.pptx-vue-viewer.pptx-vue-compat-display :after{box-shadow:none!important;-webkit-backdrop-filter:none!important;mix-blend-mode:normal!important}:where(.pptx-vue-viewer){scrollbar-width:thin;scrollbar-color:var(--pptx-border,#374151) transparent}:where(.pptx-vue-viewer) ::-webkit-scrollbar{width:6px;height:6px}:where(.pptx-vue-viewer) ::-webkit-scrollbar-track{background:0 0}:where(.pptx-vue-viewer) ::-webkit-scrollbar-thumb{background-color:var(--pptx-border,#374151);border-radius:3px}:where(.pptx-vue-viewer) ::-webkit-scrollbar-thumb:hover{background-color:var(--pptx-muted-foreground,#9ca3af)}:where(.pptx-vue-viewer) ::-webkit-scrollbar-corner{background:0 0}[data-pptx-element]:focus-visible{outline:2px solid var(--pptx-ring,#6366f1);outline-offset:2px;z-index:999}:where(.pptx-vue-viewer) :where(button,a,input,select,textarea,[tabindex]):focus-visible{outline-offset:2px;outline:2px solid var(--pptx-ring,#818cf8)!important}:where(.pptx-vue-viewer) :where(button,[role=button]):where(:not([role=switch]):not([data-pptx-compact])){touch-action:manipulation;min-width:24px;min-height:24px}@media (forced-colors:active){:where(.pptx-vue-viewer) :where(button,a,input,select,textarea,[tabindex]):focus-visible{outline-color:highlight}}.pptx-vue-viewer{background:var(--pptx-background,#030712);width:100%;height:100%;min-height:0;color:var(--pptx-foreground,#f3f4f6);flex-direction:column;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;position:relative;overflow:hidden}.pptx-vue-state{text-align:center;flex-direction:column;flex:1;justify-content:center;align-items:center;gap:.75rem;padding:2rem;display:flex}.pptx-vue-error-detail{background:var(--pptx-card,#111827);max-width:40rem;color:var(--pptx-muted-foreground,#9ca3af);white-space:pre-wrap;border-radius:.5rem;padding:.75rem;font-size:.8rem;overflow:auto}.pptx-vue-spinner{border:3px solid var(--pptx-border,#374151);border-top-color:var(--pptx-primary,#6366f1);border-radius:50%;width:2rem;height:2rem;animation:.8s linear infinite pptx-vue-spin}@keyframes pptx-vue-spin{to{transform:rotate(360deg)}}.pptx-vue-toolbar{border-bottom:1px solid var(--pptx-border,#374151);background:var(--pptx-card,#111827);justify-content:space-between;align-items:center;gap:1rem;padding:.5rem .75rem;display:flex}.pptx-vue-nav,.pptx-vue-zoom{align-items:center;gap:.5rem;display:flex}.pptx-vue-toolbar button{border:1px solid var(--pptx-border,#374151);min-width:2rem;height:2rem;color:var(--pptx-foreground,#f3f4f6);cursor:pointer;background:0 0;border-radius:.375rem;padding:0 .5rem;font-size:1rem;line-height:1}.pptx-vue-toolbar button:hover:not(:disabled){border-color:var(--pptx-primary,#6366f1)}.pptx-vue-toolbar button:disabled{opacity:.4;cursor:not-allowed}.pptx-vue-slide-counter,.pptx-vue-zoom-value{font-variant-numeric:tabular-nums;font-size:.85rem}.pptx-vue-body{flex:1;min-height:0;display:flex}.pptx-vue-thumbnails{border-right:1px solid var(--pptx-border,#374151);background:var(--pptx-card,#111827);flex-direction:column;gap:.5rem;width:11.25rem;padding:.75rem;display:flex;overflow-y:auto}.pptx-vue-thumb{border:2px solid var(--pptx-border,#374151);cursor:pointer;background:#fff;border-radius:.375rem;width:100%;padding:0;position:relative;overflow:hidden}.pptx-vue-thumb.is-active{border-color:var(--pptx-primary,#6366f1)}.pptx-vue-thumb-stage{pointer-events:none;position:absolute;inset:0;overflow:hidden}.pptx-vue-thumb-index{color:#f3f4f6;background:#0000008c;border-radius:.2rem;padding:0 .2rem;font-size:.7rem;position:absolute;bottom:.15rem;right:.3rem}.pptx-vue-main{background:var(--pptx-background,#030712);flex:1;min-width:0;display:flex;overflow:auto}.pptx-vue-main.is-editable .pptx-vue-stage{touch-action:none}.pptx-vue-canvas-viewport{width:100%;height:100%;display:flex}.pptx-vue-element{box-sizing:border-box}.pptx-vue-template-editing{outline-offset:1px;opacity:.95;outline:2px dashed #d97706}.pptx-vue-placeholder{color:#6366f1cc;background:#6366f10f;border:1px dashed #6366f180;justify-content:center;align-items:center;width:100%;height:100%;font-size:.75rem;display:flex}@media (max-width:767.98px),(pointer:coarse) and (max-height:499.98px) and (max-width:1023.98px){.pptx-vue-toolbar{flex-wrap:wrap;gap:.5rem;padding:.5rem}.pptx-vue-zoom{-webkit-overflow-scrolling:touch;scrollbar-width:thin;flex-wrap:wrap;flex:100%;padding-bottom:.15rem;overflow-x:auto}.pptx-vue-nav button,.pptx-vue-zoom button{flex:none;min-width:44px;height:auto;min-height:44px;padding:0 .65rem;font-size:1.1rem}.pptx-vue-nav button{font-size:1.5rem;font-weight:600}.pptx-vue-thumbnails{display:none}.pptx-vue-body{flex-direction:column}.pptx-vue-main{flex:auto;min-height:0;padding-bottom:56px}}@property --tw-translate-x{syntax:"*";inherits:false;initial-value:0}@property --tw-translate-y{syntax:"*";inherits:false;initial-value:0}@property --tw-translate-z{syntax:"*";inherits:false;initial-value:0}@property --tw-rotate-x{syntax:"*";inherits:false}@property --tw-rotate-y{syntax:"*";inherits:false}@property --tw-rotate-z{syntax:"*";inherits:false}@property --tw-skew-x{syntax:"*";inherits:false}@property --tw-skew-y{syntax:"*";inherits:false}@property --tw-space-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --tw-divide-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --tw-leading{syntax:"*";inherits:false}@property --tw-font-weight{syntax:"*";inherits:false}@property --tw-tracking{syntax:"*";inherits:false}@property --tw-ordinal{syntax:"*";inherits:false}@property --tw-slashed-zero{syntax:"*";inherits:false}@property --tw-numeric-figure{syntax:"*";inherits:false}@property --tw-numeric-spacing{syntax:"*";inherits:false}@property --tw-numeric-fraction{syntax:"*";inherits:false}@property --tw-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-shadow-color{syntax:"*";inherits:false}@property --tw-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-inset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-shadow-color{syntax:"*";inherits:false}@property --tw-inset-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-ring-color{syntax:"*";inherits:false}@property --tw-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-ring-color{syntax:"*";inherits:false}@property --tw-inset-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-ring-inset{syntax:"*";inherits:false}@property --tw-ring-offset-width{syntax:"<length>";inherits:false;initial-value:0}@property --tw-ring-offset-color{syntax:"*";inherits:false;initial-value:#fff}@property --tw-ring-offset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-outline-style{syntax:"*";inherits:false;initial-value:solid}@property --tw-blur{syntax:"*";inherits:false}@property --tw-brightness{syntax:"*";inherits:false}@property --tw-contrast{syntax:"*";inherits:false}@property --tw-grayscale{syntax:"*";inherits:false}@property --tw-hue-rotate{syntax:"*";inherits:false}@property --tw-invert{syntax:"*";inherits:false}@property --tw-opacity{syntax:"*";inherits:false}@property --tw-saturate{syntax:"*";inherits:false}@property --tw-sepia{syntax:"*";inherits:false}@property --tw-drop-shadow{syntax:"*";inherits:false}@property --tw-drop-shadow-color{syntax:"*";inherits:false}@property --tw-drop-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-drop-shadow-size{syntax:"*";inherits:false}@property --tw-backdrop-blur{syntax:"*";inherits:false}@property --tw-backdrop-brightness{syntax:"*";inherits:false}@property --tw-backdrop-contrast{syntax:"*";inherits:false}@property --tw-backdrop-grayscale{syntax:"*";inherits:false}@property --tw-backdrop-hue-rotate{syntax:"*";inherits:false}@property --tw-backdrop-invert{syntax:"*";inherits:false}@property --tw-backdrop-opacity{syntax:"*";inherits:false}@property --tw-backdrop-saturate{syntax:"*";inherits:false}@property --tw-backdrop-sepia{syntax:"*";inherits:false}@property --tw-duration{syntax:"*";inherits:false}@property --tw-ease{syntax:"*";inherits:false}@property --tw-content{syntax:"*";inherits:false;initial-value:""}@property --tw-scale-x{syntax:"*";inherits:false;initial-value:1}@property --tw-scale-y{syntax:"*";inherits:false;initial-value:1}@property --tw-scale-z{syntax:"*";inherits:false;initial-value:1}@keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{50%{opacity:.5}}@keyframes bounce{0%,to{animation-timing-function:cubic-bezier(.8,0,1,1);transform:translateY(-25%)}50%{animation-timing-function:cubic-bezier(0,0,.2,1);transform:none}}
+
+.pptx-vue-handout-master-canvas[data-v-2fee591c] {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+}
+
+.pptx-vue-handout-master-canvas__empty[data-v-2fee591c] {
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	font-size: 14px;
+}
+
+.pptx-vue-handout-master-canvas__element[data-v-2fee591c] {
+	position: absolute;
+	z-index: 2;
+	overflow: hidden;
+}
+
+.pptx-vue-handout-master-canvas__page[data-v-2fee591c] {
+	position: relative;
+	background: #ffffff;
+	border: 1px solid #d1d5db;
+	border-radius: 4px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.pptx-vue-handout-master-canvas__bg[data-v-2fee591c] {
+	position: absolute;
+	inset: 0;
+	border-radius: 4px;
+}
+
+.pptx-vue-handout-master-canvas__slot[data-v-2fee591c] {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	border: 1px dashed rgba(96, 165, 250, 0.5);
+	background: rgba(239, 246, 255, 0.3);
+}
+
+.pptx-vue-handout-master-canvas__slot--filled[data-v-2fee591c] {
+	border: 1px solid #d1d5db;
+	background: transparent;
+}
+
+.pptx-vue-handout-master-canvas__slot-img[data-v-2fee591c] {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.pptx-vue-handout-master-canvas__slot-label[data-v-2fee591c] {
+	font-size: 10px;
+	font-weight: 500;
+	color: rgba(96, 165, 250, 0.6);
+}
+
+.pptx-vue-handout-master-canvas__corner[data-v-2fee591c] {
+	position: absolute;
+	padding: 0 4px;
+	color: rgba(156, 163, 175, 0.5);
+	border-style: dashed;
+	border-color: rgba(209, 213, 219, 0.4);
+}
+
+.pptx-vue-handout-master-canvas__corner--tl[data-v-2fee591c] {
+	left: 0;
+	top: 0;
+	border-bottom-width: 1px;
+	border-right-width: 1px;
+}
+
+.pptx-vue-handout-master-canvas__corner--tr[data-v-2fee591c] {
+	right: 0;
+	top: 0;
+	border-bottom-width: 1px;
+	border-left-width: 1px;
+}
+
+.pptx-vue-handout-master-canvas__corner--bl[data-v-2fee591c] {
+	left: 0;
+	bottom: 0;
+	border-top-width: 1px;
+	border-right-width: 1px;
+}
+
+.pptx-vue-handout-master-canvas__corner--br[data-v-2fee591c] {
+	right: 0;
+	bottom: 0;
+	border-top-width: 1px;
+	border-left-width: 1px;
+}
+
+
+.pptx-vue-handout-master-panel[data-v-4ff26ddc] {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 0 4px;
+}
+
+.pptx-vue-handout-master-panel__empty[data-v-4ff26ddc] {
+	padding: 16px 8px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+.pptx-vue-handout-master-panel__card[data-v-4ff26ddc] {
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 6px;
+	padding: 8px;
+	background: rgba(0, 0, 0, 0.02);
+}
+
+.pptx-vue-handout-master-panel__heading[data-v-4ff26ddc] {
+	margin-bottom: 6px;
+	font-size: 10px;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+.pptx-vue-handout-master-panel__grid[data-v-4ff26ddc] {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 4px;
+}
+
+.pptx-vue-handout-master-panel__option[data-v-4ff26ddc] {
+	padding: 6px 8px;
+	border: none;
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.05);
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	font-size: 11px;
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background 0.15s ease,
+		color 0.15s ease;
+}
+
+.pptx-vue-handout-master-panel__option[data-v-4ff26ddc]:hover {
+	background: rgba(0, 0, 0, 0.08);
+	color: var(--pptx-vue-foreground, #111827);
+}
+
+.pptx-vue-handout-master-panel__option--active[data-v-4ff26ddc] {
+	background: var(--pptx-vue-primary, #2563eb);
+	color: #ffffff;
+}
+
+.pptx-vue-handout-master-panel__swatch[data-v-4ff26ddc] {
+	width: 100%;
+	height: 32px;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+}
+
+.pptx-vue-handout-master-panel__list[data-v-4ff26ddc] {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pptx-vue-handout-master-panel__row[data-v-4ff26ddc] {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 6px;
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.03);
+	font-size: 10px;
+	color: var(--pptx-vue-foreground, #111827);
+}
+
+.pptx-vue-handout-master-panel__dot[data-v-4ff26ddc] {
+	flex-shrink: 0;
+	width: 8px;
+	height: 8px;
+	border-radius: 9999px;
+	background: rgba(168, 85, 247, 0.6);
+}
+
+
+.pptx-vue-master-crud[data-v-94234ad1] {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 8px;
+}
+
+.pptx-vue-master-crud__btn[data-v-94234ad1] {
+	padding: 3px 6px;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--pptx-vue-foreground, #111827);
+	font-size: 10px;
+	cursor: pointer;
+}
+
+.pptx-vue-master-crud__btn[data-v-94234ad1]:hover:not(:disabled) {
+	background: var(--pptx-vue-muted, #f3f4f6);
+}
+
+.pptx-vue-master-crud__btn[data-v-94234ad1]:disabled {
+	color: var(--pptx-vue-muted-foreground, #9ca3af);
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.pptx-vue-master-crud__error[data-v-94234ad1] {
+	flex-basis: 100%;
+	margin: 4px 0 0;
+	font-size: 10px;
+	color: #ef4444;
+}
+
+
+.pptx-vue-notes-master-panel[data-v-e175feb0] {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 0 4px;
+}
+
+.pptx-vue-notes-master-panel__empty[data-v-e175feb0] {
+	padding: 16px 8px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+.pptx-vue-notes-master-panel__card[data-v-e175feb0] {
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 6px;
+	padding: 8px;
+	background: rgba(0, 0, 0, 0.02);
+}
+
+.pptx-vue-notes-master-panel__heading[data-v-e175feb0] {
+	margin-bottom: 6px;
+	font-size: 10px;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+.pptx-vue-notes-master-panel__swatch[data-v-e175feb0] {
+	width: 100%;
+	height: 32px;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+}
+
+.pptx-vue-notes-master-panel__list[data-v-e175feb0] {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pptx-vue-notes-master-panel__row[data-v-e175feb0] {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 6px;
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.03);
+	font-size: 10px;
+	color: var(--pptx-vue-foreground, #111827);
+}
+
+.pptx-vue-notes-master-panel__dot[data-v-e175feb0] {
+	flex-shrink: 0;
+	width: 8px;
+	height: 8px;
+	border-radius: 9999px;
+}
+
+.pptx-vue-notes-master-panel__dot--notes[data-v-e175feb0] {
+	background: rgba(34, 197, 94, 0.6);
+}
+
+.pptx-vue-notes-master-panel__muted[data-v-e175feb0] {
+	font-size: 10px;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+
+.pptx-vue-chart-drag-badge[data-v-81a44d6b] {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	z-index: 10;
+	pointer-events: none;
+	border-radius: 4px;
+	background: rgba(59, 130, 246, 0.9);
+	color: #ffffff;
+	padding: 2px 6px;
+	font-size: 10px;
+	font-weight: 500;
+}
+
+.pptx-vue-chart-title-input[data-v-81a44d6b] {
+	position: absolute;
+	left: 50%;
+	top: 2px;
+	transform: translateX(-50%);
+	z-index: 10;
+	width: 60%;
+	pointer-events: auto;
+	text-align: center;
+	font-size: 11px;
+	padding: 2px 4px;
+	border: 1px solid #cbd5e1;
+	border-radius: 4px;
+	background: #ffffff;
+	color: #0f172a;
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+
+.pptx-vue-chart-svg[data-v-a614f86c] {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+
+.pptx-vue-chart3d-loading[data-v-a68be5d7] {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	color: #6b7280;
+	font-size: 12px;
+}
+
+
+.pptx-vue-area-chart-3d-scene[data-v-aebdf7ab] {
+	will-change: transform;
+}
+
+
+.pptx-vue-bar-chart-3d-scene[data-v-ee7235ca] {
+	will-change: transform;
+}
+
+
+.pptx-vue-line-chart-3d-scene[data-v-f21b846d] {
+	will-change: transform;
+}
+
+
+.pptx-vue-pie-chart-3d-scene[data-v-0b7d8020] {
+	will-change: transform;
+}
+
+
+.pptx-vue-surface-chart-3d-scene[data-v-455d6a76] {
+	will-change: transform;
+}
+
+
+.pptx-vue-chart[data-v-b090a5a9] {
+	pointer-events: none;
+}
+
+
+/* On the editable canvas the chart opts back into pointer events so it can be
+   click-selected like any other element (mirrors the SmartArt editable opt-in);
+   thumbnails / export / presentation stay click-transparent. */
+.pptx-vue-chart.pptx-vue-chart-selectable[data-v-b090a5a9] {
+	pointer-events: auto;
+}
+
+.pptx-vue-chart-placeholder[data-v-b090a5a9] {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	font-size: 11px;
+	color: #475569;
+	background: #f1f5f9;
+	border: 1px dashed #cbd5e1;
+	box-sizing: border-box;
+}
+
+
+.pptx-vue-connector-text[data-v-1206991d] {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.pptx-vue-connector-text__block[data-v-1206991d] {
+	padding: 0 4px;
+	white-space: pre-wrap;
+	line-height: 1.2;
+	max-width: 100%;
+}
+
+
+.pptx-vue-contentpart-svg[data-v-0289db5d] {
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	display: block;
+}
+
+.pptx-vue-contentpart-fallback[data-v-0289db5d] {
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px dashed rgba(100, 116, 139, 0.6);
+	border-radius: 4px;
+	background: rgba(148, 163, 184, 0.08);
+}
+
+.pptx-vue-contentpart-fallback-label[data-v-0289db5d] {
+	font-size: 11px;
+	font-family: system-ui, sans-serif;
+	color: rgba(100, 116, 139, 0.9);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+
+.pptx-vue-equation[data-v-83a1903d] {
+	display: inline-block;
+	vertical-align: middle;
+	font-family: 'Cambria Math', 'STIX Two Math', serif;
+}
+
+.pptx-vue-equation-number[data-v-83a1903d] {
+	margin-inline-start: 0.5em;
+	white-space: nowrap;
+	font-family: 'Cambria Math', 'STIX Two Math', serif;
+}
+
+.pptx-vue-equation-fallback[data-v-83a1903d] {
+	opacity: 0.5;
+	font-style: italic;
+}
+
+.pptx-vue-link[data-v-83a1903d] {
+	color: inherit;
+}
+
+
+/* The host `.pptx-vue-media` is already absolutely positioned by
+   `getContainerStyle`, so the badge centres against the element's own box. */
+.pptx-vue-media-badge[data-v-71b2a664] {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	color: rgba(255, 255, 255, 0.8);
+	filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+	pointer-events: none;
+	font-size: 10px;
+}
+
+.pptx-vue-media-badge svg[data-v-71b2a664] {
+	width: 48px;
+	height: 48px;
+}
+
+.pptx-vue-media-badge-missing[data-v-71b2a664] {
+	color: rgba(255, 255, 255, 0.6);
+}
+
+.pptx-vue-media-badge-missing svg[data-v-71b2a664] {
+	width: 32px;
+	height: 32px;
+}
+
+.pptx-vue-media-placeholder[data-v-71b2a664] {
+	flex-direction: column;
+	gap: 4px;
+	font-size: 10px;
+}
+
+.pptx-vue-media-placeholder svg[data-v-71b2a664] {
+	width: 32px;
+	height: 32px;
+}
+
+
+.pptx-vue-equation-wrapper[data-v-9ff795dc] {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25em;
+}
+
+.pptx-vue-equation[data-v-9ff795dc] {
+	display: inline-block;
+	vertical-align: middle;
+	font-family: 'Cambria Math', 'STIX Two Math', serif;
+}
+
+.pptx-vue-equation-numbered[data-v-9ff795dc] {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	width: 100%;
+}
+
+.pptx-vue-equation-centered[data-v-9ff795dc] {
+	flex: 1;
+	text-align: center;
+}
+
+.pptx-vue-equation-number-spacer[data-v-9ff795dc] {
+	visibility: hidden;
+	white-space: nowrap;
+}
+
+.pptx-vue-equation-number[data-v-9ff795dc] {
+	white-space: nowrap;
+	font-family: 'Cambria Math', 'STIX Two Math', serif;
+}
+
+
+.pptx-vue-ink-svg[data-v-ff66b3c0] {
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	display: block;
+}
+
+
+.pptx-vue-model3d-scene[data-v-3d0ded50] {
+	width: 100%;
+	height: 100%;
+	will-change: transform;
+}
+
+.pptx-vue-model3d-poster[data-v-3d0ded50] {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	pointer-events: none;
+	user-select: none;
+	display: block;
+}
+
+.pptx-vue-model3d-placeholder[data-v-3d0ded50] {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	font-size: 11px;
+	color: #9ca3af;
+	background-color: #f9fafb;
+	border: 1px dashed #e5e7eb;
+	border-radius: 4px;
+	box-sizing: border-box;
+}
+
+.pptx-vue-model3d-icon[data-v-3d0ded50] {
+	margin-bottom: 4px;
+	color: #d1d5db;
+}
+
+
+.pptx-vue-ole-preview[data-v-219aa812] {
+	position: relative;
+	width: 100%;
+	height: 100%;
+}
+
+.pptx-vue-ole-img[data-v-219aa812] {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	pointer-events: none;
+	user-select: none;
+	display: block;
+}
+
+.pptx-vue-ole-badge[data-v-219aa812] {
+	position: absolute;
+	bottom: 4px;
+	right: 4px;
+	z-index: 10;
+	/* Decorative overlay: never intercept clicks meant for the action bar
+	   (Download / Open), which shares the bottom-right corner. */
+	pointer-events: none;
+}
+
+.pptx-vue-ole-placeholder[data-v-219aa812] {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+	box-sizing: border-box;
+}
+
+.pptx-vue-ole-name[data-v-219aa812] {
+	margin-top: 8px;
+	font-size: 12px;
+	font-weight: 500;
+	max-width: 90%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pptx-vue-ole-sublabel[data-v-219aa812] {
+	margin-top: 2px;
+	font-size: 10px;
+	color: rgba(0, 0, 0, 0.45);
+	max-width: 90%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pptx-vue-ole-actions[data-v-219aa812] {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	padding: 4px 6px;
+	box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.82);
+	border-top: 1px solid rgba(0, 0, 0, 0.08);
+	font-size: 11px;
+	/* Re-enable pointing on the action bar; the preview/icon above stay inert. */
+	pointer-events: auto;
+}
+
+.pptx-vue-ole-meta[data-v-219aa812] {
+	margin-right: auto;
+	color: rgba(0, 0, 0, 0.55);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pptx-vue-ole-action[data-v-219aa812] {
+	flex: none;
+	padding: 2px 8px;
+	border: 1px solid rgba(0, 0, 0, 0.18);
+	border-radius: 4px;
+	background: #fff;
+	color: #1a1a1a;
+	font: inherit;
+	line-height: 1.4;
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.pptx-vue-ole-action[data-v-219aa812]:hover {
+	background: #f2f2f2;
+}
+
+.pptx-vue-ole-action[data-v-219aa812]:focus-visible {
+	outline: 2px solid #2b6cb0;
+	outline-offset: 1px;
+}
+
+
+.pptx-vue-smartart-chrome[data-v-7ca47f09] {
+	position: relative;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.pptx-vue-smartart-svg[data-v-7ca47f09] {
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+
+/* Editable node groups opt back into pointer events so a double-click can
+   enter inline edit mode without breaking element selection/drag elsewhere. */
+.pptx-vue-smartart-editable[data-v-7ca47f09] {
+	pointer-events: auto;
+	cursor: text;
+}
+
+
+/* Hover ring: outline does not render on SVG <g> elements in all browsers,
+   so drop-shadow is used as the visual confirmation that a node is editable. */
+.pptx-vue-smartart-editable[data-v-7ca47f09]:hover {
+	filter: drop-shadow(0 0 2px rgba(96, 165, 250, 0.8));
+}
+
+.pptx-vue-smartart-node-editor[data-v-7ca47f09] {
+	position: absolute;
+	z-index: 2;
+	margin: 0;
+	padding: 2px;
+	border: 1px solid #2563eb;
+	border-radius: 3px;
+	box-sizing: border-box;
+	resize: none;
+	overflow: hidden;
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.2;
+	text-align: center;
+	color: #111;
+	background: #fff;
+}
+
+.pptx-vue-smartart-placeholder[data-v-7ca47f09] {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.8);
+	pointer-events: none;
+}
+
+.pptx-vue-smartart-list[data-v-7ca47f09] {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.pptx-vue-smartart-block[data-v-7ca47f09] {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px 6px;
+	border-radius: 4px;
+	color: #fff;
+	font-size: 12px;
+	text-align: center;
+	overflow: hidden;
+}
+
+
+.pptx-vue-smartart-3d-canvas[data-v-0ccad801] {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+
+/* Invisible hit-test overlay: fills the canvas area, captures dblclicks.
+   opacity:0 makes it invisible while keeping it in the layout + event flow. */
+.pptx-vue-smartart-3d-hittest[data-v-0ccad801] {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+}
+
+
+/* Force pointer-events:auto on SmartArt node groups within the hit-test overlay.
+   SmartArtRenderer sets pointer-events:none on its <svg> element; groups only
+   get pointer-events:auto when editable=true, which is disabled in the wrapper.
+   This rule re-enables them so the dblclick target is the <g> element (carrying
+   data-node-id) rather than the overlay div, enabling correct node resolution. */
+.pptx-vue-smartart-3d-hittest[data-v-0ccad801] [data-node-id] {
+	pointer-events: auto;
+}
+
+.pptx-vue-smartart-3d-editor[data-v-0ccad801] {
+	position: absolute;
+	z-index: 20;
+	margin: 0;
+	padding: 2px;
+	box-sizing: border-box;
+	border: 1px solid #2563eb;
+	border-radius: 3px;
+	resize: none;
+	overflow: hidden;
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.2;
+	text-align: center;
+	color: #111;
+	background: rgba(255, 255, 255, 0.95);
+	outline: none;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+
+/*
+ * Resize handles must be transparent to pointer events. They sit above the
+ * table cells (z-10) purely for visual stacking (hover indicator), but mouse
+ * drag initiation is handled by the container's proximity-based mousedown
+ * delegation below. This ensures touch taps always pass through to the
+ * underlying table cells (enabling double-tap-to-edit on mobile) while
+ * keeping the desktop mouse drag-to-resize functional.
+ */
+.pptx-vue-table-resize__col[data-v-b0e2eb62],
+.pptx-vue-table-resize__row[data-v-b0e2eb62] {
+	pointer-events: none;
+}
+
+
+.pptx-vue-table[data-v-3dee8cc8] {
+	overflow: hidden;
+}
+
+.pptx-vue-table__grid[data-v-3dee8cc8] {
+	width: 100%;
+	height: 100%;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.pptx-vue-table__cell[data-v-3dee8cc8] {
+	position: relative;
+	padding: 1px 4px;
+	vertical-align: top;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	white-space: pre-wrap;
+	word-break: break-word;
+	overflow-wrap: break-word;
+}
+
+.pptx-vue-table__cell--editable[data-v-3dee8cc8] {
+	cursor: cell;
+}
+
+.pptx-vue-table__cell--selected[data-v-3dee8cc8] {
+	outline: 2px solid rgb(59 130 246);
+	outline-offset: -2px;
+}
+
+.pptx-vue-table__cell--in-selection[data-v-3dee8cc8] {
+	background-color: rgba(59, 130, 246, 0.15);
+	outline: 1px solid rgba(96, 165, 250, 0.5);
+	outline-offset: -1px;
+}
+
+.pptx-vue-table__diag[data-v-3dee8cc8] {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	overflow: visible;
+}
+
+.pptx-vue-table__text[data-v-3dee8cc8] {
+	position: relative;
+}
+
+.pptx-vue-table__run[data-v-3dee8cc8] {
+	position: relative;
+}
+
+.pptx-vue-table__para-break[data-v-3dee8cc8] {
+	display: block;
+	height: 0;
+}
+
+.pptx-vue-table__cell-input[data-v-3dee8cc8] {
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	outline: none;
+}
+
+
+.pptx-vue-wordart[data-v-b190a737] {
+	position: absolute;
+	inset: 0;
+	overflow: visible;
+	pointer-events: none;
+}
+
+
+.pptx-vue-zoom-tile[data-v-e411c1d2] {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	border-radius: 4px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.pptx-vue-summary-zoom-tile[data-v-e411c1d2] {
+	overflow: hidden;
+	border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.pptx-vue-summary-zoom-tile img[data-v-e411c1d2] {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.pptx-vue-zoom-interactive[data-v-e411c1d2] {
+	cursor: pointer;
+}
+
+.pptx-vue-zoom-interactive[data-v-e411c1d2]:focus-visible {
+	outline: 2px solid #2563eb;
+	outline-offset: 2px;
+}
+
+.pptx-vue-zoom-img[data-v-e411c1d2] {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	pointer-events: none;
+	user-select: none;
+	display: block;
+}
+
+.pptx-vue-zoom-thumbnail[data-v-e411c1d2] {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	box-sizing: border-box;
+}
+
+.pptx-vue-zoom-slide-label[data-v-e411c1d2] {
+	font-size: 14px;
+	font-weight: 600;
+	color: rgba(0, 0, 0, 0.5);
+	margin-bottom: 4px;
+}
+
+.pptx-vue-zoom-section-label[data-v-e411c1d2] {
+	font-size: 10px;
+	color: rgba(0, 0, 0, 0.4);
+}
+
+.pptx-vue-zoom-badge[data-v-e411c1d2] {
+	position: absolute;
+	bottom: 4px;
+	right: 4px;
+	font-size: 9px;
+	padding: 1px 4px;
+	border-radius: 2px;
+	background-color: rgba(0, 0, 0, 0.5);
+	color: #fff;
+	pointer-events: none;
+	line-height: 1.4;
+}
+
+
+.pptx-vue-masters-list[data-v-1eb6a890] {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.pptx-vue-masters-list__group[data-v-1eb6a890] {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pptx-vue-masters-list__master[data-v-1eb6a890],
+.pptx-vue-masters-list__layout[data-v-1eb6a890] {
+	width: 100%;
+	color: inherit;
+	font: inherit;
+	text-align: inherit;
+	cursor: pointer;
+	border: 2px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 8px;
+	padding: 4px;
+	background: rgba(255, 255, 255, 0.04);
+	transition:
+		border-color 0.15s ease,
+		background 0.15s ease;
+}
+
+.pptx-vue-masters-list__layout[data-v-1eb6a890] {
+	border-radius: 6px;
+	padding: 2px;
+}
+
+.pptx-vue-masters-list__master[data-v-1eb6a890]:hover,
+.pptx-vue-masters-list__layout[data-v-1eb6a890]:hover {
+	border-color: var(--pptx-vue-muted-foreground, #9ca3af);
+}
+
+.pptx-vue-masters-list__master--active[data-v-1eb6a890] {
+	border-color: #f59e0b;
+	background: rgba(245, 158, 11, 0.1);
+}
+
+.pptx-vue-masters-list__layout--active[data-v-1eb6a890] {
+	border-color: var(--pptx-vue-primary, #2563eb);
+	background: rgba(37, 99, 235, 0.1);
+}
+
+.pptx-vue-masters-list__thumb[data-v-1eb6a890] {
+	position: relative;
+	overflow: hidden;
+	border-radius: 4px;
+	background: #ffffff;
+}
+
+.pptx-vue-masters-list__layouts[data-v-1eb6a890] {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-left: 12px;
+	padding-left: 8px;
+	border-left: 1px solid var(--pptx-vue-border, #e5e7eb);
+}
+
+.pptx-vue-masters-list__label[data-v-1eb6a890] {
+	display: block;
+	margin-top: 4px;
+	padding: 0 2px;
+	font-size: 10px;
+	font-weight: 500;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pptx-vue-masters-list__label--layout[data-v-1eb6a890] {
+	font-size: 9px;
+	font-weight: 400;
+}
+
+.pptx-vue-masters-list__master--active .pptx-vue-masters-list__label[data-v-1eb6a890] {
+	color: #f59e0b;
+}
+
+.pptx-vue-masters-list__layout--active .pptx-vue-masters-list__label[data-v-1eb6a890] {
+	color: var(--pptx-vue-primary, #2563eb);
+}
+
+.pptx-vue-masters-list__empty[data-v-1eb6a890] {
+	padding: 16px 8px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+
+.pptx-vue-master-sidebar[data-v-723902a8] {
+	display: flex;
+	flex-direction: column;
+	width: 224px;
+	height: 100%;
+	border-right: 1px solid var(--pptx-vue-border, #e5e7eb);
+	background: var(--pptx-vue-background, #ffffff);
+}
+
+.pptx-vue-master-sidebar__header[data-v-723902a8] {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+}
+
+.pptx-vue-master-sidebar__title[data-v-723902a8] {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+.pptx-vue-master-sidebar__collapse[data-v-723902a8] {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	cursor: pointer;
+	font-size: 14px;
+	line-height: 1;
+}
+
+.pptx-vue-master-sidebar__collapse[data-v-723902a8]:hover {
+	background: var(--pptx-vue-muted, #f3f4f6);
+	color: var(--pptx-vue-foreground, #111827);
+}
+
+.pptx-vue-master-sidebar__tabs[data-v-723902a8] {
+	display: flex;
+	padding: 0 4px;
+	border-bottom: 1px solid var(--pptx-vue-border, #e5e7eb);
+}
+
+.pptx-vue-master-sidebar__tab[data-v-723902a8] {
+	flex: 1;
+	padding: 6px 4px;
+	border: none;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	font-size: 10px;
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.pptx-vue-master-sidebar__tab[data-v-723902a8]:hover {
+	color: var(--pptx-vue-foreground, #111827);
+}
+
+.pptx-vue-master-sidebar__tab--active[data-v-723902a8] {
+	border-bottom-color: #f59e0b;
+	color: #f59e0b;
+}
+
+.pptx-vue-master-sidebar__body[data-v-723902a8] {
+	flex: 1;
+	overflow-y: auto;
+	padding: 4px 6px 8px;
+}
+
+.pptx-vue-master-sidebar__card[data-v-723902a8] {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 8px;
+	padding: 8px;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 6px;
+}
+
+.pptx-vue-master-sidebar__card-label[data-v-723902a8] {
+	font-size: 11px;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+}
+
+.pptx-vue-master-sidebar__swatch[data-v-723902a8] {
+	width: 100%;
+	height: 28px;
+	padding: 0;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+	background: transparent;
+	cursor: pointer;
+}
+
+
+.pptx-vue-notes-master-canvas[data-v-f2839642] {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+}
+
+.pptx-vue-notes-master-canvas__empty[data-v-f2839642] {
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	font-size: 14px;
+}
+
+.pptx-vue-notes-master-canvas__element[data-v-f2839642] {
+	position: absolute;
+	z-index: 2;
+	overflow: hidden;
+}
+
+.pptx-vue-notes-master-canvas__page[data-v-f2839642] {
+	position: relative;
+	background: #ffffff;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.pptx-vue-notes-master-canvas__bg[data-v-f2839642] {
+	position: absolute;
+	inset: 0;
+	border-radius: 4px;
+}
+
+.pptx-vue-notes-master-canvas__region[data-v-f2839642] {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	border: 1px dashed rgba(156, 163, 175, 0.4);
+	font-size: 10px;
+	text-align: center;
+	color: rgba(156, 163, 175, 0.7);
+}
+
+.pptx-vue-notes-master-canvas__region--slide[data-v-f2839642] {
+	border-color: rgba(59, 130, 246, 0.5);
+	background: rgba(59, 130, 246, 0.05);
+	color: rgba(59, 130, 246, 0.7);
+}
+
+.pptx-vue-notes-master-canvas__region--body[data-v-f2839642] {
+	border-color: rgba(34, 197, 94, 0.5);
+	background: rgba(34, 197, 94, 0.05);
+	color: rgba(34, 197, 94, 0.7);
+	align-items: flex-start;
+	justify-content: flex-start;
+}
+
+.pptx-vue-notes-master-canvas__slide-img[data-v-f2839642] {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.pptx-vue-notes-master-canvas__body-text[data-v-f2839642] {
+	width: 100%;
+	height: 100%;
+	padding: 6px;
+	overflow: auto;
+	white-space: pre-wrap;
+	text-align: left;
+	color: #374151;
+	line-height: 1.4;
+	box-sizing: border-box;
+}
+
+.pptx-vue-notes-master-canvas__label[data-v-f2839642] {
+	padding: 0 4px;
+}
+
+
+.pptx-vue-selection-overlay[data-v-63987dc9] {
+	position: absolute;
+	inset: 0;
+	/* The overlay container itself never intercepts pointer events; only the
+	   handles and the per-box drag body (which are re-enabled below) do.
+	   50 left a slide with 50+ elements able to paint its topmost elements
+	   above this host, hiding the selected element's own handles behind its
+	   own fill; bumped for headroom, but capped at 55, NOT 58 like the other
+	   bindings: a connector's own selection box still renders its
+	   `pptx-vue-selection-body` move-drag hit area (every selected element
+	   gets one, connectors included), and going to 58 put that above
+	   ConnectorEndpointOverlay (56) - it then swallowed `elementFromPoint` at
+	   the drop coordinates during endpoint authoring, so dropping an
+	   endpoint on empty canvas (inside the connector's own bounding box,
+	   between the shapes it spans) read back whatever site the endpoint
+	   started on instead of detaching. */
+	pointer-events: none;
+	z-index: 55;
+}
+
+.pptx-vue-selection-box[data-v-63987dc9] {
+	position: absolute;
+	box-sizing: border-box;
+	border: 1px solid var(--pptx-vue-selection-color, #3b82f6);
+	transform-origin: center center;
+	pointer-events: none;
+}
+
+.pptx-vue-selection-body[data-v-63987dc9] {
+	position: absolute;
+	inset: 0;
+	/* The body never intercepts pointer events; move + inline-edit entry are
+	   driven from the element itself (host pointer delegation), so taps reach the
+	   underlying element (required for e2e actionability + double-tap-to-edit).
+	   Only the resize/rotate/adjust handles capture. */
+	pointer-events: none;
+	cursor: move;
+}
+
+.pptx-vue-resize-handle[data-v-63987dc9] {
+	position: absolute;
+	/* Sized against the inverse stage zoom (--pptx-vue-hs) so the on-screen
+	   hit area stays 10px regardless of zoom; see `inverseZoom` above. */
+	width: calc(10px * var(--pptx-vue-hs, 1));
+	height: calc(10px * var(--pptx-vue-hs, 1));
+	margin: calc(-5px * var(--pptx-vue-hs, 1)) 0 0 calc(-5px * var(--pptx-vue-hs, 1));
+	padding: 0;
+	border: 1px solid #ffffff;
+	border-radius: 9999px;
+	background: var(--pptx-vue-selection-color, #3b82f6);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	pointer-events: auto;
+	/* Resize handles must own their touch gesture (no scroll/zoom stealing). */
+	touch-action: none;
+}
+
+
+/*
+ * On coarse (touch) pointers a 10px handle is far too small to grab reliably.
+ * Grow the resize/rotate hit targets to a finger-friendly size; the visual
+ * footprint stays modest but the tappable area is large.
+ */
+.pptx-vue-selection-overlay.is-coarse-pointer .pptx-vue-resize-handle[data-v-63987dc9] {
+	width: calc(22px * var(--pptx-vue-hs, 1));
+	height: calc(22px * var(--pptx-vue-hs, 1));
+	margin: calc(-11px * var(--pptx-vue-hs, 1)) 0 0 calc(-11px * var(--pptx-vue-hs, 1));
+}
+
+.pptx-vue-rotate-stem[data-v-63987dc9] {
+	position: absolute;
+	width: 1px;
+	margin-left: -0.5px;
+	background: var(--pptx-vue-selection-color, #3b82f6);
+	pointer-events: none;
+}
+
+.pptx-vue-rotate-knob[data-v-63987dc9] {
+	position: absolute;
+	width: calc(12px * var(--pptx-vue-hs, 1));
+	height: calc(12px * var(--pptx-vue-hs, 1));
+	margin: calc(-6px * var(--pptx-vue-hs, 1)) 0 0 calc(-6px * var(--pptx-vue-hs, 1));
+	padding: 0;
+	border: 1px solid #ffffff;
+	border-radius: 9999px;
+	background: var(--pptx-vue-selection-color, #3b82f6);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	cursor: grab;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+.pptx-vue-selection-overlay.is-coarse-pointer .pptx-vue-rotate-knob[data-v-63987dc9] {
+	width: calc(24px * var(--pptx-vue-hs, 1));
+	height: calc(24px * var(--pptx-vue-hs, 1));
+	margin: calc(-12px * var(--pptx-vue-hs, 1)) 0 0 calc(-12px * var(--pptx-vue-hs, 1));
+}
+
+
+/* Shape-adjustment handle: amber diamond (rotate 45°), mirrors React. */
+.pptx-vue-adjust-handle[data-v-63987dc9] {
+	position: absolute;
+	width: calc(10px * var(--pptx-vue-hs, 1));
+	height: calc(10px * var(--pptx-vue-hs, 1));
+	margin: calc(-5px * var(--pptx-vue-hs, 1)) 0 0 calc(-5px * var(--pptx-vue-hs, 1));
+	padding: 0;
+	border: 1px solid #ffffff;
+	background: #fcd34d;
+	transform: rotate(45deg);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	pointer-events: auto;
+	touch-action: none;
+}
+
+.pptx-vue-selection-overlay.is-coarse-pointer .pptx-vue-adjust-handle[data-v-63987dc9] {
+	width: calc(22px * var(--pptx-vue-hs, 1));
+	height: calc(22px * var(--pptx-vue-hs, 1));
+	margin: calc(-11px * var(--pptx-vue-hs, 1)) 0 0 calc(-11px * var(--pptx-vue-hs, 1));
+}
+
+
+/*
+ * Moved out of the inline `style` attributes the overlay carried while it lived
+ * in `PowerPointViewer.vue`; identical values, just no longer restated on every
+ * render.
+ */
+.pptx-vue-master-overlay[data-v-aea93dee] {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: flex;
+	justify-content: flex-start;
+	background: rgba(0, 0, 0, 0.45);
+}
+
+
+/*
+ * The selection overlay positions its handles in scaled slide space, so it has
+ * to share an origin with the stage it decorates.
+ */
+.pptx-vue-master-stage[data-v-aea93dee] {
+	position: relative;
+	flex: none;
+}
+
+.pptx-vue-master-canvas[data-v-aea93dee] {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	background: var(--pptx-vue-background, #111827);
+}
+
+
+.pptx-vue-collab-cursors[data-v-f4e3b294] {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	overflow: visible;
+	z-index: 9999;
+}
+
+.pptx-vue-collab-cursor[data-v-f4e3b294] {
+	position: absolute;
+	top: 0;
+	left: 0;
+	pointer-events: none;
+	will-change: transform;
+	transition: transform 90ms linear;
+}
+
+.pptx-vue-collab-pointer[data-v-f4e3b294] {
+	display: block;
+	filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+
+.pptx-vue-collab-label[data-v-f4e3b294] {
+	position: absolute;
+	top: 16px;
+	left: 12px;
+	max-width: 150px;
+	padding: 2px 6px;
+	border-radius: 4px;
+	color: #ffffff;
+	font-family: system-ui, sans-serif;
+	font-size: 10px;
+	font-weight: 500;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+
+.pptx-vue-connector-endpoints[data-v-fb3afad4] {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 56;
+}
+
+.pptx-vue-connection-site[data-v-fb3afad4] {
+	position: absolute;
+	width: 8px;
+	height: 8px;
+	border-radius: 9999px;
+	border: 2px solid #3b82f6;
+	background: rgb(96 165 250 / 60%);
+}
+
+.pptx-vue-connection-site.is-snapped[data-v-fb3afad4] {
+	background: #3b82f6;
+}
+
+
+/* A bound end is filled, a loose one hollow, so "is this connector actually
+   attached?" is answerable at a glance. */
+.pptx-vue-connector-endpoint[data-v-fb3afad4] {
+	position: absolute;
+	width: 10px;
+	height: 10px;
+	padding: 0;
+	border-radius: 9999px;
+	border: 2px solid #fff;
+	background: #fff;
+	box-shadow: 0 0 0 1px #16a34a;
+	cursor: crosshair;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+.pptx-vue-connector-endpoint.is-attached[data-v-fb3afad4] {
+	background: #16a34a;
+}
+
+
+.pptx-vue-remote-selections[data-v-431d9dde] {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	overflow: visible;
+	z-index: 9997;
+}
+
+.pptx-vue-remote-selection[data-v-431d9dde] {
+	position: absolute;
+	top: 0;
+	left: 0;
+	box-sizing: border-box;
+	border: 2px solid currentcolor;
+	border-radius: 2px;
+	pointer-events: none;
+	will-change: transform;
+	transition: transform 90ms linear;
+}
+
+.pptx-vue-remote-selection-label[data-v-431d9dde] {
+	position: absolute;
+	top: -18px;
+	left: -2px;
+	max-width: 150px;
+	padding: 1px 5px;
+	border-radius: 3px;
+	color: #ffffff;
+	font-family: system-ui, sans-serif;
+	font-size: 9px;
+	font-weight: 500;
+	line-height: 1.3;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+
+/* Math glyph font: not expressible as a Tailwind utility. Matches React's
+   inline `fontFamily: '"Cambria Math", "STIX Two Math", serif'`. */
+.pptx-vue-equation-preview-math[data-v-f6bb45dc],
+.pptx-vue-equation-template-math[data-v-f6bb45dc] {
+	font-family: 'Cambria Math', 'STIX Two Math', serif;
+}
+
+
+.pptx-vue-header-footer-panel[data-v-c30ad032] {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 360px;
+	background: var(--pptx-vue-background, #ffffff);
+	color: var(--pptx-vue-foreground, #111827);
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: var(--pptx-vue-radius, 8px);
+}
+
+.pptx-vue-header-footer-panel__header[data-v-c30ad032] {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--pptx-vue-border, #e5e7eb);
+}
+
+.pptx-vue-header-footer-panel__title[data-v-c30ad032] {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.pptx-vue-header-footer-panel__close[data-v-c30ad032] {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	font-size: 18px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.pptx-vue-header-footer-panel__close[data-v-c30ad032]:hover {
+	background: var(--pptx-vue-muted, #f3f4f6);
+	color: var(--pptx-vue-foreground, #111827);
+}
+
+.pptx-vue-header-footer-panel__body[data-v-c30ad032] {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px;
+}
+
+.pptx-vue-header-footer-panel__row[data-v-c30ad032] {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 12px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.pptx-vue-header-footer-panel__sub[data-v-c30ad032] {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-left: 24px;
+}
+
+.pptx-vue-header-footer-panel__input[data-v-c30ad032] {
+	width: 100%;
+	padding: 6px 10px;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+	background: var(--pptx-vue-muted, #f9fafb);
+	color: var(--pptx-vue-foreground, #111827);
+	font-size: 12px;
+	box-sizing: border-box;
+}
+
+.pptx-vue-header-footer-panel__input[data-v-c30ad032]:focus {
+	outline: none;
+	border-color: var(--pptx-vue-primary, #2563eb);
+}
+
+.pptx-vue-header-footer-panel__footer[data-v-c30ad032] {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 12px 16px;
+	border-top: 1px solid var(--pptx-vue-border, #e5e7eb);
+}
+
+.pptx-vue-header-footer-panel__apply[data-v-c30ad032] {
+	padding: 6px 12px;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+	background: var(--pptx-vue-muted, #f3f4f6);
+	color: var(--pptx-vue-foreground, #111827);
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.pptx-vue-header-footer-panel__apply--primary[data-v-c30ad032] {
+	border-color: var(--pptx-vue-primary, #2563eb);
+	background: var(--pptx-vue-primary, #2563eb);
+	color: #fff;
+}
+
+
+.pptx-vue-print-preview-page[data-v-96976d48] {
+	width: 130px;
+	height: 184px;
+	gap: 4px;
+	padding: 6px;
+	background: #ffffff;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pptx-vue-print-preview-notes-page[data-v-96976d48] {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 130px;
+	height: 184px;
+	padding: 8px;
+	background: #ffffff;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: 4px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pptx-vue-print-preview-notes-page .pptx-vue-print-preview-cell[data-v-96976d48] {
+	height: 70px;
+}
+
+.pptx-vue-print-preview-cell[data-v-96976d48] {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #f9fafb;
+	border: 1px solid #d1d5db;
+	border-radius: 2px;
+	font-size: 9px;
+	font-weight: 500;
+	color: #9ca3af;
+}
+
+.pptx-vue-print-preview-cell--framed[data-v-96976d48] {
+	border: 2px solid #1f2937;
+}
+
+.pptx-vue-print-preview-lines[data-v-96976d48] {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-evenly;
+	flex: 1;
+	padding: 0 2px;
+}
+
+.pptx-vue-print-preview-line[data-v-96976d48] {
+	height: 0;
+	border-bottom: 1px solid #d1d5db;
+}
+
+
+.pptx-vue-after-animation[data-v-53df727f] {
+	display: grid;
+	gap: 6px;
+}
+
+.pptx-vue-after-animation-color[data-v-53df727f] {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.pptx-vue-after-animation-color input[type='color'][data-v-53df727f] {
+	width: 40px;
+	height: 24px;
+	padding: 0;
+}
+
+
+.pptx-vue-hidden-file-input[data-v-c389e164] {
+	display: none;
+}
+
+.pptx-vue-sound-row[data-v-c389e164] {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.pptx-vue-sound-preview[data-v-c389e164] {
+	flex-shrink: 0;
+}
+
+.pptx-vue-sound-preview[data-v-c389e164]:disabled {
+	opacity: 0.4;
+}
+
+
+label[data-v-57d6fa8d] {
+	display: grid;
+	gap: 3px;
+	color: var(--muted-foreground);
+}
+
+input[data-v-57d6fa8d],
+select[data-v-57d6fa8d] {
+	box-sizing: border-box;
+	width: 100%;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	background: var(--muted);
+	color: inherit;
+	padding: 4px 6px;
+}
+
+button[data-v-57d6fa8d] {
+	border: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font-size: 10px;
+}
+
+/* Touch target: matches MIN_TOUCH_TARGET_PX (44) from pptx-viewer-shared's
+   render/responsive module, below MOBILE_BREAKPOINT (768). `input` excluded:
+   this file's `button`s are discrete controls, but the paired `select` above
+   already shares `input`'s rule for width/padding, so size only what the
+   WCAG check actually holds to 44px. */
+@media (max-width: 767px) {
+select[data-v-57d6fa8d],
+	button[data-v-57d6fa8d] {
+		min-height: 44px;
+}
+}
+
+
+select[data-v-9b7ec67e] {
+	box-sizing: border-box;
+	width: 100%;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	background: var(--muted);
+	color: inherit;
+	padding: 4px 6px;
+}
+
+
+label[data-v-9ae672e9] {
+	display: grid;
+	gap: 3px;
+	color: var(--muted-foreground);
+}
+
+select[data-v-9ae672e9] {
+	box-sizing: border-box;
+	width: 100%;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	background: var(--muted);
+	color: inherit;
+	padding: 4px 6px;
+}
+
+/* Touch target: matches MIN_TOUCH_TARGET_PX (44) from pptx-viewer-shared's
+   render/responsive module, below MOBILE_BREAKPOINT (768). */
+@media (max-width: 767px) {
+select[data-v-9ae672e9] {
+		min-height: 44px;
+}
+}
+`) is UNLAYERED CSS, and an unlayered rule always
+ * wins over a Tailwind utility class (which lives inside `@layer utilities`)
+ * regardless of specificity, unless that utility carries `!`. A narrow
+ * single-letter button (Bold "B", vertical-align "T"/"M"/"B", ...) that only
+ * relies on a plain `max-md:min-w-[44px]` Tailwind class therefore silently
+ * stays at the 24px baseline width even though its OWN min-height utility
+ * (no competing unlayered rule) applies fine - this scoped rule's higher
+ * specificity beats the `:where()` baseline on both axes at once, which is
+ * why it must set both properties, not just the one sub-panels forget.
+ */
+@media (max-width: 767px) {
+.pptx-vue-inspector[data-v-e38c5035] select,
+	.pptx-vue-inspector[data-v-e38c5035] button {
+		min-height: 44px;
+		min-width: 44px;
+}
+}
+
+
+.pptx-vue-transition-preview[data-v-8097d2a7] {
+	display: grid;
+	gap: 3px;
+}
+
+.pptx-vue-transition-preview-label[data-v-8097d2a7] {
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	font-size: 10px;
+}
+
+.pptx-vue-transition-preview-stage[data-v-8097d2a7] {
+	position: relative;
+	display: block;
+	width: 100%;
+	height: 64px;
+	padding: 0;
+	overflow: hidden;
+	border: 1px solid var(--pptx-vue-border, #e5e7eb);
+	border-radius: var(--pptx-vue-radius, 8px);
+	background: var(--pptx-vue-muted, #f3f4f6);
+	cursor: pointer;
+}
+
+.pptx-vue-transition-layer[data-v-8097d2a7] {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--pptx-vue-muted-foreground, #6b7280);
+	font-size: 9px;
+}
+
+
+/* Translucent BACKGROUND, not element opacity: the transition animations
+   drive `opacity` themselves and would fight an inherited value. */
+.pptx-vue-transition-incoming[data-v-8097d2a7] {
+	background: color-mix(in srgb, var(--pptx-vue-primary, #2563eb) 20%, transparent);
+}
+
+.pptx-vue-transition-outgoing[data-v-8097d2a7] {
+	background: var(--pptx-vue-background, #ffffff);
+}
+
+
+/* Fills the window, not the screen: the outline never asks for fullscreen. */
+.pptx-vue-outline-view[data-v-9462ae4f] {
+	position: fixed;
+	inset: 0;
+	z-index: 1300;
+	display: flex;
+	flex-direction: column;
+	background: #171717;
+	color: #f5f5f5;
+}
+
+.pptx-vue-outline-bar[data-v-9462ae4f] {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.5rem 1rem;
+	border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.pptx-vue-outline-title[data-v-9462ae4f] {
+	font-size: 0.875rem;
+	font-weight: 600;
+}
+
+.pptx-vue-outline-hint[data-v-9462ae4f] {
+	flex: 1 1 auto;
+	overflow: hidden;
+	font-size: 0.6875rem;
+	color: rgb(255 255 255 / 0.5);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pptx-vue-outline-control[data-v-9462ae4f] {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	padding: 0;
+	color: rgb(255 255 255 / 0.8);
+	background: transparent;
+	border: 0;
+	border-radius: 0.25rem;
+	cursor: pointer;
+}
+
+.pptx-vue-outline-control[data-v-9462ae4f]:hover {
+	color: #ffffff;
+	background: rgb(255 255 255 / 0.15);
+}
+
+.pptx-vue-outline-rows[data-v-9462ae4f] {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: 0.75rem 1rem;
+}
+
+.pptx-vue-outline-row[data-v-9462ae4f] {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.125rem 0;
+}
+
+.pptx-vue-outline-number[data-v-9462ae4f] {
+	width: 1.5rem;
+	flex: 0 0 auto;
+	font-size: 0.625rem;
+	font-variant-numeric: tabular-nums;
+	color: rgb(255 255 255 / 0.4);
+	text-align: right;
+}
+
+.pptx-vue-outline-input[data-v-9462ae4f] {
+	width: 100%;
+	padding: 0.125rem 0.25rem;
+	font-size: 0.8125rem;
+	color: rgb(255 255 255 / 0.8);
+	background: transparent;
+	border: 0;
+	border-radius: 0.25rem;
+	outline: none;
+}
+
+.pptx-vue-outline-input.is-title[data-v-9462ae4f] {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: #f5f5f5;
+}
+
+.pptx-vue-outline-input[data-v-9462ae4f]:focus {
+	background: rgb(255 255 255 / 0.1);
+}
+
+
+.pptx-vue-mpresenter[data-v-15b97dec] {
+	padding-top: env(safe-area-inset-top, 0px);
+	padding-bottom: env(safe-area-inset-bottom, 0px);
+	padding-left: env(safe-area-inset-left, 0px);
+	padding-right: env(safe-area-inset-right, 0px);
+}
+
+
+/* The z-index is bound inline (`overlayStyle`): it comes from the shared
+   `annotationOverlayZIndex(blackout)` rule and a scoped stylesheet cannot see
+   the blackout state. */
+.pptx-vue-annotation-overlay[data-v-fc9e3647] {
+	position: absolute;
+	inset: 0;
+	pointer-events: auto;
+}
+
+
+.pptx-vue-pt-btn[data-v-018d09f2] {
+	position: fixed;
+	z-index: 2147483002;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	min-width: 44px;
+	min-height: 44px;
+	border: none;
+	border-radius: 50%;
+	background-color: rgba(0, 0, 0, 0.55);
+	color: #ffffff;
+	line-height: 1;
+	cursor: pointer;
+	pointer-events: auto;
+	touch-action: manipulation;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.pptx-vue-pt-btn[data-v-018d09f2]:active {
+	background-color: rgba(0, 0, 0, 0.75);
+}
+
+.pptx-vue-pt-btn[data-v-018d09f2]:disabled {
+	opacity: 0.3;
+	cursor: not-allowed;
+}
+
+.pptx-vue-pt-close[data-v-018d09f2] {
+	top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+	right: calc(env(safe-area-inset-right, 0px) + 0.5rem);
+}
+
+.pptx-vue-pt-prev[data-v-018d09f2],
+.pptx-vue-pt-next[data-v-018d09f2] {
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+.pptx-vue-pt-prev[data-v-018d09f2] {
+	left: calc(env(safe-area-inset-left, 0px) + 0.5rem);
+}
+
+.pptx-vue-pt-next[data-v-018d09f2] {
+	right: calc(env(safe-area-inset-right, 0px) + 0.5rem);
+}
+
+.pptx-vue-pt-counter[data-v-018d09f2] {
+	position: fixed;
+	z-index: 2147483002;
+	bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 4px 12px;
+	border-radius: 999px;
+	background-color: rgba(0, 0, 0, 0.55);
+	color: #ffffff;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	pointer-events: none;
+	user-select: none;
+}
+
+
+.pptx-vue-transition-fragment[data-v-b9ab8fb3] {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+
+/* Same rule as the parent overlay's own `.pptx-vue-transition-layer`: the
+   layer must FILL its ancestor, not shrink-wrap `SlideStage` (which scales
+   with a CSS `transform` that never changes its laid-out box). */
+.pptx-vue-transition-layer[data-v-adf1a9bf] {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	will-change: transform, opacity, clip-path, filter;
+}
+
+
+.pptx-vue-transition-overlay[data-v-0ea03ff2] {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+
+/*
+ * The layer must FILL the overlay, not shrink-wrap its child: `SlideStage`
+ * scales with a `transform`, which never changes its laid-out box, so an
+ * auto-sized absolute layer would measure the deck's native size instead of
+ * the display size and crop the transition to that corner on a larger show
+ * surface. `inset: 0` pins it to the overlay (the frame's own scaled
+ * footprint), landing the clip exactly on the slide edge.
+ */
+.pptx-vue-transition-layer[data-v-0ea03ff2] {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	will-change: transform, opacity, clip-path, filter;
+}
+
+
+/* Position, stacking and grid geometry come from the shared Tailwind tokens on
+   the elements above; only the navigator's own chrome is styled here. */
+.slide-grid[data-v-be0c4a45] {
+	color: #f8fafc;
+}
+
+.slide-grid header[data-v-be0c4a45] {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 18px 24px;
+	border-bottom: 1px solid #ffffff1a;
+}
+
+.slide-grid h2[data-v-be0c4a45] {
+	margin: 2px 0 0;
+}
+
+.slide-grid small[data-v-be0c4a45] {
+	color: #7dd3fc;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+}
+
+.slide-grid button[data-v-be0c4a45] {
+	border: 0;
+	border-radius: 6px;
+	background: #ffffff12;
+	color: inherit;
+	padding: 9px;
+	cursor: pointer;
+}
+
+.slide-grid main button[data-v-be0c4a45] {
+	text-align: left;
+}
+
+.slide-grid main .current[data-v-be0c4a45] {
+	outline: 2px solid #38bdf8;
+}
+
+.slide-grid main .hidden[data-v-be0c4a45] {
+	opacity: 0.45;
+}
+
+.slide-grid main span[data-v-be0c4a45] {
+	display: block;
+	margin-top: 8px;
+	color: #94a3b8;
+}
+
+
+.pptx-vue-presentation[data-v-1b5134ff] {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: #000000;
+	overflow: hidden;
+	cursor: default;
+	user-select: none;
+	/* Allow vertical scroll/pinch but let us interpret horizontal swipes. */
+	touch-action: pan-y;
+}
+
+.pptx-vue-presentation-frame[data-v-1b5134ff] {
+	position: relative;
+	overflow: hidden;
+}
+
+
+/* Offset, stacking order and fade come from `toolbarSlotStyle` (the shared
+   `PRESENT_TOOLBAR_METRICS`); only the layout that has no number to share
+   stays here. */
+.pptx-vue-presentation-toolbar-slot[data-v-1b5134ff] {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	opacity: 0;
+	pointer-events: none;
+	transition-property: opacity;
+}
+
+.pptx-vue-presentation-toolbar-slot.is-visible[data-v-1b5134ff] {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+
+.pptx-vue-reading-stage[data-v-4ab26059] {
+	position: relative;
+	overflow: hidden;
+	background: #ffffff;
+	box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+}
+
+
+/* Fills the window, not the screen: Reading View never asks for fullscreen. */
+.pptx-vue-reading-view[data-v-c326dbfa] {
+	position: fixed;
+	inset: 0;
+	z-index: 1300;
+	display: flex;
+	flex-direction: column;
+	background: #171717;
+}
+
+.pptx-vue-reading-viewport[data-v-c326dbfa] {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+	align-items: center;
+	justify-content: center;
+}
+
+.pptx-vue-reading-bar[data-v-c326dbfa] {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.75rem;
+	padding: 0.5rem 1rem;
+	border-top: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.pptx-vue-reading-control[data-v-c326dbfa] {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	padding: 0;
+	color: rgb(255 255 255 / 0.8);
+	background: transparent;
+	border: 0;
+	border-radius: 0.25rem;
+	cursor: pointer;
+}
+
+.pptx-vue-reading-control[data-v-c326dbfa]:hover:not(:disabled) {
+	color: #ffffff;
+	background: rgb(255 255 255 / 0.15);
+}
+
+.pptx-vue-reading-control[data-v-c326dbfa]:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+.pptx-vue-reading-counter[data-v-c326dbfa] {
+	min-width: 4rem;
+	text-align: center;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	color: rgb(255 255 255 / 0.7);
+}
+
+
+.pptx-vue-sorter[data-v-82aafc4c] {
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	background: var(--pptx-bg, #1e1e1e);
+}
+
+.pptx-vue-sorter-head[data-v-82aafc4c] {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.75rem 1rem;
+	border-bottom: 1px solid var(--pptx-border, #333);
+	background: var(--pptx-card, #252525);
+}
+
+.pptx-vue-sorter-title[data-v-82aafc4c] {
+	margin: 0;
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: var(--pptx-fg, #f3f4f6);
+}
+
+.pptx-vue-sorter-close[data-v-82aafc4c] {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.75rem;
+	height: 1.75rem;
+	padding: 0;
+	font-size: 1.25rem;
+	line-height: 1;
+	color: var(--pptx-fg, #f3f4f6);
+	background: transparent;
+	border: 1px solid var(--pptx-border, #333);
+	border-radius: 0.375rem;
+	cursor: pointer;
+}
+
+.pptx-vue-sorter-close[data-v-82aafc4c]:hover {
+	background: var(--pptx-border, #333);
+}
+
+.pptx-vue-sorter-grid[data-v-82aafc4c] {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(192px, 1fr));
+	gap: 1rem;
+	padding: 1rem;
+	overflow-y: auto;
+}
+
+.pptx-vue-sorter-tile[data-v-82aafc4c] {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	padding: 0;
+	overflow: hidden;
+	border: 2px solid var(--pptx-border, #333);
+	border-radius: 0.5rem;
+	background: #ffffff;
+	cursor: grab;
+}
+
+.pptx-vue-sorter-tile.is-active[data-v-82aafc4c] {
+	border-color: var(--pptx-primary, #2563eb);
+}
+
+.pptx-vue-sorter-tile.is-dragging[data-v-82aafc4c] {
+	opacity: 0.45;
+}
+
+.pptx-vue-sorter-tile.is-drop-target[data-v-82aafc4c] {
+	outline: 2px dashed var(--pptx-primary, #2563eb);
+	outline-offset: -2px;
+}
+
+
+/* Mini slide preview; non-interactive so drag/click target the tile. */
+.pptx-vue-sorter-stage[data-v-82aafc4c] {
+	position: relative;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.pptx-vue-sorter-index[data-v-82aafc4c] {
+	position: absolute;
+	bottom: 0.25rem;
+	right: 0.35rem;
+	padding: 0 0.3rem;
+	font-size: 0.7rem;
+	color: #f3f4f6;
+	background: rgba(0, 0, 0, 0.55);
+	border-radius: 0.2rem;
+}
+
+.pptx-vue-sorter-hidden[data-v-82aafc4c] {
+	position: absolute;
+	top: 0.25rem;
+	left: 0.35rem;
+	padding: 0 0.3rem;
+	font-size: 0.65rem;
+	color: #f3f4f6;
+	background: rgba(0, 0, 0, 0.65);
+	border-radius: 0.2rem;
+}
+
+.pptx-vue-sorter-tile.is-hidden .pptx-vue-sorter-stage[data-v-82aafc4c] {
+	opacity: 0.5;
+}

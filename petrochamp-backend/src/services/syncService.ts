@@ -3,13 +3,6 @@ import axios from 'axios';
 
 const prisma = new PrismaClient();
 
-// Ordem estrita: Pais primeiro, Filhos depois (evita erros de Foreign Key)
-// NOTA: 'setting' foi removido de propósito desta lista - o modelo Setting
-// usa "key" como chave primária em vez de "id" (ver schema.prisma), e toda
-// a lógica de sync (aqui e em routes/sync.ts) assume um campo "id". Por
-// isso o Setting também está de fora de SYNC_TABLES em routes/sync.ts.
-// Incluir 'setting' aqui fazia a API responder 400 em todos os ciclos de
-// sync (routes/sync.ts rejeita nomes de tabela não reconhecidos).
 const SYNC_ORDER = [
   // 1. Tabelas Independentes / Base
   'team',
@@ -40,7 +33,6 @@ const SYNC_ORDER = [
   // 3. Tabelas Nível 2 (Dependem do Nível 1)
   'presentationScore',
   'evaluationCriteriaScore',
-  'presentationSlide',
 ] as const;
 
 export class SyncService {

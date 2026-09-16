@@ -2,13 +2,6 @@ import { prisma } from '../db'
 
 export type ChampionshipType = 'universitario' | 'ensino_medio' | 'exibicao'
 
-// CORRIGIDO - 'category' vem diretamente do Prisma (Team.category é
-// String no schema.prisma, sem enum), por isso é sempre um string
-// genérico em runtime, não necessariamente um dos 3 valores de
-// ChampionshipType. Forçar o tipo estrito aqui causava erro de
-// compilação em qualquer sítio que atribuísse um Team vindo do Prisma
-// diretamente a liveState.teamA/teamB (ex: moderator:selectTeams) ou
-// passasse esse Team a addToPhaseRanking/addToChampionshipRanking.
 export interface Team {
   id: string
   name: string
@@ -52,11 +45,6 @@ export interface InitialScoreEntry {
   scoreB: number
 }
 
-export interface PresentationSlideRef {
-  order: number
-  imageUrl: string
-}
-
 // criteriaId é um cuid (String) no schema.prisma, não number.
 export interface CriteriaScoreEntry {
   jurorId: string
@@ -90,19 +78,19 @@ export interface PresentationFlowState {
   criteriaScores: CriteriaScoreEntry[]
   jurorsSubmitted: string[]
   allJurorsSubmitted: boolean
+
+  // Agora a apresentação usa o PPTX original.
+  // O backend apenas informa se existe um documento.
+  // O viewer é responsável por renderizar o PPTX.
   presentationMode: 'standard' | 'document'
-  slides: PresentationSlideRef[]
-  currentPage: number
+
+  // Página atualmente sincronizada entre moderador e projeção.
+  currentPage: number,
+  totalPages: number
 }
 
 // Pontuação de apresentação "transportada" para a ronda de Quiz seguinte,
-// usada na fase 'apresentacao' com noElimination ativo: a nota de
-// apresentação fica à espera aqui até o Quiz da mesma equipa terminar,
-// momento em que moderator:finishMatch combina as duas notas pela média
-// ponderada (presentationWeight/quizWeight, definidos no Admin) e só
-// depois decide quem passa. Referenciado em resetChampionship,
-// selectChampionship, abandonChampionship, finalizeChampionship,
-// finishMatch e checkAllJurorsSubmitted em socket/index.ts.
+// usada na fase 'apresentacao' com noElimination ativo.
 export interface CarriedPresentationScoreEntry {
   teamId: string
   name: string
@@ -112,9 +100,6 @@ export interface CarriedPresentationScoreEntry {
   quizWeight: number
 }
 
-// matchId, currentQuestionId e os ids em usedQuestionIds são cuids
-// (String) no schema.prisma (TiebreakMatch, TiebreakQuestion), não
-// number.
 export interface TiebreakState {
   active: boolean
   pending: boolean
@@ -123,8 +108,6 @@ export interface TiebreakState {
   usedQuestionIds: string[]
 }
 
-// configId é um cuid (String) no schema.prisma (RepescagemConfig), não
-// number.
 export interface RepescagemRevealState {
   stage: 'idle' | 'suspense' | 'countdown' | 'voting' | 'results'
   countdownValue: number
@@ -132,11 +115,6 @@ export interface RepescagemRevealState {
   repescadaNames: string[]
 }
 
-// União de 'stage' alargada com 'battleEnded' (tela "A batalha
-// terminou!" mostrada na Projeção antes do ranking normal de fim de
-// ronda de Quiz) e 'presentationRanking' (tela de notas de apresentação,
-// sem AVANÇA/ELIMINADA, exclusiva da fase apresentacao_quiz - ver
-// checkAllJurorsSubmitted em socket/index.ts).
 export interface PhaseFlowState {
   stage:
     | 'idle'
@@ -199,10 +177,6 @@ export interface PhaseRankingReveal {
 export type PublicVotingStatus = 'idle' | 'starting' | 'online' | 'failed'
 
 export interface LiveState {
-  // CORRIGIDO - 'championship' recebe diretamente payload.championship
-  // (string) em moderator:selectChampionship, vindo do frontend sem
-  // validação de enum nesse ponto. Relaxado para string | null, igual ao
-  // que já acontece com Team.category acima, pela mesma razão.
   championship: string | null
   editionName: string | null
   phase: number
@@ -217,8 +191,6 @@ export interface LiveState {
   teamBAnsweredCount: number
   currentQuestionIndex: number
 
-  // currentQuestionId e os ids em usedQuestionIds são cuids (String) no
-  // schema.prisma (Question), não number.
   currentQuestionId: string | null
   currentItemSource: 'question' | 'analytic' | null
   currentAnalyticItemId: string | null
@@ -249,15 +221,10 @@ export interface LiveState {
   initialScoresConfirmed: boolean
 
   activeModerators: ModeratorInfo[]
-  // Indica se o painel do moderador está "a ajustar" um estado já em
-  // curso (batalha ou apresentação já iniciada) depois de entrar no
-  // Admin, para a UI poder avisar que se está a mexer em algo ao vivo.
   moderatorAdjusting: boolean
 
   presentationFlow: PresentationFlowState
   presentationPhaseScores: RankingEntry[]
-  // Notas de apresentação transportadas para a ronda de Quiz seguinte -
-  // ver CarriedPresentationScoreEntry acima.
   carriedPresentationScores: CarriedPresentationScoreEntry[]
 
   phaseRankings: RankingEntry[]
@@ -313,6 +280,7 @@ export const liveState: LiveState = {
   teamBCorrect: null,
 
   awaitingJuryEvaluation: false,
+
   analyticEvaluation: {
     itemId: null,
     criteriaScores: [],
@@ -320,7 +288,11 @@ export const liveState: LiveState = {
     expectedJurorCount: 0
   },
 
-  countdown: { active: false, value: 0 },
+  countdown: {
+    active: false,
+    value: 0
+  },
+
   matchCodes: {
     teamACode: '',
     teamBCode: '',
@@ -330,7 +302,13 @@ export const liveState: LiveState = {
     teamBPlayerName: null
   },
 
-  tiebreak: { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] },
+  tiebreak: {
+    active: false,
+    pending: false,
+    matchId: null,
+    currentQuestionId: null,
+    usedQuestionIds: []
+  },
 
   jurors: [],
   jurorEntries: [],
@@ -352,30 +330,67 @@ export const liveState: LiveState = {
     criteriaScores: [],
     jurorsSubmitted: [],
     allJurorsSubmitted: false,
+
+    // Sem slides.
     presentationMode: 'standard',
-    slides: [],
-    currentPage: 1
+
+    // Página atual do PPTX.
+    currentPage: 1,
+    totalPages: 0
   },
+
   presentationPhaseScores: [],
   carriedPresentationScores: [],
 
   phaseRankings: [],
   championshipRankings: [],
   eliminatedTeamIds: [],
-  phaseRankingReveal: { visible: false },
 
-  phaseFlow: { stage: 'idle', suspensePhrase: null },
+  phaseRankingReveal: {
+    visible: false
+  },
+
+  phaseFlow: {
+    stage: 'idle',
+    suspensePhrase: null
+  },
+
   presentationRoundReady: false,
   expectedJurorCount: 0,
 
-  repescagemReveal: { stage: 'idle', countdownValue: 0, configId: null, repescadaNames: [] },
+  repescagemReveal: {
+    stage: 'idle',
+    countdownValue: 0,
+    configId: null,
+    repescadaNames: []
+  },
 
   bracketVisible: false,
 
-  podium: { active: false, phaseNumber: 1, phaseLabel: '', isGrandFinal: false, entries: [] },
-  podiumReveal: { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false },
-  championReveal: { active: false, teamName: null, logoUrl: null },
-  phaseTransition: { stage: 'idle' },
+  podium: {
+    active: false,
+    phaseNumber: 1,
+    phaseLabel: '',
+    isGrandFinal: false,
+    entries: []
+  },
+
+  podiumReveal: {
+    stage: 'idle',
+    countdownValue: 0,
+    suspensePhrase: null,
+    finalRankingVisible: false
+  },
+
+  championReveal: {
+    active: false,
+    teamName: null,
+    logoUrl: null
+  },
+
+  phaseTransition: {
+    stage: 'idle'
+  },
 
   publicVotingUrl: null,
   publicVotingStatus: 'idle'
@@ -383,10 +398,13 @@ export const liveState: LiveState = {
 
 export function generateJoinCode(length = 6): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
   let code = ''
+
   for (let i = 0; i < length; i++) {
     code += chars[Math.floor(Math.random() * chars.length)]
   }
+
   return code
 }
 
@@ -413,14 +431,15 @@ export function resetPresentationFlow(): void {
     teamName: null,
     theme: null,
     timeLeft: 0,
-    presentedTeamIds: [],
+    presentedTeamIds: [], // limpa sempre
     criteriaScores: [],
     jurorsSubmitted: [],
     allJurorsSubmitted: false,
     presentationMode: 'standard',
-    slides: [],
-    currentPage: 1
+    currentPage: 1,
+    totalPages: 0
   }
+  liveState.presentationRoundReady = false
 }
 
 export function resetMatch(questionTimeSeconds: number): void {
@@ -431,30 +450,54 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.teamAAnsweredCount = 0
   liveState.teamBAnsweredCount = 0
   liveState.currentQuestionIndex = 0
+
+  liveState.presentationPhaseScores = []
+  liveState.carriedPresentationScores = []
+  liveState.presentationRoundReady = false
+  liveState.usedQuestionIds = []
+  liveState.usedAnalyticItemIds = []
+  liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+  liveState.phase = 1
+
   liveState.currentQuestionId = null
   liveState.currentItemSource = null
   liveState.currentAnalyticItemId = null
   liveState.currentItemMode = null
+
   liveState.activeTeam = 'A'
   liveState.timeLeft = questionTimeSeconds
   liveState.isRunning = false
+
   liveState.usedQuestionIds = []
   liveState.usedAnalyticItemIds = []
+
   liveState.awaitingJuryEvaluation = false
+
   liveState.analyticEvaluation = {
     itemId: null,
     criteriaScores: [],
     jurorsSubmitted: [],
     expectedJurorCount: 0
   }
+
   resetAnswerState()
+
   liveState.matchStartedAt = null
+
   liveState.jurors = []
   liveState.jurorEntries = []
   liveState.jurorSubmittedItemIds = []
   liveState.initialScoreEntries = []
   liveState.initialScoresConfirmed = false
-  liveState.tiebreak = { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] }
+
+  liveState.tiebreak = {
+    active: false,
+    pending: false,
+    matchId: null,
+    currentQuestionId: null,
+    usedQuestionIds: []
+  }
+
   liveState.matchCodes = {
     teamACode: '',
     teamBCode: '',
@@ -467,48 +510,90 @@ export function resetMatch(questionTimeSeconds: number): void {
 
 export function addToPhaseRanking(team: Team | null, score: number): void {
   if (!team) return
-  const existing = liveState.phaseRankings.find((r) => r.teamId === team.id)
+
+  const existing = liveState.phaseRankings.find(
+    (r) => r.teamId === team.id
+  )
+
   if (existing) {
     existing.score += score
   } else {
-    liveState.phaseRankings.push({ teamId: team.id, name: team.name, institution: team.institution, score })
+    liveState.phaseRankings.push({
+      teamId: team.id,
+      name: team.name,
+      institution: team.institution,
+      score
+    })
   }
 }
 
-export function addToChampionshipRanking(team: Team | null, score: number): void {
+export function addToChampionshipRanking(
+  team: Team | null,
+  score: number
+): void {
   if (!team) return
-  const existing = liveState.championshipRankings.find((r) => r.teamId === team.id)
+
+  const existing = liveState.championshipRankings.find(
+    (r) => r.teamId === team.id
+  )
+
   if (existing) {
     existing.score += score
   } else {
-    liveState.championshipRankings.push({ teamId: team.id, name: team.name, institution: team.institution, score })
+    liveState.championshipRankings.push({
+      teamId: team.id,
+      name: team.name,
+      institution: team.institution,
+      score
+    })
   }
 }
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
 
 export function persistLiveState(): void {
-  if (saveTimeout) clearTimeout(saveTimeout)
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+
   saveTimeout = setTimeout(async () => {
     try {
       await prisma.setting.upsert({
-        where: { key: 'liveStateSnapshot' },
-        update: { value: JSON.stringify(liveState) },
-        create: { key: 'liveStateSnapshot', value: JSON.stringify(liveState) }
+        where: {
+          key: 'liveStateSnapshot'
+        },
+        update: {
+          value: JSON.stringify(liveState)
+        },
+        create: {
+          key: 'liveStateSnapshot',
+          value: JSON.stringify(liveState)
+        }
       })
     } catch (err) {
-      console.error('Falha ao persistir o estado da partida:', err)
+      console.error(
+        'Falha ao persistir o estado da partida:',
+        err
+      )
     }
   }, 1500)
 }
 
 export async function loadPersistedState(): Promise<void> {
   try {
-    const row = await prisma.setting.findUnique({ where: { key: 'liveStateSnapshot' } })
+    const row = await prisma.setting.findUnique({
+      where: {
+        key: 'liveStateSnapshot'
+      }
+    })
+
     if (!row) return
+
     const parsed = JSON.parse(row.value) as Partial<LiveState>
+
     Object.assign(liveState, parsed)
-    // Snapshots antigos não têm o bloco de avaliação analítica.
+
+    // Compatibilidade com snapshots antigos.
     if (!liveState.analyticEvaluation) {
       liveState.analyticEvaluation = {
         itemId: null,
@@ -517,8 +602,33 @@ export async function loadPersistedState(): Promise<void> {
         expectedJurorCount: 0
       }
     }
-    console.log('Estado da partida recuperado do último encerramento.')
+
+    // Compatibilidade com snapshots antigos que ainda possuíam slides.
+    // O novo sistema trabalha exclusivamente com PPTX original.
+    if (!liveState.presentationFlow) {
+      resetPresentationFlow()
+    } else {
+      delete (liveState.presentationFlow as any).slides
+
+      if (
+        typeof liveState.presentationFlow.currentPage !== 'number' ||
+        liveState.presentationFlow.currentPage < 1
+      ) {
+        liveState.presentationFlow.currentPage = 1
+      }
+
+      if (!liveState.presentationFlow.presentationMode) {
+        liveState.presentationFlow.presentationMode = 'standard'
+      }
+    }
+
+    console.log(
+      'Estado da partida recuperado do último encerramento.'
+    )
   } catch (err) {
-    console.error('Falha ao recuperar o estado da partida:', err)
+    console.error(
+      'Falha ao recuperar o estado da partida:',
+      err
+    )
   }
 }
