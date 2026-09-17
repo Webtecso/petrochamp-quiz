@@ -173,9 +173,10 @@ const canGoNext = computed(() => {
     presentationMode: string
   }
   if (presentationMode !== 'document') return false
-  // se ainda não sabemos o total, deixa avançar (a projeção reporta depois)
-  if (!totalPages || totalPages < 1) return true
-  return currentPage < totalPages
+  const total = totalPages ?? 0
+  // 0 ou 1 = ainda não fiável
+  if (total <= 1) return true
+  return currentPage < total
 })
 </script>
 

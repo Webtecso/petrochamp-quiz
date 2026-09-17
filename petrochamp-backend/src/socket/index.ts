@@ -1844,11 +1844,12 @@ export function registerSocketHandlers(io: Server): void {
       if (n <= 0) return
       const flow = liveState.presentationFlow
       if (flow.stage !== 'presenting' && flow.stage !== 'countdown') return
+      if (flow.totalPages > 1 && n < flow.totalPages) return
       flow.totalPages = n
       if (flow.currentPage > n) flow.currentPage = n
+      console.log('[setSlideCount] totalPages =', n)
       broadcast()
     })
-
 
     socket.on('moderator:presentationPrevPage', () => {
       const flow = liveState.presentationFlow

@@ -25,6 +25,7 @@ import PhaseRankingBoard from '../components/PhaseRankingBoard.vue'
 import PresentationRankingBoard from '../components/PresentationRankingBoard.vue'
 import projectionBg from '../assets/projecao-bg.jpg'
 import { PowerPointViewer, type PowerPointViewerExpose } from 'pptx-vue-viewer'
+import { getSocket } from '../services/socket'
 
 const store = useCampeonatoStore()
 const quizContent = useQuizContentStore()
@@ -211,17 +212,43 @@ function onProjViewerMounted(): void {
       const viewer = viewerRef.value as any
       if (typeof viewer?.setMode === 'function') {
         const mode = viewer.getMode?.()
-        if (mode === 'present') {
-          viewer.setMode('preview')
-        }
+        if (mode === 'present') viewer.setMode('preview')
       }
-      projSlideCount.value = viewer?.getSlideCount?.() ?? 0
+
+      const readCount = () => viewer?.getSlideCount?.() ?? 0
+
+      let count = readCount()
+      projSlideCount.value = count
+      if (count > 1) reportSlideCount(count)
+
+      // o PPTX por vezes só revela o total depois do mount
+      setTimeout(() => {
+        count = readCount()
+        projSlideCount.value = count
+        if (count >= 1) reportSlideCount(count)
+        applyPageToViewer(store.presentationFlow.currentPage)
+        notifyViewerResize()
+      }, 800)
+
+      setTimeout(() => {
+        count = readCount()
+        projSlideCount.value = count
+        if (count >= 1) reportSlideCount(count)
+      }, 2000)
+
       applyPageToViewer(store.presentationFlow.currentPage)
       notifyViewerResize()
     } catch (e) {
       console.warn('[proj] mounted', e)
     }
   })
+}
+
+function reportSlideCount(count: number): void {
+  const n = Math.floor(Number(count) || 0)
+  if (n < 1) return
+  console.log('[proj] reportSlideCount', n)
+  getSocket().emit('presentation:setSlideCount', { count: n })
 }
 
 function notifyViewerResize(): void {
@@ -262,13 +289,13 @@ watch(viewerContent, (bytes) => {
 
 function onProjSlideCountChange(count: number): void {
   projSlideCount.value = count
+  reportSlideCount(count)
 }
 
 function onProjActiveSlideChange(index: number): void {
   projActiveSlideIndex.value = index
 }
 
-// se o stage/mode mudar para presenting+document, reaplica
 watch(
   () =>
     [
