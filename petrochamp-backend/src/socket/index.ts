@@ -1317,11 +1317,19 @@ export function registerSocketHandlers(io: Server): void {
     })
 
     socket.on('moderator:showPartners', async () => {
+      const currentPhaseConfig = await getCurrentPhaseConfig()
+      const isPresentationQuiz =
+        liveState.phaseFlow.stage === 'presentationRanking' &&
+        currentPhaseConfig?.type === 'apresentacao_quiz'
+
       if (
         liveState.phaseFlow.stage !== 'ranking' &&
-        liveState.phaseFlow.stage !== 'partnersPending'
-      )
+        liveState.phaseFlow.stage !== 'partnersPending' &&
+        !isPresentationQuiz
+      ) {
         return
+      }
+
       const isLastPhase = liveState.phaseFlow.stage === 'partnersPending'
       const seconds = await getPartnersDurationSeconds()
 
@@ -1329,13 +1337,26 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
 
       if (partnersTimerHandle) clearTimeout(partnersTimerHandle)
+
       partnersTimerHandle = setTimeout(() => {
         if (liveState.phaseFlow.stage !== 'partners') return
+
+        // Fluxo especial:
+        // Apresentação + Quiz → Parceiros → Introdução do Quiz
+        if (isPresentationQuiz) {
+          liveState.phaseFlow = { stage: 'quizIntro', suspensePhrase: null }
+          liveState.bracketVisible = false
+          broadcast()
+          return
+        }
+
+        // Fluxo institucional normal
         liveState.phaseFlow = { stage: 'webtec', suspensePhrase: null }
         broadcast()
 
         partnersTimerHandle = setTimeout(() => {
           if (liveState.phaseFlow.stage !== 'webtec') return
+
           liveState.phaseFlow = { stage: 'organizer', suspensePhrase: null }
           broadcast()
 
@@ -1343,8 +1364,12 @@ export function registerSocketHandlers(io: Server): void {
 
           partnersTimerHandle = setTimeout(async () => {
             if (liveState.phaseFlow.stage !== 'organizer') return
+
             const phrase = await pickSuspensePhrase()
-            liveState.phaseFlow = { stage: 'suspense', suspensePhrase: phrase }
+            liveState.phaseFlow = {
+              stage: 'suspense',
+              suspensePhrase: phrase
+            }
             broadcast()
           }, seconds * 1000)
         }, seconds * 1000)
@@ -1753,7 +1778,9 @@ export function registerSocketHandlers(io: Server): void {
 
             presentationMode,
 
-            currentPage: 1
+            currentPage: 1,
+
+            totalPages: 1
           }
 
           await refreshExpectedJurorCount()
@@ -1994,7 +2021,9 @@ export function registerSocketHandlers(io: Server): void {
 
         presentationMode: 'standard',
 
-        currentPage: 1
+        currentPage: 1,
+
+        totalPages: 1
       }
 
       liveState.bracketVisible = true

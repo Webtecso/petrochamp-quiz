@@ -145,12 +145,22 @@ function advanceNext(): void {
   store.advanceToNextPresentation()
 }
 
+// function goNext(): void {
+//   if (isCompositePhase.value) {
+//     store.confirmQuizIntro()
+//   } else {
+//     store.confirmPresentationRanking()
+//   }
+//   router.push('/moderador/equipas')
+// }
+
 function goNext(): void {
   if (isCompositePhase.value) {
-    store.confirmQuizIntro()
+    store.showPartners()
   } else {
     store.confirmPresentationRanking()
   }
+
   router.push('/moderador/equipas')
 }
 
@@ -186,13 +196,27 @@ const canGoNext = computed(() => {
           <p class="text-sm text-gray-600">
             {{
               isCompositePhase
+                ? 'Todas as equipas apresentaram e foram avaliadas. Agora serão apresentados os parceiros antes do Quiz.'
+                : 'Todas as equipas já apresentaram nesta fase.'
+            }}
+          </p>
+
+          <button
+            class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold self-center"
+            @click="goNext"
+          >
+            {{ isCompositePhase ? 'Mostrar Parceiros' : 'Ir para o Ranking' }}
+          </button>
+          <!-- <p class="text-sm text-gray-600">
+            {{
+              isCompositePhase
                 ? 'Todas as equipas apresentaram e foram avaliadas. Agora é a vez do Quiz desta fase.'
                 : 'Todas as equipas já apresentaram nesta fase.'
             }}
           </p>
           <button class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold self-center" @click="goNext">
             {{ isCompositePhase ? 'Ir para Escolha de Equipas (Quiz)' : 'Ir para o Ranking' }}
-          </button>
+          </button> -->
         </div>
 
         <div v-else-if="pendingSelection" class="flex flex-col gap-4 text-center">

@@ -146,7 +146,7 @@ function formatImageUrl(url: string | null | undefined): string {
   return url.startsWith('/') ? url : `/${url}`
 }
 
-const slideCount = computed(() => Math.max(1, store.presentationFlow.slides?.length ?? 0))
+const slideCount = computed(() => Math.max(1, store.presentationFlow.totalPages ?? 0))
 const startMessage = computed(() => {
   if (!store.championship) return 'A aguardar o início do evento...'
   const base = `A ${championshipLabels[store.championship]} vai começar dentro de momentos...`
@@ -339,7 +339,7 @@ const isBattleActiveState = computed(() => {
           {{ store.presentationFlow.teamName }} · {{ store.presentationFlow.theme }}
         </span>
         <div class="flex items-center gap-4 text-xs text-white/70">
-          <span>Slide {{ store.presentationFlow.currentPage }} / {{ store.presentationFlow.slides?.length ?? 0 }}</span>
+
           <span>
             {{ String(Math.floor(store.presentationFlow.timeLeft / 60)).padStart(2, '0') }}:{{ String(store.presentationFlow.timeLeft % 60).padStart(2, '0') }}
           </span>
@@ -352,8 +352,9 @@ const isBattleActiveState = computed(() => {
           width: `${slideCount * 100}%`
         }"
       >
+
         <div
-          v-for="s in store.presentationFlow.slides ?? []"
+          v-for="s in ([] as { order: number; imageUrl: string }[])"
           :key="s.order"
           class="h-full flex items-center justify-center shrink-0"
           :style="{ width: `${100 / slideCount}%` }"

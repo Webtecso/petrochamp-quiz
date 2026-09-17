@@ -24,6 +24,8 @@ const starting = ref(false)
 const openingVote = ref(false)
 const repescagemError = ref('')
 
+// onMounted
+
 onMounted(async () => {
   await teamsStore.fetchTeams()
   await phasesStore.fetchPhases(store.championship ?? undefined)
@@ -46,21 +48,7 @@ onMounted(async () => {
 })
 
 const hasBracket = computed(() => liveBracketStore.matches.length > 0)
-const isLastPhaseFlow = computed(() => store.phase >= phasesStore.totalPhases)
 
-// CORRIGIDO - antes usava store.phase diretamente como round do
-// chaveamento (liveBracketStore.pendingMatchesForRound(store.phase)).
-// Isso só é correto quando Phase.order coincide sempre com
-// BracketMatch.round. Assim que existe uma fase "apresentacao" com
-// noElimination: true na sequência (que não gera nenhuma ronda de
-// bracket - ver bracketLive.ts), store.phase avança à frente do round
-// real, e pendingMatchesForRound(store.phase) passava a procurar um
-// round inexistente - devolvendo sempre lista vazia, mesmo com
-// confrontos por jogar no round real. Agora traduz-se sempre
-// Phase.order -> BracketMatch.round através de
-// phasesStore.phaseOrderToBracketRound antes de filtrar os confrontos.
-// No universitario (sem nenhuma fase apresentacao+noElimination), esta
-// tradução é a identidade - nada muda lá.
 const currentBracketRound = computed(() => phasesStore.phaseOrderToBracketRound(store.phase))
 const pendingMatchesThisRound = computed(() => liveBracketStore.pendingMatchesForRound(currentBracketRound.value))
 
@@ -234,21 +222,25 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
         Mostrar Parceiros
       </button>
     </template>
-    <template v-else-if="store.phaseFlow.stage === 'partners' || store.phaseFlow.stage === 'webtec' || store.phaseFlow.stage === 'organizer'">
-      <h1 class="text-2xl font-bold text-petro-primary">Sequência institucional em curso</h1>
-      <p v-if="isLastPhaseFlow" class="text-sm text-gray-500">
-        Quando terminar, segue para o Pódio.
+    <template v-else-if="store.phaseFlow.stage === 'partners'">
+      <h1 class="text-2xl font-bold text-petro-primary">
+        Apresentação dos Parceiros
+      </h1>
+
+      <p class="text-sm text-gray-500">
+        Os parceiros estão a ser apresentados na Projeção.
+        Aguarda o início da introdução do Quiz.
       </p>
-      <p v-else class="text-sm text-gray-500">
-        A avançar automaticamente para a tela de suspense da próxima fase...
+    </template>
+
+    <template v-else-if="store.phaseFlow.stage === 'webtec' || store.phaseFlow.stage === 'organizer'">
+      <h1 class="text-2xl font-bold text-petro-primary">
+        Sequência institucional em curso
+      </h1>
+
+      <p class="text-sm text-gray-500">
+        Aguarda o término da apresentação institucional.
       </p>
-      <RouterLink
-        v-if="isLastPhaseFlow"
-        to="/moderador/podio"
-        class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold"
-      >
-        Ir para o Pódio
-      </RouterLink>
     </template>
 
     <!-- Suspense/Próxima Fase -->

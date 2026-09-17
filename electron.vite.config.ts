@@ -13,20 +13,20 @@ export default defineConfig({
   renderer: {
     optimizeDeps: {
       include: ['jszip', 'fast-xml-parser', 'vue-i18n', 'pptx-vue-viewer'],
-      needsInterop: ['jszip'],
+      needsInterop: ['jszip']
     },
     base: './',
     resolve: {
       alias: [
         { find: 'jszip', replacement: 'jszip/lib/index.js' },
-        { find: '@renderer', replacement: resolve('src/renderer/src') },
-        { find: /pptx-vue-viewer\.css$/, replacement: resolve('src/renderer/empty.css') }
+        { find: '@renderer', replacement: resolve('src/renderer/src') }
       ]
     },
     plugins: [vue(), tailwindcss()],
     server: {
       headers: {
-        'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http: https: ws: wss:; frame-src 'self' http://localhost:4000 *; child-src 'self' http://localhost:4000 *;"
+        'Content-Security-Policy':
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http: https: ws: wss:; frame-src 'self' http://localhost:4000 *; child-src 'self' http://localhost:4000 *;"
       }
     }
   }

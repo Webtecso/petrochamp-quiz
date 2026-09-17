@@ -120,6 +120,8 @@ model PresentationDupla {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  documents PresentationDocument[]
+
   @@unique([phaseId, teamAId])
 }
 
@@ -378,6 +380,8 @@ model PresentationDocument {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  dupla PresentationDupla @relation(fields: [duplaId], references: [id], onDelete: Cascade)
 
   @@unique([duplaId, teamId])
 }
