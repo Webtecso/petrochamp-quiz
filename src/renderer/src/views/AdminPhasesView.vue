@@ -16,19 +16,10 @@ const championshipOptions: { value: ChampionshipType; label: string }[] = [
   { value: 'exibicao', label: 'Exibição' }
 ]
 
-onMounted(() => {
-  phasesStore.fetchPhases(selectedChampionship.value)
-})
-
-watch(selectedChampionship, (val) => {
-  resetForm()
-  phasesStore.fetchPhases(val)
-})
-
 const editingId = ref<string | null>(null)
 const form = ref({
   label: '',
-  type: 'quiz' as 'quiz' | 'apresentacao' | 'apresentacao_quiz',
+  type: 'quiz' as 'quiz' | 'apresentacao',
   useQuestions: true,
   useJudges: false,
   maxQuestions: null as number | null,
@@ -40,6 +31,31 @@ const form = ref({
   quizWeight: 50 as number | null,
   noElimination: false
 })
+
+onMounted(() => {
+  phasesStore.fetchPhases(selectedChampionship.value)
+})
+
+watch(selectedChampionship, (val) => {
+  resetForm()
+  phasesStore.fetchPhases(val)
+})
+
+// DEPOIS de form estar declarado
+watch(
+  () => form.value.type,
+  (type) => {
+    if (type === 'apresentacao') {
+      form.value.useQuestions = false
+      form.value.questionsPerTeam = null
+      form.value.maxQuestions = null
+      form.value.useInitialScores = false
+    } else if (type === 'quiz') {
+      form.value.useQuestions = true
+      form.value.presentationMinutes = null
+    }
+  }
+)
 
 function resetForm(): void {
   editingId.value = null
@@ -61,10 +77,13 @@ function resetForm(): void {
 
 function editPhase(p: Phase): void {
   editingId.value = p.id
+  // se ainda houver fases antigas apresentacao_quiz na BD, trata como apresentacao
+  const type =
+    p.type === 'apresentacao' || p.type === 'apresentacao_quiz' ? 'apresentacao' : 'quiz'
   form.value = {
     label: p.label,
-    type: p.type ?? 'quiz',
-    useQuestions: p.useQuestions,
+    type,
+    useQuestions: type === 'apresentacao' ? false : p.useQuestions,
     useJudges: p.useJudges,
     maxQuestions: p.maxQuestions ?? null,
     questionsPerTeam: p.questionsPerTeam ?? null,
@@ -77,11 +96,11 @@ function editPhase(p: Phase): void {
   }
 }
 
-// Sincroniza as PresentationDuplas a partir do chaveamento já existente,
-// sem apagar nada.
 async function resyncPresentationDuplas(): Promise<void> {
   try {
-    await adminFetch(`/api/bracket-live/${selectedChampionship.value}/resync-presentation`, { method: 'POST' })
+    await adminFetch(`/api/bracket-live/${selectedChampionship.value}/resync-presentation`, {
+      method: 'POST'
+    })
   } catch (e) {
     console.error('Falha ao sincronizar duplas de apresentação automaticamente:', e)
   }
@@ -90,13 +109,27 @@ async function resyncPresentationDuplas(): Promise<void> {
 async function savePhase(): Promise<void> {
   if (!form.value.label.trim()) return
   errorMsg.value = ''
+
+  if (form.value.type === 'apresentacao') {
+    form.value.useQuestions = false
+  }
+  if (form.value.type === 'quiz') {
+    form.value.useQuestions = true
+  }
+
   try {
     if (editingId.value !== null) {
-      await phasesStore.updatePhase(editingId.value, { ...form.value, championship: selectedChampionship.value })
+      await phasesStore.updatePhase(editingId.value, {
+        ...form.value,
+        championship: selectedChampionship.value
+      })
     } else {
-      await phasesStore.addPhase({ ...form.value, championship: selectedChampionship.value })
+      await phasesStore.addPhase({
+        ...form.value,
+        championship: selectedChampionship.value
+      })
     }
-    if (form.value.type === 'apresentacao' || form.value.type === 'apresentacao_quiz') {
+    if (form.value.type === 'apresentacao') {
       await resyncPresentationDuplas()
     }
     resetForm()
@@ -154,8 +187,7 @@ async function manualResyncPresentation(): Promise<void> {
 }
 
 function typeLabel(type: string): string {
-  if (type === 'apresentacao') return 'Apresentação de Projetos'
-  if (type === 'apresentacao_quiz') return 'Apresentação + Quiz'
+  if (type === 'apresentacao' || type === 'apresentacao_quiz') return 'Apresentação de Projetos'
   return 'Quiz'
 }
 </script>
@@ -217,11 +249,11 @@ function typeLabel(type: string): string {
           <select v-model="form.type" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             <option value="quiz">Quiz</option>
             <option value="apresentacao">Apresentação de Projetos</option>
-            <option value="apresentacao_quiz">Apresentação + Quiz</option>
+            <!-- <option value="apresentacao_quiz">Apresentação + Quiz</option> -->
           </select>
         </div>
 
-        <template v-if="form.type === 'quiz' || form.type === 'apresentacao_quiz'">
+        <template v-if="form.type === 'quiz'">
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-xs text-gray-500 block mb-1">Máximo de perguntas nesta fase</label>
@@ -245,7 +277,7 @@ function typeLabel(type: string): string {
           </div>
         </template>
 
-        <template v-if="form.type === 'apresentacao' || form.type === 'apresentacao_quiz'">
+        <template v-if="form.type === 'apresentacao'">
           <div>
             <label class="text-xs text-gray-500 block mb-1">Tempo de apresentação (minutos)</label>
             <input v-model.number="form.presentationMinutes" type="number" min="1" placeholder="Ex: 10" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
@@ -282,7 +314,7 @@ function typeLabel(type: string): string {
           </div>
         </template>
 
-        <template v-if="form.type === 'apresentacao_quiz'">
+        <!-- <template v-if="form.type === 'apresentacao_quiz'">
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-xs text-gray-500 block mb-1">Peso da Apresentação (%)</label>
@@ -293,7 +325,7 @@ function typeLabel(type: string): string {
               <input v-model.number="form.quizWeight" type="number" min="0" max="100" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>
-        </template>
+        </template> -->
 
         <div class="flex items-center justify-between">
           <span class="text-sm text-gray-600">Usa Avaliação dos Jurados?</span>
@@ -358,7 +390,7 @@ function typeLabel(type: string): string {
               <span v-if="p.maxQuestions"> · máx {{ p.maxQuestions }} perguntas</span>
               <span v-if="p.questionsPerTeam"> · {{ p.questionsPerTeam }}/equipa</span>
               <span v-if="p.presentationMinutes"> · {{ p.presentationMinutes }} min de apresentação</span>
-              <span v-if="p.type === 'apresentacao_quiz'"> · {{ p.presentationWeight }}%/{{ p.quizWeight }}%</span>
+              <!-- <span v-if="p.type === 'apresentacao_quiz'"> · {{ p.presentationWeight }}%/{{ p.quizWeight }}%</span> -->
               <span v-if="p.type === 'apresentacao' && p.noElimination"> · sem eliminação ({{ p.presentationWeight }}%/{{ p.quizWeight }}%)</span>
             </div>
           </div>

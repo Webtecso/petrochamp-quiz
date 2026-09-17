@@ -49,7 +49,6 @@ function recomputeStageSize(): void {
   const ch = el.clientHeight
   if (cw <= 0 || ch <= 0) return
 
-  // Preenche 100% do espaço disponível, sem manter aspect ratio.
   stageWidth.value = cw
   stageHeight.value = ch
 }
@@ -58,7 +57,6 @@ function scheduleRecompute(): void {
   if (resizeRaf) cancelAnimationFrame(resizeRaf)
   resizeRaf = requestAnimationFrame(recomputeStageSize)
 }
-// ── fim stage responsivo ──────────────────────────────────────────────
 
 const championshipLabels: Record<string, string> = {
   universitario: 'Campeonato Universitário',
@@ -181,14 +179,19 @@ watch(
 
 function applyPageToViewer(page: number): void {
   const viewer = viewerRef.value as any
-  if (!viewer || !viewerContent.value) {
-    return
-  }
+  if (!viewer || !viewerContent.value) return
 
   const target = Math.max(0, (page ?? 1) - 1)
 
   try {
-    // NÃO chamar setMode('present') — isso isola a navegação numa layer própria
+    // Garantir modo em que goTo funciona (não present)
+    if (typeof viewer.setMode === 'function') {
+      const mode = viewer.getMode?.()
+      if (mode === 'present') {
+        viewer.setMode('preview')
+      }
+    }
+
     if (typeof viewer.setActiveSlideIndex === 'function') {
       viewer.setActiveSlideIndex(target)
     } else if (typeof viewer.goTo === 'function') {
@@ -199,8 +202,8 @@ function applyPageToViewer(page: number): void {
       typeof viewer.getActiveSlideIndex === 'function'
         ? viewer.getActiveSlideIndex()
         : null
-
     projActiveSlideIndex.value = active ?? target
+    console.log('[proj] goTo', target, 'active=', active)
   } catch (e) {
     console.error('[proj] apply failed', e)
   }
@@ -210,18 +213,20 @@ function onProjViewerMounted(): void {
   nextTick(() => {
     try {
       const viewer = viewerRef.value as any
+      const readCount = () => viewer?.getSlideCount?.() ?? 0
+
       if (typeof viewer?.setMode === 'function') {
         const mode = viewer.getMode?.()
         if (mode === 'present') viewer.setMode('preview')
       }
 
-      const readCount = () => viewer?.getSlideCount?.() ?? 0
-
       let count = readCount()
       projSlideCount.value = count
       if (count > 1) reportSlideCount(count)
 
-      // o PPTX por vezes só revela o total depois do mount
+      applyPageToViewer(store.presentationFlow.currentPage)
+      notifyViewerResize()
+
       setTimeout(() => {
         count = readCount()
         projSlideCount.value = count
@@ -234,10 +239,8 @@ function onProjViewerMounted(): void {
         count = readCount()
         projSlideCount.value = count
         if (count >= 1) reportSlideCount(count)
+        applyPageToViewer(store.presentationFlow.currentPage)
       }, 2000)
-
-      applyPageToViewer(store.presentationFlow.currentPage)
-      notifyViewerResize()
     } catch (e) {
       console.warn('[proj] mounted', e)
     }
@@ -264,9 +267,6 @@ function notifyViewerResize(): void {
   }
 }
 
-// Sempre que a caixa do stage mudar de tamanho (resize da janela,
-// maximizar, mudar de monitor), reaplica a página atual e avisa o
-// viewer para recalcular a escala interna.
 watch([stageWidth, stageHeight], () => {
   nextTick(() => {
     notifyViewerResize()
@@ -572,7 +572,7 @@ const roundJustEnded = computed(() => {
       v-else-if="store.phaseFlow.stage === 'presentationRanking'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
     >
-      <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem)">
+      <h2 class="font-bold" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem); color: white">
         Notas de Apresentação - Fase {{ store.phase }}
       </h2>
       <PresentationRankingBoard :rankings="store.presentationPhaseScores" />
@@ -979,12 +979,12 @@ const roundJustEnded = computed(() => {
             </div>
             <div
               v-if="questionImage"
-              class="flex-[1.5] flex justify-center items-center bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-gray-200 group relative min-h-[300px]"
+              class="mb-4 w-full flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[250px] sm:min-h-[300px] md:min-h-[350px]"
             >
               <img
                 :src="formatImageUrl(questionImage)"
                 alt="Imagem Ilustrativa"
-                class="absolute inset-0 w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105"
+                class="flex-[1.8] w-full min-h-[250px] sm:min-h-[300px] md:min-h-[350px] object-contain"
               />
             </div>
           </div>
@@ -1115,96 +1115,104 @@ const roundJustEnded = computed(() => {
 </template>
 
 <style scoped>
-.repescada-glow {
-  animation: repescadaPulse 1.8s ease-in-out infinite;
+body:has(.pptx-projection) {
+  overflow: hidden !important;
 }
-@keyframes repescadaPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
-  50% { box-shadow: 0 0 25px 4px rgba(251, 191, 36, 0.5); }
+
+.pptx-projection {
+  position: relative;
+  overflow: hidden;
+  background: #000;
 }
-.team-turn-glow {
-  animation: bgLightPulse 0.9s infinite alternate ease-in-out;
-  z-index: 20 !important;
+
+.pptx-projection-viewer,
+.pptx-projection .pptx-vue-root,
+.pptx-projection [class*='pptx-vue'] {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  background: #000 !important;
 }
-.team-turn-glow .rounded-full {
-  animation: avatarAuraPulse 0.9s infinite alternate ease-in-out !important;
+
+.pptx-projection [class*='ribbon'],
+.pptx-projection [class*='Ribbon'],
+.pptx-projection [class*='TitleBar'],
+.pptx-projection [class*='title-bar'],
+.pptx-projection [class*='StatusBar'],
+.pptx-projection [class*='status-bar'],
+.pptx-projection [class*='toolbar'],
+.pptx-projection [class*='Toolbar'],
+.pptx-projection [class*='BottomBar'],
+.pptx-projection [class*='bottom-bar'],
+.pptx-projection [class*='SlideRail'],
+.pptx-projection [class*='slide-rail'],
+.pptx-projection [class*='Thumbnail'],
+.pptx-projection [class*='thumbnail'],
+.pptx-projection [class*='Presentation'],
+.pptx-projection [class*='Read-only'],
+.pptx-projection [class*='readonly'],
+.pptx-projection [class*='ReadOnly'],
+.pptx-projection [class*='Zoom'],
+.pptx-projection [class*='zoom'],
+.pptx-projection aside,
+.pptx-projection header,
+.pptx-projection footer,
+.pptx-projection nav,
+.pptx-projection [role='toolbar'],
+.pptx-projection [role='status'],
+.pptx-projection [role='tablist'],
+.pptx-projection .pptx-vue-presentation-toolbar-slot {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
 }
-.team-turn-glow .uppercase {
-  animation: textNeonPulse 0.9s infinite alternate ease-in-out;
+
+.pptx-projection [class*='SlideStage'],
+.pptx-projection [class*='slide-stage'],
+.pptx-projection [class*='SlideCanvas'],
+.pptx-projection [class*='slide-canvas'],
+.pptx-projection [class*='CanvasHost'],
+.pptx-projection [class*='canvas-host'],
+.pptx-projection [class*='Workspace'],
+.pptx-projection [class*='workspace'],
+.pptx-projection [class*='Main'],
+.pptx-projection [class*='main-content'] {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #000 !important;
 }
-@keyframes bgLightPulse {
-  0% { filter: brightness(1) contrast(1); }
-  100% { filter: brightness(1.35) contrast(1.05); }
+
+.pptx-vue-presentation {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1 !important;
+  background: #000 !important;
+  overflow: hidden !important;
 }
-@keyframes avatarAuraPulse {
-  0% { box-shadow: 0 0 0px rgba(251, 191, 36, 0); border-color: rgba(251, 191, 36, 0.4); }
-  100% { box-shadow: 0 0 25px 8px rgba(251, 191, 36, 0.85); border-color: rgb(251, 191, 36); }
-}
-@keyframes textNeonPulse {
-  0% { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-  100% { text-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 25px rgba(251, 191, 36, 0.8); }
-}
-.phase-rank-glow {
-  animation: phaseRankPulse 2s ease-in-out infinite;
-}
-@keyframes phaseRankPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(250, 204, 21, 0); }
-}
-.edition-badge {
-  animation: editionBadgeIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) both,
-             editionBadgeGlow 3s ease-in-out infinite 0.8s;
-}
-@keyframes editionBadgeIn {
-  from { transform: translateY(-20px) scale(0.9); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
-}
-@keyframes editionBadgeGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
-  50% { box-shadow: 0 0 20px 4px rgba(212, 175, 55, 0.35); }
-}
-.firework {
-  position: absolute;
-  top: 25%;
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, #fde68a, #f59e0b, transparent 70%);
-  animation: fireworkBurst 2.4s ease-out infinite;
-}
-@keyframes fireworkBurst {
-  0% { transform: translateY(0) scale(0); opacity: 0; box-shadow: none; }
-  12% { opacity: 1; }
-  45% {
-    transform: translateY(-180px) scale(1);
-    box-shadow:
-      0 0 0 2px rgba(253, 230, 138, 0.9),
-      40px 20px 0 2px rgba(253, 230, 138, 0.8),
-      -40px 20px 0 2px rgba(253, 230, 138, 0.8),
-      30px -30px 0 2px rgba(245, 158, 11, 0.8),
-      -30px -30px 0 2px rgba(245, 158, 11, 0.8),
-      0px -50px 0 2px rgba(245, 158, 11, 0.7);
-  }
-  100% { transform: translateY(-220px) scale(1.4); opacity: 0; }
-}
-.champion-logo {
-  animation: championLogoIn 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes championLogoIn {
-  from { transform: scale(0.4) rotate(-15deg); opacity: 0; }
-  to { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-.champion-name {
-  animation: championNamePulse 1.6s ease-in-out infinite;
-}
-@keyframes championNamePulse {
-  0%, 100% { text-shadow: 0 0 20px rgba(251, 191, 36, 0.6); }
-  50% { text-shadow: 0 0 40px rgba(251, 191, 36, 1); }
+
+.pptx-vue-presentation-frame {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
 }
 </style>
 
 <style>
-/* ── Projeção PPTX: ecrã limpo, só o slide ativo ───────────────────── */
 
 body:has(.pptx-projection) {
   overflow: hidden !important;
@@ -1222,7 +1230,6 @@ body:has(.pptx-projection) {
   background: #000 !important;
 }
 
-/* Ribbon / title / status / toolbars */
 .pptx-projection [class*='ribbon'],
 .pptx-projection [class*='Ribbon'],
 .pptx-projection [class*='TitleBar'],
@@ -1239,7 +1246,6 @@ body:has(.pptx-projection) {
   pointer-events: none !important;
 }
 
-/* Rail de miniaturas (lista vertical à esquerda) */
 .pptx-projection [class*='SlideRail'],
 .pptx-projection [class*='slide-rail'],
 .pptx-projection [class*='slideRail'],
@@ -1255,7 +1261,6 @@ body:has(.pptx-projection) {
   pointer-events: none !important;
 }
 
-/* Layer de presentation mode (se ainda aparecer) */
 .pptx-vue-presentation {
   position: absolute !important;
   inset: 0 !important;
@@ -1279,5 +1284,25 @@ body:has(.pptx-projection) {
 
 .pptx-vue-presentation-toolbar-slot {
   display: none !important;
+}
+
+.pptx-projection [class*='Presentation'],
+.pptx-projection [class*='presentation-tab'],
+.pptx-projection [class*='Read-only'],
+.pptx-projection [class*='readonly'],
+.pptx-projection [class*='ReadOnly'],
+.pptx-projection [class*='StatusBar'],
+.pptx-projection [class*='status-bar'],
+.pptx-projection [class*='BottomBar'],
+.pptx-projection [class*='bottom-bar'],
+.pptx-projection [class*='Zoom'],
+.pptx-projection [class*='zoom'],
+.pptx-projection header,
+.pptx-projection footer,
+.pptx-projection [role='toolbar'],
+.pptx-projection [role='status'] {
+  display: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
 }
 </style>

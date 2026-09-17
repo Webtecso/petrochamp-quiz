@@ -93,7 +93,6 @@ const currentQuestion = computed(() => {
 const currentAnalyticItem = computed(() => {
   if (store.currentItemSource !== 'analytic' || !store.currentAnalyticItemId) return null
   const id = String(store.currentAnalyticItemId)
-  // procura em TODOS os itens carregados (não só por fase)
   return quizContent.evaluationItems.find((i) => String(i.id) === id) ?? null
 })
 
@@ -128,8 +127,14 @@ const currentPhaseFull = computed(() =>
   phasesStore.phases.find((p) => Number(p.order) === Number(store.phase))
 )
 
+const isPresentationPhase = computed(() => {
+  const type = currentPhaseFull.value?.type
+  return type === 'apresentacao' || type === 'apresentacao_quiz'
+})
+
 function redirectIfPresentationPhase(): boolean {
   if (store.teamA && store.teamB) return false
+
   const type = currentPhaseFull.value?.type
   if (type === 'apresentacao' || type === 'apresentacao_quiz') {
     router.replace('/moderador/apresentacao')
@@ -187,6 +192,10 @@ function goToDashboard(): void {
   router.push('/moderador/ranking')
 }
 
+function goToPresentation(): void {
+  router.push('/moderador/apresentacao')
+}
+
 function finishMatch(): void {
   if (!canFinish.value) return
   store.finishMatch()
@@ -218,8 +227,25 @@ function finishMatch(): void {
       </div>
     </header>
 
+    <!-- Fase de apresentação: nunca mostrar quiz / "sem perguntas" -->
     <main
-      v-if="!phaseConfig.useQuestions"
+      v-if="isPresentationPhase"
+      class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4"
+    >
+      <p class="text-gray-500 text-sm max-w-sm">
+        Esta fase é de Apresentação de Projetos. Usa o ecrã de apresentação.
+      </p>
+      <button
+        class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold"
+        @click="goToPresentation"
+      >
+        Ir para Apresentação
+      </button>
+    </main>
+
+    <!-- Fase sem perguntas automáticas (ex.: só jurados) -->
+    <main
+      v-else-if="!phaseConfig.useQuestions"
       class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4"
     >
       <p class="text-gray-500 text-sm max-w-sm">
@@ -235,6 +261,7 @@ function finishMatch(): void {
       </RouterLink>
     </main>
 
+    <!-- Desempate -->
     <template v-else-if="store.tiebreak?.active || store.tiebreak?.pending">
       <div class="flex items-center justify-center py-3 px-4 sm:px-8">
         <span
@@ -294,6 +321,7 @@ function finishMatch(): void {
       />
     </template>
 
+    <!-- Countdown antes da 1ª pergunta -->
     <template v-else-if="store.countdown.active">
       <main class="flex-1 flex flex-col items-center justify-center gap-3 px-4 sm:px-8 py-6">
         <div class="text-6xl font-black text-petro-primary">{{ store.countdown.value }}</div>
@@ -301,6 +329,7 @@ function finishMatch(): void {
       </main>
     </template>
 
+    <!-- Pergunta / item analítico ativo -->
     <template v-else-if="activeDisplay">
       <main
         class="flex-1 flex flex-col lg:flex-row items-stretch lg:items-center justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto min-h-0"
@@ -363,6 +392,7 @@ function finishMatch(): void {
       />
     </template>
 
+    <!-- Sem pergunta ativa: ronda completa / analítica em falta / sem perguntas (só quiz) -->
     <main
       v-else
       class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4"
@@ -385,7 +415,6 @@ function finishMatch(): void {
         </p>
       </template>
 
-      <!-- CORRIGIDO: distinguir item analítico em falta vs. zero perguntas -->
       <div
         v-else-if="store.currentItemSource === 'analytic' && store.currentAnalyticItemId"
         class="flex flex-col items-center gap-3"
@@ -397,11 +426,24 @@ function finishMatch(): void {
         </p>
       </div>
 
-      <div v-else class="flex flex-col items-center gap-3">
+      <!-- Só em fase de quiz: mensagem de perguntas em falta -->
+      <div v-else-if="!isPresentationPhase" class="flex flex-col items-center gap-3">
         <p class="text-gray-400 text-sm max-w-sm">
           Ainda não há perguntas cadastradas para a Fase {{ store.phase }}. Vai ao Painel do
           Administrador para adicionar perguntas.
         </p>
+      </div>
+
+      <div v-else class="flex flex-col items-center gap-3">
+        <p class="text-gray-500 text-sm max-w-sm">
+          Fase de apresentação — usa o ecrã de Apresentação.
+        </p>
+        <button
+          class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold"
+          @click="goToPresentation"
+        >
+          Ir para Apresentação
+        </button>
       </div>
     </main>
 

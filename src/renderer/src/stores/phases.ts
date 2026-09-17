@@ -47,9 +47,10 @@ export const usePhasesStore = defineStore('phases', {
       return (order: number | string) => {
         const found = state.phases.find((p) => Number(p.order) === Number(order))
         if (found) {
+          const type = found.type ?? 'quiz'
           return {
-            type: found.type ?? 'quiz',
-            useQuestions: Boolean(found.useQuestions),
+            type,
+            useQuestions: type === 'apresentacao' ? false : Boolean(found.useQuestions),
             useJudges: Boolean(found.useJudges),
             maxQuestions: found.maxQuestions ?? null,
             questionsPerTeam: found.questionsPerTeam ?? null,
