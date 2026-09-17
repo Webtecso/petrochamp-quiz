@@ -1,16 +1,12 @@
 import { app, shell, BrowserWindow, screen, session } from 'electron'
 import { join } from 'path'
+// import { pathToFileURL } from 'url'
 import { existsSync, copyFileSync, mkdirSync, appendFileSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
 import http from 'http'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-// NOVO - log persistente em ficheiro. Numa app empacotada (subsistema
-// Windows GUI), o stdout/console.log do processo principal não aparece em
-// lado nenhum visível - mesmo correndo o .exe a partir de um terminal.
-// Sem isto, um problema no arranque do backend em produção é invisível.
-// O ficheiro fica em %APPDATA%\petrochamp-quiz\logs\main.log.
 function logToFile(message: string): void {
   try {
     const logsDir = join(app.getPath('userData'), 'logs')
@@ -39,11 +35,6 @@ if (!gotSingleInstanceLock) {
 
   let backendProcess: ChildProcess | null = null
 
-  // NOVO - garante que existe uma base de dados gravável em userData antes
-  // de arrancar o backend em produção. A pasta de instalação (resources/)
-  // não é local seguro para gravar (fica só de leitura em muitos setups, e
-  // é apagada/substituída em cada atualização). userData é a pasta correta
-  // e persistente por utilizador (ex: %APPDATA%\petrochamp-quiz).
   function ensureProdDatabase(): string {
     const userDataDir = app.getPath('userData')
     const dbPath = join(userDataDir, 'petrochamp.db')
@@ -82,25 +73,28 @@ if (!gotSingleInstanceLock) {
         stdio: 'pipe'
       })
     } else {
-      // PRODUÇÃO - corre o backend já compilado (dist/index.js) com o
-      // próprio binário do Electron em modo "run as node", em vez de
-      // depender de `npm`/`tsx` que não fazem parte do pacote final e de
-      // depender de o utilizador ter Node.js instalado na máquina.
       const backendPath = join(process.resourcesPath, 'petrochamp-backend')
       const entryPoint = join(backendPath, 'dist', 'index.js')
       const dbPath = ensureProdDatabase()
 
-      console.log('A arrancar backend local (produção) em:', backendPath)
-      logToFile(`A arrancar backend local (produção). backendPath=${backendPath} entryPoint=${entryPoint} entryPointExiste=${existsSync(entryPoint)} dbPath=${dbPath}`)
+      logToFile(
+        `A arrancar backend local (produção). backendPath=${backendPath} entryPoint=${entryPoint} entryPointExiste=${existsSync(entryPoint)} cwdExiste=${existsSync(backendPath)} dbPath=${dbPath} execPath=${process.execPath}`
+      )
+
+      if (!existsSync(entryPoint) || !existsSync(backendPath)) {
+        logToFile('ABORTADO: petrochamp-backend não foi empacotado em extraResources.')
+        return
+      }
 
       backendProcess = spawn(process.execPath, [entryPoint], {
         cwd: backendPath,
         shell: false,
+        windowsHide: true,
         stdio: 'pipe',
         env: {
           ...process.env,
           ELECTRON_RUN_AS_NODE: '1',
-          DATABASE_URL: `file:${dbPath}`,
+          DATABASE_URL: `file:${dbPath.replace(/\\/g, '/')}`,
           UPLOADS_DIR: join(app.getPath('userData'), 'uploads'),
           PORT: '4000'
         }
@@ -155,15 +149,27 @@ if (!gotSingleInstanceLock) {
     return new Promise((resolve, reject) => {
       function attempt(): void {
         http
-          .get(url, (res) => {
+        .get(url, (res) => {
             res.resume()
-            resolve()
+
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve()
+              return
+            }
+
+            if (Date.now() - start > timeoutMs) {
+              reject(new Error(`Backend respondeu com HTTP ${res.statusCode}`))
+              return
+            }
+
+            setTimeout(attempt, 400)
           })
           .on('error', () => {
             if (Date.now() - start > timeoutMs) {
               reject(new Error('Backend local não respondeu a tempo'))
               return
             }
+
             setTimeout(attempt, 400)
           })
       }
@@ -171,11 +177,6 @@ if (!gotSingleInstanceLock) {
     })
   }
 
-  // (Bloco 3) - dispara a sincronização com o Cloud através do próprio
-  // backend Local (que já sabe se há Internet e onde fica o Cloud, via
-  // CLOUD_API_URL no seu .env). Não bloqueia a abertura das janelas: corre
-  // "fire and forget" com um timeout de segurança, e falha em silêncio se
-  // não houver Internet - a app abre sempre, sincronizada ou não.
   function triggerSyncInBackground(): void {
     const req = http.request(
       'http://localhost:4000/api/sync/run',

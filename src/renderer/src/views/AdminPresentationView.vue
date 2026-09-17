@@ -44,9 +44,9 @@ const previewContent = ref<Record<string, Uint8Array>>({})
 const previewLoadingKey = ref<string | null>(null)
 const previewErrorKey = ref<string | null>(null)
 
-// Pré-visualização é só leitura - o admin não deve conseguir editar,
-// partilhar ou exportar o ficheiro a partir daqui.
-const PREVIEW_HIDDEN_ACTIONS = ['share', 'broadcast', 'insert', 'collaboration', 'edit', 'save', 'export', 'print'] as const
+import type { ToolbarActionId } from 'pptx-vue-viewer'
+
+const PREVIEW_HIDDEN_ACTIONS: ToolbarActionId[] = ['share', 'broadcast', 'insert', 'collaboration', 'edit', 'save', 'export', 'print']
 
 const championshipOptions: { value: ChampionshipType; label: string }[] = [
   { value: 'universitario', label: 'Universitário' },

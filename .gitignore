@@ -7,6 +7,14 @@ out
 petrochamp-backend/prisma/dev.db
 petrochamp-backend/uploads/
 petrochamp-admin-cloud/
+petrochamp-backend/dist/
+build/electron/
 .env.admin-cloud
 .db
 echo "dist/" >> .gitignore
+release/
+*.exe
+*.AppImage
+*.db
+*.db-journal
+petrochamp-backend/uploads/

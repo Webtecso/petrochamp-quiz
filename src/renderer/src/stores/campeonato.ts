@@ -194,7 +194,8 @@ function defaultPresentationFlow(): PresentationFlowState {
     jurorsSubmitted: [],
     allJurorsSubmitted: false,
     presentationMode: 'standard',
-    currentPage: 1
+    currentPage: 1,
+    totalPages: 0 
   }
 }
 

@@ -208,16 +208,15 @@ function applyPageToViewer(page: number): void {
 function onProjViewerMounted(): void {
   nextTick(() => {
     try {
-      if (typeof viewerRef.value?.setMode === 'function') {
-        const mode = viewerRef.value.getMode?.()
+      const viewer = viewerRef.value as any
+      if (typeof viewer?.setMode === 'function') {
+        const mode = viewer.getMode?.()
         if (mode === 'present') {
-          viewerRef.value.setMode('preview')
+          viewer.setMode('preview')
         }
       }
-      projSlideCount.value = viewerRef.value?.getSlideCount() ?? 0
+      projSlideCount.value = viewer?.getSlideCount?.() ?? 0
       applyPageToViewer(store.presentationFlow.currentPage)
-      // garante que o viewer recalcula o próprio layout assim que monta,
-      // já dentro da caixa de tamanho correto (stageWidth/stageHeight).
       notifyViewerResize()
     } catch (e) {
       console.warn('[proj] mounted', e)
@@ -225,9 +224,6 @@ function onProjViewerMounted(): void {
   })
 }
 
-// Tenta avisar o PowerPointViewer que o seu container mudou de tamanho,
-// experimentando os nomes de método mais comuns para este tipo de API.
-// Se nenhum existir, não faz nada (fail-safe).
 function notifyViewerResize(): void {
   const viewer = viewerRef.value as any
   if (!viewer) return
