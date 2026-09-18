@@ -37,12 +37,12 @@ defineProps<{
     <!-- Mesmo padrão que funcionou na projeção -->
     <div
       v-if="imageUrl"
-      class="mb-4 w-full flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[250px] sm:min-h-[300px] md:min-h-[350px]"
+      class="mb-4 w-full flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[200px] max-h-[45vh]"
     >
       <img
         :src="imageUrl"
         alt="Imagem da pergunta"
-        class="flex-[1.8] w-full min-h-[250px] sm:min-h-[300px] md:min-h-[350px] object-contain"
+        class="w-full h-full object-contain"
       />
     </div>
 

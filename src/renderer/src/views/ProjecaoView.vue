@@ -981,12 +981,12 @@ const roundJustEnded = computed(() => {
             </div>
             <div
               v-if="questionImage"
-              class="mb-4 w-full flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[250px] sm:min-h-[300px] md:min-h-[350px]"
+              class="flex-1 min-w-[40%] flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[250px] max-h-[60vh] lg:max-h-none lg:self-stretch"
             >
               <img
                 :src="formatImageUrl(questionImage)"
                 alt="Imagem Ilustrativa"
-                class="flex-[1.8] w-full min-h-[250px] sm:min-h-[300px] md:min-h-[350px] object-contain"
+                class="w-full h-full object-contain"
               />
             </div>
           </div>
@@ -994,7 +994,7 @@ const roundJustEnded = computed(() => {
       </main>
 
       <footer class="w-full max-w-7xl mx-auto px-4 mt-2 shrink-0">
-        <div class="relative w-full h-20 rounded-2xl bg-[#0a0f1d] border border-amber-500/30 shadow-2xl overflow-hidden flex items-stretch">
+        <div class="relative w-full min-h-[5rem] rounded-2xl bg-[#0a0f1d] border border-amber-500/30 shadow-2xl flex items-stretch">
           <div
             class="relative flex-1 bg-gradient-to-r from-[#800010] via-[#60000c] to-[#3a0007] flex items-center justify-start pl-6 pr-12 text-white [clip-path:polygon(0_0,100%_0,85%_100%,0_100%)] z-10 transition-all duration-300"
             :class="store.activeTeam === 'A' ? 'team-turn-glow' : ''"
@@ -1011,11 +1011,11 @@ const roundJustEnded = computed(() => {
                   {{ teamAName.slice(0, 3).toUpperCase() }}
                 </span>
               </div>
-              <div class="flex flex-col">
-                <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">
+              <div class="flex flex-col py-1">
+                <span class="font-black tracking-tight uppercase text-white drop-shadow leading-tight" style="font-size: clamp(0.85rem, 1.6vw, 1.35rem)">
                   {{ teamAName }}
                 </span>
-                <span class="text-amber-300 font-bold tracking-widest" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">
+                <span class="text-amber-300 font-bold tracking-widest leading-tight" style="font-size: clamp(0.6rem, 0.9vw, 0.8rem)">
                   PONTOS: {{ store.teamAScore }}
                 </span>
               </div>
@@ -1047,11 +1047,11 @@ const roundJustEnded = computed(() => {
                   {{ teamBName.slice(0, 3).toUpperCase() }}
                 </span>
               </div>
-              <div class="flex flex-col items-end text-right">
-                <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">
+              <div class="flex flex-col items-end text-right py-1">
+                <span class="font-black tracking-tight uppercase text-white drop-shadow leading-tight" style="font-size: clamp(0.85rem, 1.6vw, 1.35rem)">
                   {{ teamBName }}
                 </span>
-                <span class="text-amber-300 font-bold tracking-widest" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">
+                <span class="text-amber-300 font-bold tracking-widest leading-tight" style="font-size: clamp(0.6rem, 0.9vw, 0.8rem)">
                   PONTOS: {{ store.teamBScore }}
                 </span>
               </div>

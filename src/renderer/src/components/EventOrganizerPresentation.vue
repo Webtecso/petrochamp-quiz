@@ -38,7 +38,8 @@ onUnmounted(() => {
     <img
       :src="organizerLogo"
       :alt="ORGANIZER_NAME"
-      class="object-contain w-[clamp(60rem,90vw,100rem)] h-[clamp(28rem,55vw,72rem)] max-h-[70vh]"
+      class="object-contain"
+      style="width: clamp(16rem, 55vmin, 40rem); height: clamp(16rem, 55vmin, 40rem); max-height: 55vh;"
     />
     <div class="font-black tracking-widest text-[clamp(2.25rem,5.5vw,6rem)]">
       {{ ORGANIZER_NAME }}
