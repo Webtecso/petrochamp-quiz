@@ -84,7 +84,8 @@ function onShowPartners(): void {
 // dando a impressão de "repetir a apresentação" e bloqueando o avanço,
 // porque o botão "Ir para o Ranking" ali não fazia nada.
 function onStartNextPhase(): void {
-  store.startNextPhase()
+  // store.startNextPhase()
+  store.startQuizPhase()
 }
 
 // NOVO — só decide para onde navegar DEPOIS do valor de store.phase

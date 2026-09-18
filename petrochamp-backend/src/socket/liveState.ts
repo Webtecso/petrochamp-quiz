@@ -442,7 +442,7 @@ export function resetPresentationFlow(): void {
   liveState.presentationRoundReady = false
 }
 
-export function resetMatch(questionTimeSeconds: number): void {
+export function resetMatch(questionTimeSeconds: number, resetPhase = true): void {
   liveState.teamA = null
   liveState.teamB = null
   liveState.teamAScore = 0
@@ -457,7 +457,10 @@ export function resetMatch(questionTimeSeconds: number): void {
   liveState.usedQuestionIds = []
   liveState.usedAnalyticItemIds = []
   liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
-  liveState.phase = 1
+
+  if (resetPhase) {
+    liveState.phase = 1
+  }
 
   liveState.currentQuestionId = null
   liveState.currentItemSource = null

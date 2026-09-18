@@ -921,7 +921,7 @@ const roundJustEnded = computed(() => {
         </div>
         <div class="flex flex-col items-center justify-center text-center">
           <LogoMark />
-          <span class="font-bold text-gray-600 tracking-widest uppercase mt-1 whitespace-nowrap" style="font-size: clamp(0.55rem, 0.8vw, 0.7rem)">
+          <span class="font-bold tracking-widest uppercase mt-1 whitespace-nowrap" style="font-size: clamp(0.55rem, 0.8vw, 0.7rem); color:aliceblue">
             O QUIZ COMPETITIVO DO MUNDO DO PETRÓLEO
           </span>
         </div>
@@ -973,7 +973,7 @@ const roundJustEnded = computed(() => {
                 <p
                   v-else-if="isOpenAnalyticQuestion"
                   class="text-slate-500 font-semibold"
-                  style="font-size: clamp(0.9rem, 1.4vw, 1.15rem)"
+                  style="font-size: clamp(0.9rem, 1.4vw, 1.15rem); text-align: center;"
                 >
                   Pergunta de resposta aberta - avaliação dos jurados em curso.
                 </p>

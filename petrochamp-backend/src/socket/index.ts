@@ -44,6 +44,7 @@ const RESTRICTED_TO_AREA: Record<string, string> = {
   'moderator:continueAfterRepescagem': 'quiz',
   'moderator:showPartners': 'quiz',
   'moderator:startNextPhase': 'quiz',
+  'moderator:startQuizPhase': 'apresentacao',
   'moderator:advancePhase': 'quiz',
   'moderator:showPhaseRanking': 'quiz',
   'moderator:hidePhaseRanking': 'quiz',
@@ -212,6 +213,45 @@ function applyPresentationWeighting(phaseConfig: {
     if (phaseEntry) phaseEntry.score += delta
     if (champEntry) champEntry.score += delta
   }
+}
+
+async function triggerFinalPodiumSequence(broadcast: () => void): Promise<void> {
+  const phrase = await pickSuspensePhrase()
+  liveState.podiumReveal.stage = 'suspense'
+  liveState.podiumReveal.suspensePhrase = phrase
+  liveState.podiumReveal.finalRankingVisible = false
+  liveState.phaseRankingReveal = { visible: false }
+  liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+  broadcast()
+  setTimeout(() => {
+    liveState.podiumReveal.stage = 'countdown'
+    liveState.podiumReveal.countdownValue = 10
+    broadcast()
+    const interval = setInterval(() => {
+      liveState.podiumReveal.countdownValue -= 1
+      if (liveState.podiumReveal.countdownValue <= 0) {
+        clearInterval(interval)
+        const top3 = [...liveState.championshipRankings]
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3)
+          .map((r) => ({
+            id: r.teamId,
+            name: r.name,
+            institution: r.institution,
+            score: r.score
+          }))
+        liveState.podium.active = true
+        liveState.podium.phaseNumber = liveState.phase
+        liveState.podium.phaseLabel = 'Grande Final'
+        liveState.podium.entries = top3
+        liveState.podium.isGrandFinal = true
+        liveState.podiumReveal.stage = 'revealed'
+        broadcast()
+      } else {
+        broadcast()
+      }
+    }, 1000)
+  }, 4000)
 }
 
 type PoolItem =
@@ -1269,7 +1309,7 @@ export function registerSocketHandlers(io: Server): void {
         }
       }
 
-      resetMatch(questionTime)
+      resetMatch(questionTime, false)
 
       if (shouldStartSequence) {
         await startPostRoundSequence()
@@ -1406,10 +1446,14 @@ export function registerSocketHandlers(io: Server): void {
           liveState.phaseFlow = { stage: 'organizer', suspensePhrase: null }
           broadcast()
 
-          if (isLastPhase) return
-
           partnersTimerHandle = setTimeout(async () => {
             if (liveState.phaseFlow.stage !== 'organizer') return
+
+            if (isLastPhase) {
+              // Não há próxima fase — avança automaticamente para o pódio final
+              await triggerFinalPodiumSequence(broadcast)
+              return
+            }
 
             const phrase = await pickSuspensePhrase()
             liveState.phaseFlow = {
@@ -1428,8 +1472,10 @@ export function registerSocketHandlers(io: Server): void {
         callback?.({ success: false, error: 'A fase seguinte só pode avançar quando está em suspense.' })
         return
       }
+
       const questionTime = await getQuestionTimeSeconds()
       const totalPhases = await getTotalPhases()
+
       if (liveState.phase < totalPhases) liveState.phase += 1
       liveState.phaseRankings = []
       liveState.usedQuestionIds = []
@@ -1439,7 +1485,32 @@ export function registerSocketHandlers(io: Server): void {
       liveState.presentationPhaseScores = []
       resetPresentationFlow()
       liveState.bracketVisible = true
-      resetMatch(questionTime)
+      resetMatch(questionTime, false)
+      await refreshExpectedJurorCount()
+      broadcast()
+      callback?.({ success: true })
+    })
+
+    socket.on('moderator:startQuizPhase', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
+      const force = Boolean(payload?.force)
+      if (!force && liveState.phaseFlow.stage !== 'suspense') {
+        callback?.({ success: false, error: 'A fase seguinte só pode avançar quando está em suspense.' })
+        return
+      }
+
+      const questionTime = await getQuestionTimeSeconds()
+      const totalPhases = await getTotalPhases()
+
+      if (liveState.phase < totalPhases) liveState.phase += 1
+      liveState.phaseRankings = []
+      liveState.usedQuestionIds = []
+      liveState.eliminatedTeamIds = []
+      liveState.phaseRankingReveal = { visible: false }
+      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+      liveState.presentationPhaseScores = []
+      resetPresentationFlow()
+      liveState.bracketVisible = true
+      resetMatch(questionTime, false)
       await refreshExpectedJurorCount()
       broadcast()
       callback?.({ success: true })
@@ -1462,6 +1533,38 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
+    //     socket.on('moderator:confirmPresentationRanking', async () => {
+    //   if (!liveState.presentationRoundReady) return
+
+    //   const phaseConfig = await getCurrentPhaseConfig()
+    //   if (!phaseConfig || phaseConfig.type !== 'apresentacao') return
+
+    //   liveState.presentationRoundReady = false
+    //   resetPresentationFlow()
+    //   liveState.bracketVisible = false
+
+    //   const totalPhases = await getTotalPhases()
+    //   const questionTime = await getQuestionTimeSeconds()
+
+    //   if (liveState.phase < totalPhases) {
+    //     liveState.phase += 1
+    //     liveState.phaseRankings = []
+    //     liveState.teamA = null
+    //     liveState.teamB = null
+    //     liveState.eliminatedTeamIds = []
+    //     liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+    //     liveState.phaseRankingReveal = { visible: false }
+    //     liveState.bracketVisible = true
+    //     resetMatch(questionTime)
+    //     await refreshExpectedJurorCount()
+    //   } else {
+    //     // Era a última fase
+    //     liveState.phaseFlow = { stage: 'partnersPending', suspensePhrase: null }
+    //   }
+
+    //   broadcast()
+    // })
+
     socket.on('moderator:advancePhase', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
       const force = Boolean(payload?.force)
       const questionTime = await getQuestionTimeSeconds()
@@ -1480,7 +1583,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.presentationPhaseScores = []
       resetPresentationFlow()
       liveState.bracketVisible = true
-      resetMatch(questionTime)
+      resetMatch(questionTime, false)
       await refreshExpectedJurorCount()
       broadcast()
       callback?.({ success: true })
@@ -1608,43 +1711,9 @@ export function registerSocketHandlers(io: Server): void {
     })
 
     socket.on('moderator:startFinalPodiumSequence', async () => {
-      const totalPhases = await getTotalPhases()
-      if (liveState.phase !== totalPhases) return
-      const phrase = await pickSuspensePhrase()
-      liveState.podiumReveal.stage = 'suspense'
-      liveState.podiumReveal.suspensePhrase = phrase
-      liveState.podiumReveal.finalRankingVisible = false
-      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
-      broadcast()
-      setTimeout(() => {
-        liveState.podiumReveal.stage = 'countdown'
-        liveState.podiumReveal.countdownValue = 10
-        broadcast()
-        const interval = setInterval(() => {
-          liveState.podiumReveal.countdownValue -= 1
-          if (liveState.podiumReveal.countdownValue <= 0) {
-            clearInterval(interval)
-            const top3 = [...liveState.championshipRankings]
-              .sort((a, b) => b.score - a.score)
-              .slice(0, 3)
-              .map((r) => ({
-                id: r.teamId,
-                name: r.name,
-                institution: r.institution,
-                score: r.score
-              }))
-            liveState.podium.active = true
-            liveState.podium.phaseNumber = liveState.phase
-            liveState.podium.phaseLabel = 'Grande Final'
-            liveState.podium.entries = top3
-            liveState.podium.isGrandFinal = true
-            liveState.podiumReveal.stage = 'revealed'
-            broadcast()
-          } else {
-            broadcast()
-          }
-        }, 1000)
-      }, 4000)
+      // const totalPhases = await getTotalPhases()
+      // if (liveState.phase !== totalPhases) return
+      await triggerFinalPodiumSequence(broadcast)
     })
 
     socket.on('moderator:showFinalRanking', () => {

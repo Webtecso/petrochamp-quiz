@@ -370,6 +370,17 @@ export const useCampeonatoStore = defineStore('campeonato', {
         })
       })
     },
+    startQuizPhase(force = false): Promise<{ success: boolean; error?: string } | void> {
+      return new Promise((resolve) => {
+        getSocket().emit('moderator:startQuizPhase', { force }, (res?: { success?: boolean; error?: string }) => {
+          const safeRes: { success: boolean; error?: string } =
+            res && typeof res.success === 'boolean'
+              ? { success: res.success, error: res.error }
+              : { success: true }
+          resolve(safeRes)
+        })
+      })
+    },
     finalizeChampionship(force = false): Promise<{ success: boolean; error?: string } | void> {
       return new Promise((resolve) => {
         getSocket().emit('moderator:finalizeChampionship', { force }, (res?: { success?: boolean; error?: string }) => {
