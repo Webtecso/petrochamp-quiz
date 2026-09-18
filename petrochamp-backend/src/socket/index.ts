@@ -83,13 +83,17 @@ async function getPartnersDurationSeconds(): Promise<number> {
 
 async function getCurrentPhaseConfig() {
   return prisma.phase.findFirst({
-    where: { order: liveState.phase, championship: liveState.championship ?? undefined }
+    where: {
+      order: liveState.phase,
+      championship: liveState.championship ?? undefined,
+      deletedAt: null
+    }
   })
 }
 
 async function getTotalPhases(): Promise<number> {
   const count = await prisma.phase.count({
-    where: { championship: liveState.championship ?? undefined }
+    where: { championship: liveState.championship ?? undefined, deletedAt: null }
   })
   return count > 0 ? count : 1
 }
@@ -117,7 +121,15 @@ async function isRoundComplete(championship: string, round: number): Promise<boo
 }
 
 async function getPresentationTeamIds(phaseId: string): Promise<string[]> {
-  const duplas = await prisma.presentationDupla.findMany({ where: { phaseId } })
+  // CORRIGIDO — faltava o filtro deletedAt: null (já usado em
+  // syncPresentationDuplasForRound, em bracketLive.ts, para a mesma
+  // tabela). Sem isto, duplas apagadas por soft-delete continuavam a
+  // contar para o total de equipas esperadas nesta fase, fazendo
+  // allPresentedAndEvaluated nunca ficar true — presentationRoundReady
+  // ficava preso em false para sempre, e o botão "Ir para o Ranking"
+  // parecia não fazer nada (o evento chegava ao servidor mas era
+  // ignorado pela guarda "if (!liveState.presentationRoundReady) return").
+  const duplas = await prisma.presentationDupla.findMany({ where: { phaseId, deletedAt: null } })
   const ids = new Set<string>()
   for (const d of duplas) {
     ids.add(d.teamAId)
@@ -421,7 +433,7 @@ async function pickSuspensePhrase(): Promise<string> {
     : 'Preparem-se - a próxima fase está prestes a começar...'
 }
 
-aasync function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
+async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   const flow = liveState.presentationFlow
   if (flow.stage !== 'concluded' || !flow.teamId) return
   if (flow.allJurorsSubmitted) return
@@ -537,6 +549,11 @@ aasync function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
     const allPresentedAndEvaluated =
       allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
 
+    console.log('[DEBUG] phaseConfig:', phaseConfig.id, phaseConfig.type, phaseConfig.noElimination)
+    console.log('[DEBUG] allTeamIds:', allTeamIds)
+    console.log('[DEBUG] recordedTeamIds:', recordedTeamIds)
+    console.log('[DEBUG] allPresentedAndEvaluated:', allPresentedAndEvaluated)
+
     if (allPresentedAndEvaluated) {
       if (phaseConfig.type === 'apresentacao') {
         liveState.presentationRoundReady = true
@@ -644,19 +661,6 @@ export function registerSocketHandlers(io: Server): void {
       }
       if (changed) broadcast()
 
-      // CORRIGIDO - quando o tempo acaba e awaitingJuryEvaluation passa a
-      // true aqui em cima, é possível que os jurados já tenham enviado a
-      // nota ANTES do fim do tempo (juror:setScore chama
-      // checkAutoConfirmOpenItem, mas nessa altura awaitingJuryEvaluation
-      // ainda era false, então a checagem saía sem confirmar nada). Sem
-      // este chamada extra, essa nota ficava presa em jurorEntries para
-      // sempre - nunca era promovida a jurorSubmittedItemIds, e o jurado
-      // via o botão "Confirmar Pontuação" a dizer "enviado" sem nada
-      // realmente avançar. Ao chamar checkAutoConfirmOpenItem aqui, assim
-      // que awaitingJuryEvaluation se torna true, o sistema volta a
-      // verificar se todos os jurados esperados já responderam e, se sim,
-      // confirma imediatamente - sem esperar por um novo juror:setScore
-      // que pode nunca vir (o jurado já enviou a nota dele).
       if (liveState.awaitingJuryEvaluation) {
         checkAutoConfirmOpenItem(broadcast)
       }
@@ -1002,15 +1006,6 @@ export function registerSocketHandlers(io: Server): void {
       liveState.isRunning = false
       liveState.awaitingJuryEvaluation = true
       broadcast()
-      // CORRIGIDO - mesmo raciocínio do timer principal: se os jurados já
-      // tinham enviado a nota antes do moderador clicar em "Encerrar
-      // Pergunta Aberta", essa nota ficava presa em jurorEntries e nunca
-      // era promovida a jurorSubmittedItemIds, porque a única chamada a
-      // checkAutoConfirmOpenItem acontecia dentro do handler
-      // juror:setScore - e nessa altura awaitingJuryEvaluation ainda
-      // era false. Agora, assim que awaitingJuryEvaluation passa a true
-      // aqui, verificamos imediatamente se a avaliação já pode ser
-      // confirmada.
       checkAutoConfirmOpenItem(broadcast)
     })
 
@@ -1612,82 +1607,82 @@ export function registerSocketHandlers(io: Server): void {
     })
 
     socket.on(
-    'moderator:finalizeChampionship',
-    async (
-      payload?: { force?: boolean },
-      callback?: (res: { success: boolean; error?: string }) => void
-    ) => {
-      const force = Boolean(payload?.force)
-      const isMediumSchool = liveState.championship === 'ensino_medio'
-      if (!liveState.championship) {
-        callback?.({ success: false, error: 'Nenhum campeonato ativo para finalizar.' })
-        return
-      }
-      const totalPhases = await getTotalPhases()
-      const isLastPhase = liveState.phase >= totalPhases
-      const canFinalizeByState =
-        force || isMediumSchool || isLastPhase || liveState.podiumReveal.finalRankingVisible
-
-      if (!canFinalizeByState) {
-        callback?.({ success: false, error: 'O ranking final ainda não está visível.' })
-        return
-      }
-
-      if (!force && !isMediumSchool && !isLastPhase) {
-        callback?.({ success: false, error: 'Só é possível finalizar na última fase.' })
-        return
-      }
-
-      const matches = await prisma.matchHistory.findMany({
-        where: { championship: liveState.championship, editionName: liveState.editionName }
-      })
-
-      const championEntry = liveState.podium.entries[0] ?? null
-      let championLogoUrl: string | null = null
-      if (championEntry) {
-        const team = await prisma.team.findUnique({ where: { id: championEntry.id } })
-        championLogoUrl = team?.logoUrl ?? null
-      }
-
-      await prisma.championshipHistory.create({
-        data: {
-          championship: liveState.championship,
-          editionName: liveState.editionName ?? 'Sem nome',
-          championTeamId: championEntry?.id ?? null,
-          championTeamName: championEntry?.name ?? null,
-          finalRankingJson: JSON.stringify(liveState.championshipRankings),
-          matchesJson: JSON.stringify(matches),
-          totalMatches: matches.length,
-          startedAt: new Date(liveState.championshipStartedAt ?? Date.now()),
-          endedAt: new Date()
+      'moderator:finalizeChampionship',
+      async (
+        payload?: { force?: boolean },
+        callback?: (res: { success: boolean; error?: string }) => void
+      ) => {
+        const force = Boolean(payload?.force)
+        const isMediumSchool = liveState.championship === 'ensino_medio'
+        if (!liveState.championship) {
+          callback?.({ success: false, error: 'Nenhum campeonato ativo para finalizar.' })
+          return
         }
-      })
+        const totalPhases = await getTotalPhases()
+        const isLastPhase = liveState.phase >= totalPhases
+        const canFinalizeByState =
+          force || isMediumSchool || isLastPhase || liveState.podiumReveal.finalRankingVisible
 
-      // Limpar chaveamento para o próximo evento (ronda 1 sem vencedores)
-      const champ = liveState.championship
-      await prisma.bracketMatch.updateMany({
-        where: { championship: champ, round: { gt: 1 } },
-        data: { teamAId: null, teamBId: null, winnerId: null }
-      })
-      await prisma.bracketMatch.updateMany({
-        where: { championship: champ, round: 1 },
-        data: { winnerId: null }
-      })
+        if (!canFinalizeByState) {
+          callback?.({ success: false, error: 'O ranking final ainda não está visível.' })
+          return
+        }
 
-      liveState.championReveal = {
-        active: true,
-        teamName: championEntry?.name ?? null,
-        logoUrl: championLogoUrl
+        if (!force && !isMediumSchool && !isLastPhase) {
+          callback?.({ success: false, error: 'Só é possível finalizar na última fase.' })
+          return
+        }
+
+        const matches = await prisma.matchHistory.findMany({
+          where: { championship: liveState.championship, editionName: liveState.editionName }
+        })
+
+        const championEntry = liveState.podium.entries[0] ?? null
+        let championLogoUrl: string | null = null
+        if (championEntry) {
+          const team = await prisma.team.findUnique({ where: { id: championEntry.id } })
+          championLogoUrl = team?.logoUrl ?? null
+        }
+
+        await prisma.championshipHistory.create({
+          data: {
+            championship: liveState.championship,
+            editionName: liveState.editionName ?? 'Sem nome',
+            championTeamId: championEntry?.id ?? null,
+            championTeamName: championEntry?.name ?? null,
+            finalRankingJson: JSON.stringify(liveState.championshipRankings),
+            matchesJson: JSON.stringify(matches),
+            totalMatches: matches.length,
+            startedAt: new Date(liveState.championshipStartedAt ?? Date.now()),
+            endedAt: new Date()
+          }
+        })
+
+        // Limpar chaveamento para o próximo evento (ronda 1 sem vencedores)
+        const champ = liveState.championship
+        await prisma.bracketMatch.updateMany({
+          where: { championship: champ, round: { gt: 1 } },
+          data: { teamAId: null, teamBId: null, winnerId: null }
+        })
+        await prisma.bracketMatch.updateMany({
+          where: { championship: champ, round: 1 },
+          data: { winnerId: null }
+        })
+
+        liveState.championReveal = {
+          active: true,
+          teamName: championEntry?.name ?? null,
+          logoUrl: championLogoUrl
+        }
+
+        clearActiveChampionshipState()
+        const questionTime = await getQuestionTimeSeconds()
+        resetMatch(questionTime)
+
+        broadcast()
+        callback?.({ success: true })
       }
-
-      clearActiveChampionshipState()
-      const questionTime = await getQuestionTimeSeconds()
-      resetMatch(questionTime)
-
-      broadcast()
-      callback?.({ success: true })
-    }
-  )
+    )
 
     socket.on('moderator:showPhaseTransition', () => {
       liveState.phaseTransition.stage = 'carousel'

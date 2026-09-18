@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useTeamsStore } from '../stores/teams'
@@ -24,6 +24,37 @@ const starting = ref(false)
 const openingVote = ref(false)
 const repescagemError = ref('')
 
+// CORRIGIDO — fase 'apresentacao' pura (não 'apresentacao_quiz') não
+// deve nunca mostrar confrontos do chaveamento como jogáveis aqui.
+// Antes das duplas passarem a ser geradas automaticamente, uma fase de
+// apresentação pura nunca tinha BracketMatch (as duplas eram só
+// manuais), por isso este ecrã nunca tinha nada para mostrar e o
+// problema não aparecia. Agora que /generate cria confrontos de
+// chaveamento para TODAS as rondas (incluindo as que correspondem a
+// fases de apresentação pura), este ecrã passou a mostrar esses
+// confrontos como se fossem batalhas de Quiz — o moderador clicava,
+// selectTeams() era chamado, e o sistema tentava arrancar um Quiz numa
+// fase sem perguntas cadastradas.
+//
+// Uma primeira tentativa desta correção redirecionava por router logo
+// no onMounted quando stage === 'idle', mas isso criava uma condição de
+// corrida com o botão "Ir para o Ranking" em
+// ModeradorApresentacaoView.vue: esse botão chama
+// confirmPresentationRanking() (que só emite um evento ao servidor) e
+// navega para /moderador/equipas de imediato — mas o phaseFlow.stage só
+// muda de 'idle' para 'ranking' quando o socket devolve o novo estado,
+// que ainda não chegou nesse instante. O redirecionamento via
+// onMounted apanhava esse 'idle' momentâneo e mandava de volta para a
+// Apresentação, cancelando a ida para o Ranking.
+//
+// Esta versão não navega em lado nenhum: apenas impede que os
+// confrontos do chaveamento apareçam como clicáveis para uma fase
+// apresentacao pura, mostrando uma mensagem explicativa em vez disso.
+// Isto elimina a corrida por completo, porque já não depende do
+// momento exato em que phaseFlow.stage muda.
+const currentPhaseRecord = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
+const isPurePresentationPhase = computed(() => currentPhaseRecord.value?.type === 'apresentacao')
+
 // onMounted
 
 onMounted(async () => {
@@ -47,10 +78,16 @@ onMounted(async () => {
   }
 })
 
-const hasBracket = computed(() => liveBracketStore.matches.length > 0)
+const hasBracket = computed(() => liveBracketStore.matches.length > 0 && !isPurePresentationPhase.value)
 
 const currentBracketRound = computed(() => phasesStore.phaseOrderToBracketRound(store.phase))
-const pendingMatchesThisRound = computed(() => liveBracketStore.pendingMatchesForRound(currentBracketRound.value))
+// CORRIGIDO — numa fase apresentacao pura, os confrontos do chaveamento
+// dessa ronda existem na base de dados (gerados automaticamente por
+// /generate), mas não devem aparecer aqui como jogáveis — essa fase não
+// tem Quiz. Ver o comentário grande acima de isPurePresentationPhase.
+const pendingMatchesThisRound = computed(() =>
+  isPurePresentationPhase.value ? [] : liveBracketStore.pendingMatchesForRound(currentBracketRound.value)
+)
 
 function goToEquipas(): void {
   if (store.phaseFlow.stage === 'quizIntro') {
@@ -118,29 +155,6 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
     router.push('/moderador/jogo')
   }
 }
-
-const currentBracketRound = computed(() =>
-  phasesStore.phaseOrderToBracketRound(store.phase)
-)
-
-// debug
-watch(
-  [currentBracketRound, () => liveBracketStore.matches],
-  () => {
-    console.log('[equipas]', {
-      phase: store.phase,
-      round: currentBracketRound.value,
-      totalMatches: liveBracketStore.matches.length,
-      pending: liveBracketStore.pendingMatchesForRound(currentBracketRound.value).length,
-      byRound: liveBracketStore.matches.reduce((acc: Record<number, number>, m: any) => {
-        const r = m.round
-        acc[r] = (acc[r] ?? 0) + 1
-        return acc
-      }, {})
-    })
-  },
-  { immediate: true }
-)
 </script>
 
 <template>
@@ -278,8 +292,22 @@ watch(
 
   <!-- Ecrã de Escolha de Confronto (quando stage === 'idle') -->
   <div v-else class="flex-1 flex flex-col items-center justify-center px-10 py-12 gap-8">
-    <h1 class="text-2xl font-bold text-petro-primary">Escolha o Próximo Confronto</h1>
-    <template v-if="hasBracket">
+    <!-- NOVO — fase apresentacao pura: não há confrontos de Quiz aqui,
+         só um aviso a apontar para o ecrã certo. -->
+    <template v-if="isPurePresentationPhase">
+      <h1 class="text-2xl font-bold text-petro-primary">Fase {{ store.phase }} é de Apresentação</h1>
+      <p class="text-sm text-gray-500 text-center max-w-md">
+        Esta fase não tem Quiz. Continua a gestão das apresentações no ecrã de Apresentação.
+      </p>
+      <RouterLink
+        to="/moderador/apresentacao"
+        class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold inline-block"
+      >
+        Ir para Apresentação
+      </RouterLink>
+    </template>
+    <h1 v-else class="text-2xl font-bold text-petro-primary">Escolha o Próximo Confronto</h1>
+    <template v-if="!isPurePresentationPhase && hasBracket">
       <p v-if="pendingMatchesThisRound.length" class="text-sm text-gray-400 text-center max-w-md">
         Escolhe um dos confrontos pendentes - as equipas já usadas nesta fase não voltam a aparecer aqui.
       </p>
@@ -300,7 +328,7 @@ watch(
         Todos os confrontos desta fase já foram jogados. Vai a Ranking ou Pódio para continuar.
       </div>
     </template>
-    <div v-else class="text-center max-w-md">
+    <div v-else-if="!isPurePresentationPhase" class="text-center max-w-md">
       <div class="text-4xl mb-4">🏆</div>
       <p class="text-sm text-gray-500 mb-6">
         Ainda não existe um chaveamento gerado para este campeonato. Vai ao Painel do Administrador → Chaveamento
