@@ -5,12 +5,9 @@ out
 .eslintcache
 *.log*
 petrochamp-backend/prisma/dev.db
-petrochamp-backend/uploads/
 petrochamp-backend/dist/
 build/electron/
-echo "dist/" >> .gitignore
 release/
 *.exe
 *.AppImage
 *.db-journal
-petrochamp-backend/uploads/
