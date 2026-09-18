@@ -4,13 +4,6 @@ defineProps<{
 }>()
 </script>
 <template>
-  <!--
-    CORRIGIDO - w-24/h-24/text-2xl eram tamanhos fixos em rem, iguais em
-    qualquer ecrã. Em monitores/projetores grandes o cronómetro ficava
-    desproporcionalmente pequeno face ao resto da tela. Agora o diâmetro
-    e o tamanho do número escalam com a largura do ecrã (vw), com um
-    mínimo e máximo para nunca ficar ilegível nem gigantesco demais.
-  -->
   <div
     class="mx-auto rounded-full border-4 flex items-center justify-center font-bold shrink-0"
     style="

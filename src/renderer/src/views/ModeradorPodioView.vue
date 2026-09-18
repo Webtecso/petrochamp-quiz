@@ -40,7 +40,11 @@ const championId = computed(() => {
 })
 
 const canShowChampions = computed(
-  () => isLastPhase.value && !!championId.value && store.phaseFlow.stage === 'organizer'
+  () => isLastPhase.value && !!championId.value
+)
+
+const podiumSequenceAlreadyTriggered = computed(
+  () => store.podiumReveal.stage !== 'idle'
 )
 
 const canFinalizeChampionship = computed(() => {
@@ -53,13 +57,17 @@ const canAdvanceToNextPhase = computed(
   () => !!store.championship && store.phase < phasesStore.totalPhases && !store.championReveal.active
 )
 
-function confirmReset(): void {
+async function confirmReset(): Promise<void> {
   const message = 'Tem certeza que deseja finalizar o campeonato?'
   const ok = confirm(message)
-  if (ok) {
-    store.abandonChampionship()
-    router.push('/moderador/modo')
+  if (!ok) return
+
+  const res: any = await store.finalizeChampionship()
+  if (res && res.success === false) {
+    window.alert(res.error || 'Não foi possível finalizar o campeonato.')
+    return
   }
+  router.push('/moderador/modo')
 }
 
 const waitingForInstitutional = computed(
@@ -132,13 +140,15 @@ async function advance(): Promise<void> {
           O Pódio só fica disponível depois de todas as fases terminarem e existir uma equipa campeã no
           chaveamento final.
         </p>
+
         <button
           class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-          :disabled="!canShowChampions || store.podiumReveal.stage !== 'idle'"
+          :disabled="true"
           @click="startFinalSequence"
         >
-          {{ store.podiumReveal.stage === 'idle' ? 'Iniciar Contagem para Mostrar Campeões' : 'Sequência em curso...' }}
+          {{ podiumSequenceAlreadyTriggered ? 'Sequência em curso...' : 'A aguardar sequência automática...' }}
         </button>
+
         <button
           v-if="store.podiumReveal.stage === 'revealed'"
           class="text-sm text-petro-primary underline"

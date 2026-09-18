@@ -75,6 +75,22 @@ export const useQuizContentStore = defineStore('quizContent', {
       }
       this.evaluationItems = await api.get<EvaluationItem[]>(`/evaluation-items?championship=${encodeURIComponent(championship)}`)
     },
+    async fetchEvaluationItemById(id: string): Promise<EvaluationItem | null> {
+      try {
+        const item = await api.get<EvaluationItem>(`/evaluation-items/${id}`)
+        if (item) {
+          const idx = this.evaluationItems.findIndex((i) => i.id === item.id)
+          if (idx === -1) {
+            this.evaluationItems.push(item)
+          } else {
+            this.evaluationItems[idx] = item
+          }
+        }
+        return item
+      } catch {
+        return null
+      }
+    },
     async fetchTiebreakQuestions(championship?: string) {
       if (!championship) {
         this.tiebreakQuestions = []
