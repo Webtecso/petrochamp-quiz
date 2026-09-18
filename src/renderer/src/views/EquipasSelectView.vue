@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useTeamsStore } from '../stores/teams'
@@ -118,10 +118,6 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
     router.push('/moderador/jogo')
   }
 }
-
-const currentBracketRound = computed(() =>
-  phasesStore.phaseOrderToBracketRound(store.phase)
-)
 
 // debug
 watch(

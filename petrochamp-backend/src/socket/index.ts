@@ -421,7 +421,7 @@ async function pickSuspensePhrase(): Promise<string> {
     : 'Preparem-se - a próxima fase está prestes a começar...'
 }
 
-aasync function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
+async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   const flow = liveState.presentationFlow
   if (flow.stage !== 'concluded' || !flow.teamId) return
   if (flow.allJurorsSubmitted) return
