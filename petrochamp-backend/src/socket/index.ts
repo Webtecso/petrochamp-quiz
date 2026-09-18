@@ -433,6 +433,50 @@ async function pickSuspensePhrase(): Promise<string> {
     : 'Preparem-se - a próxima fase está prestes a começar...'
 }
 
+async function tryResolveBracketForPresentationPhase(phaseConfig: {
+  id: string
+  type: string
+  noElimination: boolean | null
+}): Promise<void> {
+  // Só se aplica a fases "apresentacao" isoladas COM eliminação.
+  // "apresentacao_quiz" e "apresentacao" com noElimination já têm os
+  // seus próprios fluxos (ponderação com o quiz / transporte de nota).
+  if (phaseConfig.type !== 'apresentacao' || phaseConfig.noElimination) return
+  if (!liveState.championship) return
+
+  const duplas = await prisma.presentationDupla.findMany({
+    where: { phaseId: phaseConfig.id, deletedAt: null }
+  })
+
+  for (const d of duplas) {
+    if (!d.teamBId) continue // apresentação individual, sem confronto a decidir
+
+    const scoreA = liveState.phaseRankings.find((r) => r.teamId === d.teamAId)?.score
+    const scoreB = liveState.phaseRankings.find((r) => r.teamId === d.teamBId)?.score
+    if (scoreA === undefined || scoreB === undefined) continue // falta uma das equipas avaliar
+
+    const alreadyResolved = await prisma.bracketMatch.findFirst({
+      where: {
+        championship: liveState.championship,
+        winnerId: { not: null },
+        OR: [
+          { teamAId: d.teamAId, teamBId: d.teamBId },
+          { teamAId: d.teamBId, teamBId: d.teamAId }
+        ]
+      }
+    })
+    if (alreadyResolved) continue
+
+    const winnerId = scoreA >= scoreB ? d.teamAId : d.teamBId
+    const loserId = winnerId === d.teamAId ? d.teamBId : d.teamAId
+
+    await recordBracketResult(liveState.championship, d.teamAId, d.teamBId, winnerId)
+    if (!liveState.eliminatedTeamIds.includes(loserId)) {
+      liveState.eliminatedTeamIds.push(loserId)
+    }
+  }
+}
+
 async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   const flow = liveState.presentationFlow
   if (flow.stage !== 'concluded' || !flow.teamId) return
@@ -530,10 +574,12 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
       }
     }
   } else if (phaseConfig?.type === 'apresentacao') {
-    // Apresentação isolada (com ou sem eliminação por ranking):
-    // só notas — NÃO fecha BracketMatch do quiz
+    // Apresentação isolada COM eliminação: grava nota e, assim que
+    // ambas as equipas da mesma dupla tiverem nota, decide o vencedor
+    // e propaga para o BracketMatch (tal como o Quiz já faz).
     addToPhaseRanking(team, average)
     addToChampionshipRanking(team, average)
+    await tryResolveBracketForPresentationPhase(phaseConfig)
   } else {
     // Outros tipos legados: só ranking, sem tocar no bracket aqui
     addToPhaseRanking(team, average)

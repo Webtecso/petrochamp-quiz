@@ -100,19 +100,39 @@ function onShowPartners(): void {
   store.showPartners()
 }
 
+// CORRIGIDO — a navegação para '/moderador/apresentacao' foi retirada
+// daqui (ver nota no watch(() => store.phase, ...) abaixo). Antes,
+// calculava nextPhaseOrder = store.phase + 1 e navegava logo a seguir a
+// chamar store.startNextPhase() — mas essa chamada é assíncrona (só
+// emite o evento ao servidor); store.phase ainda não tinha sido
+// atualizado pelo state:sync real quando a navegação já acontecia. O
+// ModeradorApresentacaoView.vue então montava a mostrar a fase de
+// Apresentação ANTERIOR (já toda apresentada, com
+// presentationRoundReady já consumido a false) em vez da nova fase,
+// dando a impressão de "repetir a apresentação" e bloqueando o avanço,
+// porque o botão "Ir para o Ranking" ali não fazia nada.
 function onStartNextPhase(): void {
   store.startNextPhase()
-
-  const nextPhaseOrder = Math.min(store.phase + 1, phasesStore.totalPhases)
-  const nextPhase = phasesStore.phases.find((p) => p.order === nextPhaseOrder)
-
-  if (nextPhase?.type === 'apresentacao' || nextPhase?.type === 'apresentacao_quiz') {
-    router.push('/moderador/apresentacao')
-  }
-  // Se for quiz, não fazemos nada - o componente EquipasView continuará montado
-  // e, assim que o estado sync chegar via socket (stage: 'idle'), ele mostrará
-  // automaticamente o chaveamento/confrontos.
 }
+
+// NOVO — só decide para onde navegar DEPOIS do valor de store.phase
+// realmente mudar (chegou o state:sync do backend), nunca antes. Isto
+// elimina a condição de corrida descrita acima: quando a nova fase é de
+// Apresentação (pura ou + Quiz), navega para lá; se for Quiz, fica em
+// '/moderador/equipas' — o próprio ecrã (mais abaixo) já mostra o
+// chaveamento/confrontos assim que phaseFlow.stage voltar a 'idle'
+// (usando isPurePresentationPhase/currentBracketRound, que também
+// dependem de store.phase e já reagem sozinhos a essa mudança).
+watch(
+  () => store.phase,
+  (newPhase, oldPhase) => {
+    if (newPhase === oldPhase) return
+    const nextPhase = phasesStore.phases.find((p) => p.order === newPhase)
+    if (nextPhase?.type === 'apresentacao' || nextPhase?.type === 'apresentacao_quiz') {
+      router.push('/moderador/apresentacao')
+    }
+  }
+)
 
 async function openRepescagemVoting(): Promise<void> {
   if (!repescagemStore.config) return
