@@ -421,7 +421,7 @@ async function pickSuspensePhrase(): Promise<string> {
     : 'Preparem-se - a próxima fase está prestes a começar...'
 }
 
-async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
+aasync function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   const flow = liveState.presentationFlow
   if (flow.stage !== 'concluded' || !flow.teamId) return
   if (flow.allJurorsSubmitted) return
@@ -467,7 +467,10 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
           }
         })
         .catch((err) =>
-          console.error('[checkAllJurorsSubmitted] Falha ao gravar nota (ignorada, a continuar):', err)
+          console.error(
+            '[checkAllJurorsSubmitted] Falha ao gravar nota (ignorada, a continuar):',
+            err
+          )
         )
     )
   )
@@ -476,7 +479,10 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
   const phaseConfig = await getCurrentPhaseConfig()
 
   if (phaseConfig?.type === 'apresentacao_quiz') {
-    const existingPresScore = liveState.presentationPhaseScores.find((r) => r.teamId === flow.teamId)
+    // Legado: só guarda média para ponderar depois com o quiz da mesma fase
+    const existingPresScore = liveState.presentationPhaseScores.find(
+      (r) => r.teamId === flow.teamId
+    )
     if (existingPresScore) {
       existingPresScore.score = average
     } else if (team) {
@@ -488,9 +494,12 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
       })
     }
   } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
+    // Apresentação sem eliminação: ranking + nota para o quiz seguinte
     addToPhaseRanking(team, average)
     if (team) {
-      const existingCarried = liveState.carriedPresentationScores.find((r) => r.teamId === team.id)
+      const existingCarried = liveState.carriedPresentationScores.find(
+        (r) => r.teamId === team.id
+      )
       const presentationWeight = phaseConfig.presentationWeight ?? 50
       const quizWeight = phaseConfig.quizWeight ?? 50
       if (existingCarried) {
@@ -508,32 +517,15 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
         })
       }
     }
-  } else {
+  } else if (phaseConfig?.type === 'apresentacao') {
+    // Apresentação isolada (com ou sem eliminação por ranking):
+    // só notas — NÃO fecha BracketMatch do quiz
     addToPhaseRanking(team, average)
     addToChampionshipRanking(team, average)
-
-    const dupla = await prisma.presentationDupla.findFirst({
-      where: {
-        phaseId: phaseConfig?.id,
-        OR: [{ teamAId: flow.teamId }, { teamBId: flow.teamId }]
-      }
-    })
-    if (liveState.championship && phaseConfig && dupla?.teamAId) {
-      if (!dupla.teamBId) {
-        await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamAId, dupla.teamAId)
-      } else {
-        const rankA = liveState.phaseRankings.find((r) => r.teamId === dupla.teamAId)
-        const rankB = liveState.phaseRankings.find((r) => r.teamId === dupla.teamBId)
-        if (rankA && rankB) {
-          const dWinnerId = rankA.score >= rankB.score ? dupla.teamAId : dupla.teamBId
-          const dLoserId = dWinnerId === dupla.teamAId ? dupla.teamBId : dupla.teamAId
-          await recordBracketResult(liveState.championship, dupla.teamAId, dupla.teamBId, dWinnerId)
-          if (!liveState.eliminatedTeamIds.includes(dLoserId)) {
-            liveState.eliminatedTeamIds.push(dLoserId)
-          }
-        }
-      }
-    }
+  } else {
+    // Outros tipos legados: só ranking, sem tocar no bracket aqui
+    addToPhaseRanking(team, average)
+    addToChampionshipRanking(team, average)
   }
 
   if (phaseConfig) {
@@ -542,7 +534,8 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
       phaseConfig.type === 'apresentacao_quiz'
         ? liveState.presentationPhaseScores.map((r) => r.teamId)
         : liveState.phaseRankings.map((r) => r.teamId)
-    const allPresentedAndEvaluated = allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
+    const allPresentedAndEvaluated =
+      allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
 
     if (allPresentedAndEvaluated) {
       if (phaseConfig.type === 'apresentacao') {
@@ -797,7 +790,19 @@ export function registerSocketHandlers(io: Server): void {
         payload: { championship: string; editionName?: string },
         callback?: (ok: boolean) => void
       ) => {
-        liveState.championship = payload.championship
+        const championship = payload.championship
+
+        // Limpar vencedores / slots avançados (mantém estrutura da ronda 1)
+        await prisma.bracketMatch.updateMany({
+          where: { championship, round: { gt: 1 } },
+          data: { teamAId: null, teamBId: null, winnerId: null }
+        })
+        await prisma.bracketMatch.updateMany({
+          where: { championship, round: 1 },
+          data: { winnerId: null }
+        })
+
+        liveState.championship = championship
         liveState.editionName = payload.editionName || null
         liveState.phase = 1
         liveState.teamA = null
@@ -1442,20 +1447,19 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on('moderator:resetChampionship', async () => {
       const questionTime = await getQuestionTimeSeconds()
+      const championship = liveState.championship
 
-      if (liveState.championship) {
+      if (championship) {
         await prisma.bracketMatch.updateMany({
-          where: { championship: liveState.championship, round: { gt: 1 } },
+          where: { championship, round: { gt: 1 } },
           data: { teamAId: null, teamBId: null, winnerId: null }
         })
         await prisma.bracketMatch.updateMany({
-          where: { championship: liveState.championship, round: 1 },
+          where: { championship, round: 1 },
           data: { winnerId: null }
         })
 
-        const phases = await prisma.phase.findMany({
-          where: { championship: liveState.championship }
-        })
+        const phases = await prisma.phase.findMany({ where: { championship } })
         const phaseIds = phases.map((p) => p.id)
         if (phaseIds.length) {
           const criteriaIds = (
@@ -1471,7 +1475,7 @@ export function registerSocketHandlers(io: Server): void {
           }
           await prisma.presentationDupla.deleteMany({ where: { phaseId: { in: phaseIds } } })
         }
-        await syncPresentationDuplasForRound(liveState.championship, 1)
+        await syncPresentationDuplasForRound(championship, 1)
       }
 
       liveState.phase = 1
@@ -1607,7 +1611,12 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on('moderator:finalizeChampionship', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
+    socket.on(
+    'moderator:finalizeChampionship',
+    async (
+      payload?: { force?: boolean },
+      callback?: (res: { success: boolean; error?: string }) => void
+    ) => {
       const force = Boolean(payload?.force)
       const isMediumSchool = liveState.championship === 'ensino_medio'
       if (!liveState.championship) {
@@ -1616,7 +1625,8 @@ export function registerSocketHandlers(io: Server): void {
       }
       const totalPhases = await getTotalPhases()
       const isLastPhase = liveState.phase >= totalPhases
-      const canFinalizeByState = force || isMediumSchool || isLastPhase || liveState.podiumReveal.finalRankingVisible
+      const canFinalizeByState =
+        force || isMediumSchool || isLastPhase || liveState.podiumReveal.finalRankingVisible
 
       if (!canFinalizeByState) {
         callback?.({ success: false, error: 'O ranking final ainda não está visível.' })
@@ -1653,6 +1663,17 @@ export function registerSocketHandlers(io: Server): void {
         }
       })
 
+      // Limpar chaveamento para o próximo evento (ronda 1 sem vencedores)
+      const champ = liveState.championship
+      await prisma.bracketMatch.updateMany({
+        where: { championship: champ, round: { gt: 1 } },
+        data: { teamAId: null, teamBId: null, winnerId: null }
+      })
+      await prisma.bracketMatch.updateMany({
+        where: { championship: champ, round: 1 },
+        data: { winnerId: null }
+      })
+
       liveState.championReveal = {
         active: true,
         teamName: championEntry?.name ?? null,
@@ -1665,7 +1686,8 @@ export function registerSocketHandlers(io: Server): void {
 
       broadcast()
       callback?.({ success: true })
-    })
+    }
+  )
 
     socket.on('moderator:showPhaseTransition', () => {
       liveState.phaseTransition.stage = 'carousel'

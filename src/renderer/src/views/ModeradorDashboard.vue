@@ -66,6 +66,18 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => store.currentAnalyticItemId,
+  async (id) => {
+    if (!id || !store.championship) return
+    
+    const found = quizContent.evaluationItems.some((i) => String(i.id) === String(id))
+    if (!found) {
+      await quizContent.fetchEvaluationItems(store.championship)
+    }
+  }
+)
+
 onMounted(async () => {
   store.listenToServer()
   startConfigSync()

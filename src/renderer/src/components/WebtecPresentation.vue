@@ -1,3 +1,4 @@
+<!-- WebtecPresentation.vue -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { playTypewriterTick } from '../services/sound'
@@ -29,12 +30,18 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="min-h-screen flex flex-col items-center justify-center gap-[clamp(1.5rem,3vh,3rem)] text-white px-10"
+    class="min-h-screen flex flex-col items-center justify-center gap-[clamp(1rem,2.5vh,2.5rem)] text-white px-6"
     :class="transparent ? 'bg-petro-dark/85' : 'bg-petro-dark'"
   >
-    <img :src="webtecLogo" alt="Webtec Solution" class="object-contain w-[clamp(20rem,38vw,50rem)] h-[clamp(20rem,38vw,50rem)]" />
-    <div class="font-black tracking-widest text-[clamp(2rem,5vw,5.5rem)]">WEBTEC SOLUTION</div>
-    <p class="text-[clamp(1rem,1.6vw,1.75rem)] text-white/70 text-center max-w-3xl min-h-[3rem]">
+    <img
+      :src="webtecLogo"
+      alt="Webtec Solution"
+      class="object-contain w-[clamp(28rem,55vw,72rem)] h-[clamp(28rem,55vw,72rem)] max-h-[70vh]"
+    />
+    <div class="font-black tracking-widest text-[clamp(2.25rem,5.5vw,6rem)]">
+      WEBTEC SOLUTION
+    </div>
+    <p class="text-[clamp(1.1rem,1.8vw,2rem)] text-white/70 text-center max-w-4xl min-h-[3rem]">
       {{ displayedText }}<span class="animate-pulse">|</span>
     </p>
   </div>

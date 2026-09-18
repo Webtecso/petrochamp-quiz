@@ -118,6 +118,29 @@ async function startBracketMatch(teamAId: string, teamBId: string): Promise<void
     router.push('/moderador/jogo')
   }
 }
+
+const currentBracketRound = computed(() =>
+  phasesStore.phaseOrderToBracketRound(store.phase)
+)
+
+// debug
+watch(
+  [currentBracketRound, () => liveBracketStore.matches],
+  () => {
+    console.log('[equipas]', {
+      phase: store.phase,
+      round: currentBracketRound.value,
+      totalMatches: liveBracketStore.matches.length,
+      pending: liveBracketStore.pendingMatchesForRound(currentBracketRound.value).length,
+      byRound: liveBracketStore.matches.reduce((acc: Record<number, number>, m: any) => {
+        const r = m.round
+        acc[r] = (acc[r] ?? 0) + 1
+        return acc
+      }, {})
+    })
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
