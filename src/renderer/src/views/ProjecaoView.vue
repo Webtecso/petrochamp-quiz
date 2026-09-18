@@ -714,6 +714,7 @@ const roundJustEnded = computed(() => {
             :content="viewerContent"
             :can-edit="false"
             :fit-padding="0"
+            :max-fit-scale="null"
             :hidden-actions="[
               'share',
               'broadcast',

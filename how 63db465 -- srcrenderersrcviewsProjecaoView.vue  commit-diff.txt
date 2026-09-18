@@ -1,0 +1,14 @@
+[33mcommit 63db4654ba2629cb6e2f627ed37e47b313a26c21[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Kiala001 <kialaprogrs@gmail.com>
+Date:   Fri Sep 18 12:13:22 2026 +0100
+
+    feat(projecao): melhorar visualização de apresentações PPTX e fluxo de projeção
+    
+    - Integra PowerPointViewer com controlo de slides, resize e sincronização
+    - Ajusta layout full-screen da projeção de documentos
+    - Melhora gestão de estados (apresentação, ranking, repescagem, batalha)
+    - Esconde UI desnecessária do viewer e força modo preview
+
+ petrochamp-backend/prisma/petrochamp.db | Bin [31m7004160[m -> [32m7004160[m bytes
+ src/renderer/src/views/ProjecaoView.vue |   1 [32m+[m
+ 2 files changed, 1 insertion(+)
