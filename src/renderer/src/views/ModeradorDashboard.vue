@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useQuizContentStore } from '../stores/quizContent'
@@ -20,6 +20,8 @@ const quizContent = useQuizContentStore()
 const tiebreakQuestions = useTiebreakQuestionsStore()
 const modeStore = useModeStore()
 const phasesStore = usePhasesStore()
+
+const loadingMissingItem = ref(false)
 
 watch(
   () => [store.teamA, store.teamB],
@@ -66,16 +68,23 @@ watch(
   { immediate: true }
 )
 
+async function ensureAnalyticItemLoaded(id: string | null): Promise<void> {
+  if (!id || !store.championship) return
+  const found = quizContent.evaluationItems.some((i) => String(i.id) === String(id))
+  if (found) return
+
+  loadingMissingItem.value = true
+  const item = await quizContent.fetchEvaluationItemById(id)
+  if (!item) {
+    await quizContent.fetchEvaluationItems(store.championship)
+  }
+  loadingMissingItem.value = false
+}
+
 watch(
   () => store.currentAnalyticItemId,
-  async (id) => {
-    if (!id || !store.championship) return
-    
-    const found = quizContent.evaluationItems.some((i) => String(i.id) === String(id))
-    if (!found) {
-      await quizContent.fetchEvaluationItems(store.championship)
-    }
-  }
+  (id) => { ensureAnalyticItemLoaded(id) },
+  { immediate: true }
 )
 
 onMounted(async () => {
@@ -431,7 +440,10 @@ function finishMatch(): void {
         v-else-if="store.currentItemSource === 'analytic' && store.currentAnalyticItemId"
         class="flex flex-col items-center gap-3"
       >
-        <p class="text-amber-700 text-sm max-w-sm font-semibold">
+        <p v-if="loadingMissingItem" class="text-gray-400 text-sm">
+          A carregar pergunta analítica...
+        </p>
+        <p v-else class="text-amber-700 text-sm max-w-sm font-semibold">
           Item analítico ativo (id: {{ store.currentAnalyticItemId }}), mas não foi encontrado no
           cache local da Fase {{ store.phase }}. Confirma Evaluation Items do tipo «analítica» no
           Admin e recarrega.

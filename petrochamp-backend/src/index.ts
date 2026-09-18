@@ -28,28 +28,16 @@ import moderatorsRouter from './routes/moderators'
 import adminAuthRouter from './routes/adminAuth'
 import syncRouter from './routes/sync'
 import syncTriggerRouter from './routes/syncTrigger'
-// NOVO - rota que expõe o IP da máquina na rede local, para o frontend
-// conseguir mostrar o link/QR code do portal de jurados sem depender de
-// nenhum IP fixo nem de configuração manual (ver services/networkInfo.ts).
+
 import networkInfoRouter from './routes/networkInfo'
 import { requireAdmin } from './middleware/requireAdmin'
 import { registerSocketHandlers } from './socket'
 import { initConfigEvents } from './socket/configEvents'
 import { loadPersistedState, liveState } from './socket/liveState'
 import { startPublicTunnel, stopPublicTunnel } from './services/tunnel'
-// CORRIGIDO - syncService.ts passou a exportar a classe SyncService em vez
-// da função runSync(). O import antigo compilava (TypeScript não apanha
-// isto sem strict de exports em runtime dinâmico), mas rebentava sempre
-// que o setInterval periódico chamava runSync(), porque deixou de existir.
+
 import { SyncService } from './services/syncService'
 
-// NOTA: rede de segurança a nível de processo. Antes, um erro não
-// tratado em qualquer rota ou callback (ex: o crash do otplib em
-// adminAuth.ts) derrubava o processo Node inteiro, tirando o backend do
-// ar por completo (todos os pedidos seguintes, incluindo Socket.io,
-// passavam a dar ERR_CONNECTION_REFUSED até o tsx watch reiniciar
-// sozinho). Isto garante que o processo nunca morre por causa de um erro
-// isolado - o erro fica registado na consola, mas o backend continua vivo.
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException] Erro não tratado - o backend continua a correr:', err)
 })
@@ -62,23 +50,9 @@ process.on('unhandledRejection', (err) => {
 
 const app = express()
 app.use(cors())
-// CORRIGIDO - 10mb para 15mb. Perguntas/critérios/equipas com imagem
-// guardam a imagem como base64 diretamente no campo (ver upload.ts), o
-// que facilmente ultrapassa vários MB no JSON do pedido inteiro (POST/PATCH
-// de uma pergunta com imagem). O limite antigo (mesmo a 10mb) ainda podia
-// ser insuficiente para payloads com múltiplas imagens de uma vez (ex:
-// sincronização), e o valor por omissão do Express (100kb) já tinha
-// causado um PayloadTooLargeError confirmado nos logs.
+
 app.use(express.json({ limit: '15mb' }))
 
-// ALTERADO - em produção (empacotado), __dirname fica dentro da pasta de
-// instalação (resources/petrochamp-backend/dist), que não é local seguro
-// nem persistente para guardar ficheiros: pode não ter permissão de
-// escrita, e é substituída a cada atualização da app. UPLOADS_DIR é
-// definida pelo processo principal do Electron (src/main/index.ts),
-// apontando para app.getPath('userData'), que é gravável e sobrevive a
-// atualizações. Em dev, UPLOADS_DIR não existe, por isso cai no caminho
-// antigo (petrochamp-backend/uploads), mantendo o comportamento atual.
 const UPLOADS_BASE = process.env.UPLOADS_DIR
   ? process.env.UPLOADS_DIR
   : path.join(__dirname, '..', 'uploads')
@@ -95,7 +69,6 @@ app.get('/health', async (_req, res) => {
 app.use('/api/teams', teamsRouter)
 app.use('/api/questions', questionsRouter)
 app.use('/api/evaluation-items', evaluationItemsRouter)
-// NOVO - critérios de avaliação por Pergunta Analítica (Admin → Avaliação).
 app.use('/api/evaluation-criteria', evaluationCriteriaRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/upload', uploadRouter)
@@ -114,20 +87,12 @@ app.use('/api/presentation', presentationRouter)
 app.use('/api/presentation-documents', presentationDocumentsRouter)
 app.use('/api/moderators', requireAdmin, moderatorsRouter)
 app.use('/api/admin-auth', adminAuthRouter)
-// NOVO - GET /api/network-info: { ip, port, portalUrl }. Sem autenticação
-// de propósito, para o ecrã inicial da app poder mostrar o link/QR do
-// portal de jurados assim que abre, sem exigir login de moderador antes.
+
 app.use('/api/network-info', networkInfoRouter)
 
-// Rotas de sincronização com o Cloud. syncRouter expõe /pull e /push
-// (usadas pelo Cloud quando é ELE a chamar-nos - não é o caso normal, mas
-// fica simétrico); syncTriggerRouter expõe /run, chamada tanto pelo
-// processo do Electron (main/index.ts) ao abrir a app, como pelo botão
-// "Atualizar" no Admin, para forçar sync sem esperar pelo ciclo periódico.
 app.use('/api/sync', syncRouter)
 app.use('/api/sync', syncTriggerRouter)
 
-// Rota interna para atualização do URL público via tunnel
 app.post('/api/internal/public-url', (req, res) => {
   const { url } = req.body as { url?: string }
   liveState.publicVotingUrl = url ?? null
@@ -135,9 +100,6 @@ app.post('/api/internal/public-url', (req, res) => {
   res.json({ success: true })
 })
 
-// NOTA: middleware de erro final. Apanha qualquer erro que chegue até
-// aqui vindo de dentro de uma rota e devolve uma resposta 500 controlada.
-// Tem de ser o ÚLTIMO app.use() de rotas Express.
 app.use(
   (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('[Erro não tratado numa rota]', err)

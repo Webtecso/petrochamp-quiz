@@ -32,9 +32,8 @@ defineProps<{
       <span class="text-gray-400">PERGUNTA {{ questionNumber }} DE {{ totalQuestions }}</span>
     </div>
 
-    <TimerRing :seconds="timeLeft" class="mb-3 sm:mb-4 shrink-0 self-center" />
+    <TimerRing :seconds="timeLeft" class="mb-3 sm:mb-4 shrink-0 self-center" style="color: black;" />
 
-    <!-- Mesmo padrão que funcionou na projeção -->
     <div
       v-if="imageUrl"
       class="mb-4 w-full flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[250px] sm:min-h-[300px] md:min-h-[350px]"
