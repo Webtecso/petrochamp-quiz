@@ -113,15 +113,25 @@ export async function getBracketRoundForPhaseOrder(
   return round || phaseOrder
 }
 
+async function findPhaseForBracketRound(championship: string, round: number) {
+  const phases = await prisma.phase.findMany({
+    where: { championship, deletedAt: null },
+    orderBy: { order: 'asc' }
+  })
+  for (const p of phases) {
+    const r = await getBracketRoundForPhaseOrder(championship, p.order)
+    if (r === round) return p
+  }
+  return null
+}
+
 // Cria/atualiza as PresentationDuplas de uma ronda específica - ver
 // comentário histórico original sobre o Map local anti-duplicação.
 export async function syncPresentationDuplasForRound(
   championship: string,
   round: number
 ): Promise<void> {
-  const phase = await prisma.phase.findFirst({
-    where: { championship, order: round, deletedAt: null }
-  })
+  const phase = await findPhaseForBracketRound(championship, round)
   if (!phase || (phase.type !== 'apresentacao' && phase.type !== 'apresentacao_quiz')) return
 
   const matches = await prisma.bracketMatch.findMany({
