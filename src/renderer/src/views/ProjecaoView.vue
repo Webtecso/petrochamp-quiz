@@ -424,7 +424,49 @@ const teamAName = computed(() => store.teamA?.name ?? 'EQUIPA A')
 const teamALogo = computed(() => store.teamA?.logoUrl ?? null)
 const teamBName = computed(() => store.teamB?.name ?? 'EQUIPA B')
 const teamBLogo = computed(() => store.teamB?.logoUrl ?? null)
+
 const questionImage = computed(() => (currentQuestion.value as { imageUrl?: string | null } | undefined)?.imageUrl ?? null)
+
+const questionTextLength = computed(() => currentQuestion.value?.text?.length ?? 0)
+
+const questionCardWidthClass = computed(() => {
+  const len = questionTextLength.value
+  if (len > 700) return 'max-w-[96vw]'
+  if (len > 400) return 'max-w-[92vw]'
+  if (len > 250) return 'max-w-7xl'
+  return 'max-w-6xl'
+})
+
+const questionFontSizeStyle = computed(() => {
+  const len = questionTextLength.value
+  const hasImage = !!questionImage.value
+  if (len > 900) {
+    return hasImage ? 'clamp(0.85rem, 1.25vw, 1.15rem)' : 'clamp(0.95rem, 1.4vw, 1.3rem)'
+  }
+  if (len > 600) {
+    return hasImage ? 'clamp(0.95rem, 1.4vw, 1.3rem)' : 'clamp(1.05rem, 1.6vw, 1.45rem)'
+  }
+  if (len > 400) {
+    return hasImage ? 'clamp(1.05rem, 1.6vw, 1.45rem)' : 'clamp(1.1rem, 1.8vw, 1.6rem)'
+  }
+  if (len > 120) {
+    return hasImage ? 'clamp(1.25rem, 2.2vw, 1.9rem)' : 'clamp(1.4rem, 2.6vw, 2.25rem)'
+  }
+  return hasImage ? 'clamp(1.5rem, 3vw, 2.75rem)' : 'clamp(1.8rem, 3.8vw, 3.5rem)'
+})
+
+const questionCardPaddingClass = computed(() => {
+  const len = questionTextLength.value
+  if (len > 600) return 'p-5 md:p-6'
+  if (len > 300) return 'p-6 md:p-8'
+  return 'p-8 md:p-10'
+})
+
+const questionContentGapClass = computed(() => {
+  const len = questionTextLength.value
+  if (len > 500) return 'gap-4 md:gap-6'
+  return 'gap-6 md:gap-8'
+})
 
 const currentTiebreakQuestion = computed(() =>
   quizContent.tiebreakQuestionsForPhase(store.phase).find((q) => String(q.id) === String(store.tiebreak.currentQuestionId))
@@ -930,37 +972,57 @@ const roundJustEnded = computed(() => {
         </div>
       </header>
 
-      <main class="flex-1 flex flex-col items-center justify-center my-4 px-4 w-full max-w-6xl mx-auto min-h-0">
-        <div class="w-full h-full bg-white rounded-3xl p-8 md:p-10 shadow-2xl border border-gray-100/90 relative overflow-hidden flex flex-col justify-center">
+      <main
+        class="flex-1 flex flex-col items-center justify-center my-3 px-3 md:px-4 w-full mx-auto min-h-0"
+        :class="questionCardWidthClass"
+      >
+        <div
+          class="w-full h-full bg-white rounded-3xl shadow-2xl border border-gray-100/90 relative overflow-hidden flex flex-col justify-center"
+          :class="questionCardPaddingClass"
+        >
           <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 via-red-600 to-blue-600"></div>
+
           <div
-            class="flex w-full h-full gap-8 md:gap-12 transition-all duration-500"
-            :class="questionImage ? 'flex-col lg:flex-row lg:items-stretch' : 'flex-col items-center justify-center py-8'"
+            class="flex w-full h-full transition-all duration-500 min-h-0"
+            :class="[
+              questionContentGapClass,
+              questionImage
+                ? (questionTextLength > 500
+                    ? 'flex-col xl:flex-row xl:items-stretch'
+                    : 'flex-col lg:flex-row lg:items-stretch')
+                : 'flex-col items-center justify-center py-4 md:py-8'
+            ]"
           >
+            <!-- Texto + opções -->
             <div
-              class="flex flex-col gap-6 justify-center transition-all duration-500"
-              :class="questionImage ? 'flex-1 min-w-[40%]' : 'w-full max-w-4xl items-center text-center'"
+              class="flex flex-col justify-center transition-all duration-500 min-h-0"
+              :class="[
+                questionContentGapClass,
+                questionImage
+                  ? (questionTextLength > 500 ? 'flex-[1.4] min-w-0' : 'flex-1 min-w-[40%]')
+                  : 'w-full max-w-4xl items-center text-center'
+              ]"
             >
               <div
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide transition-all"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide transition-all shrink-0"
                 style="font-size: clamp(0.65rem, 1vw, 0.85rem)"
                 :class="questionImage ? 'bg-amber-50 text-amber-700 border border-amber-200/60 self-start' : 'bg-slate-100 text-slate-600 self-center'"
               >
                 <span>❓</span> {{ questionImage ? 'ENUNCIADO' : 'QUESTÃO POR RESPONDER' }}
               </div>
-              <h1
-                class="font-extrabold text-slate-800 leading-tight md:leading-snug transition-all duration-300"
-                :class="questionImage ? 'text-left' : 'text-center'"
-                :style="{
-                  fontSize:
-                    currentQuestion?.text && currentQuestion.text.length > 120
-                      ? 'clamp(1.4rem, 2.6vw, 2.25rem)'
-                      : 'clamp(1.8rem, 3.8vw, 3.5rem)'
-                }"
-              >
-                {{ currentQuestion?.text }}
-              </h1>
-              <div class="w-full mt-2 text-left">
+
+              <!-- Scroll só vertical; texto parte a linha -->
+              <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
+                <h1
+                  class="font-extrabold text-slate-800 leading-snug break-words [overflow-wrap:anywhere] whitespace-normal transition-all duration-300"
+                  :class="questionImage ? 'text-left' : 'text-center'"
+                  :style="{ fontSize: questionFontSizeStyle }"
+                >
+                  {{ currentQuestion?.text }}
+                </h1>
+              </div>
+
+              <div class="w-full mt-1 text-left shrink-0">
                 <AnswerOptions
                   v-if="currentQuestion && currentQuestionOptions"
                   :options="currentQuestionOptions"
@@ -979,14 +1041,21 @@ const roundJustEnded = computed(() => {
                 </p>
               </div>
             </div>
+
+            <!-- Imagem: cabe toda; mais baixa se o texto for muito longo -->
             <div
               v-if="questionImage"
-              class="flex-1 min-w-[40%] flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[250px] max-h-[60vh] lg:max-h-none lg:self-stretch"
+              class="flex justify-center items-center overflow-hidden relative shrink-0"
+              :class="
+                questionTextLength > 500
+                  ? 'flex-1 min-h-[160px] max-h-[32vh] xl:max-h-none xl:min-w-[32%] xl:self-stretch'
+                  : 'flex-1 min-w-[40%] min-h-[200px] max-h-[45vh] lg:max-h-none lg:self-stretch'
+              "
             >
               <img
                 :src="formatImageUrl(questionImage)"
                 alt="Imagem Ilustrativa"
-                class="w-full h-full object-contain"
+                class="max-w-full max-h-full w-auto h-auto object-contain object-center"
               />
             </div>
           </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import TimerRing from './TimerRing.vue'
 import AnswerOptions from './AnswerOptions.vue'
 
@@ -7,7 +8,7 @@ interface Option {
   text: string
 }
 
-defineProps<{
+const props = defineProps<{
   questionText: string
   options: Option[]
   questionNumber: number
@@ -20,34 +21,119 @@ defineProps<{
   teamACorrect?: boolean | null
   teamBCorrect?: boolean | null
 }>()
+
+const textLen = computed(() => props.questionText?.length ?? 0)
+const hasImage = computed(() => !!props.imageUrl)
+
+const cardWidthClass = computed(() => {
+  const len = textLen.value
+  if (hasImage.value) {
+    if (len > 500) return 'w-full max-w-[min(100%,96vw)] sm:max-w-[min(100%,1100px)] lg:max-w-[min(100%,1280px)]'
+    if (len > 220) return 'w-full max-w-[min(100%,96vw)] sm:max-w-[min(100%,1000px)] lg:max-w-[min(100%,1200px)]'
+    return 'w-full max-w-[min(100%,96vw)] sm:max-w-[min(100%,860px)] md:max-w-[min(100%,960px)]'
+  }
+  if (len > 700) return 'w-full max-w-[min(100%,96vw)]'
+  if (len > 400) return 'w-full max-w-[min(100%,96vw)] sm:max-w-[min(100%,960px)] lg:max-w-[min(100%,1120px)]'
+  if (len > 200) return 'w-full max-w-[min(100%,96vw)] sm:max-w-[min(100%,760px)] md:max-w-[min(100%,880px)]'
+  return 'w-full max-w-[min(100%,96vw)] sm:max-w-[480px] md:max-w-[560px]'
+})
+
+const cardPaddingClass = computed(() => {
+  const len = textLen.value
+  if (len > 600 || (hasImage.value && len > 300)) return 'p-3 sm:p-4 md:p-5'
+  if (len > 300) return 'p-3 sm:p-4 md:p-5 lg:p-6'
+  return 'p-4 sm:p-5 md:p-6 lg:p-8'
+})
+
+const questionTextSizeClass = computed(() => {
+  const len = textLen.value
+  if (len > 900) {
+    return hasImage.value
+      ? 'text-xs sm:text-xs md:text-sm leading-snug'
+      : 'text-xs sm:text-sm md:text-base leading-snug'
+  }
+  if (len > 600) {
+    return hasImage.value
+      ? 'text-xs sm:text-sm md:text-sm lg:text-base leading-snug'
+      : 'text-sm sm:text-sm md:text-base leading-snug'
+  }
+  if (len > 400) {
+    return hasImage.value
+      ? 'text-sm sm:text-sm md:text-base leading-snug'
+      : 'text-sm sm:text-base md:text-lg leading-snug'
+  }
+  if (len > 250) {
+    return hasImage.value
+      ? 'text-sm sm:text-base md:text-base lg:text-lg leading-snug'
+      : 'text-sm sm:text-base md:text-lg leading-snug'
+  }
+  return hasImage.value
+    ? 'text-base sm:text-lg md:text-lg leading-snug'
+    : 'text-base sm:text-lg md:text-xl leading-snug'
+})
+
+/** Imagem mais alta; texto longo → um pouco mais baixa para equilibrar */
+const imageBoxClass = computed(() => {
+  const len = textLen.value
+  if (len > 500) {
+    return 'h-[200px] sm:h-[240px] md:h-[280px] lg:h-[320px]'
+  }
+  if (len > 300) {
+    return 'h-[220px] sm:h-[270px] md:h-[310px] lg:h-[360px]'
+  }
+  return 'h-[240px] sm:h-[300px] md:h-[340px] lg:h-[400px]'
+})
+
+const gapClass = computed(() => {
+  const len = textLen.value
+  if (len > 500 || (hasImage.value && len > 300)) return 'gap-2 sm:gap-2.5 md:gap-3'
+  return 'gap-2.5 sm:gap-3 md:gap-4'
+})
 </script>
 
 <template>
   <div
-    class="bg-white rounded-2xl shadow p-4 sm:p-6 md:p-8 text-center w-full flex flex-col min-h-0"
-    :class="imageUrl ? 'max-w-[min(100%,900px)]' : 'max-w-[520px]'"
+    class="bg-white rounded-2xl shadow flex flex-col min-h-0 max-h-[min(92vh,920px)] overflow-x-hidden"
+    :class="[cardWidthClass, cardPaddingClass, gapClass]"
   >
-    <div class="flex items-center justify-between mb-3 sm:mb-4 text-xs shrink-0">
-      <span class="bg-petro-primary/10 text-petro-primary px-2 py-1 rounded-full">EM JOGO</span>
-      <span class="text-gray-400">PERGUNTA {{ questionNumber }} DE {{ totalQuestions }}</span>
+    <div class="flex items-center justify-between text-[10px] sm:text-xs shrink-0">
+      <span class="bg-petro-primary/10 text-petro-primary px-2 py-0.5 sm:py-1 rounded-full font-medium">
+        EM JOGO
+      </span>
+      <span class="text-gray-400">
+        PERGUNTA {{ questionNumber }} DE {{ totalQuestions }}
+      </span>
     </div>
 
-    <TimerRing :seconds="timeLeft" class="mb-3 sm:mb-4 shrink-0 self-center" style="color: black;" />
+    <TimerRing
+      :seconds="timeLeft"
+      class="shrink-0 self-center scale-90 sm:scale-100"
+      style="color: black;"
+    />
 
+    <!-- Sem fundo na div; imagem maior -->
     <div
       v-if="imageUrl"
-      class="mb-4 w-full flex justify-center items-center bg-slate-900 rounded-xl overflow-hidden border border-gray-100 relative min-h-[200px] max-h-[45vh]"
+      class="w-full shrink-0 flex items-center justify-center rounded-lg sm:rounded-xl overflow-hidden"
+      :class="imageBoxClass"
     >
       <img
         :src="imageUrl"
         alt="Imagem da pergunta"
-        class="w-full h-full object-contain"
+        class="w-full h-full object-contain object-center"
       />
     </div>
 
-    <h2 class="text-base sm:text-lg font-semibold mb-4 sm:mb-6 shrink-0">{{ questionText }}</h2>
+    <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+      <h2
+        class="font-semibold break-words [overflow-wrap:anywhere] whitespace-normal"
+        :class="[questionTextSizeClass, imageUrl ? 'text-left' : 'text-center']"
+      >
+        {{ questionText }}
+      </h2>
+    </div>
 
-    <div class="min-h-0 shrink-0">
+    <div class="shrink-0 min-h-0 overflow-x-hidden">
       <AnswerOptions
         :options="options"
         :correct-index="correctIndex"
