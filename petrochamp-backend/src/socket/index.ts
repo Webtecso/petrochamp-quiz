@@ -526,9 +526,7 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
 
   const connectedCount = liveState.jurors.length
   const target =
-    connectedCount > 0
-      ? Math.min(liveState.expectedJurorCount || connectedCount, connectedCount)
-      : liveState.expectedJurorCount
+    liveState.expectedJurorCount > 0 ? liveState.expectedJurorCount : connectedCount
 
   if (target <= 0) return
   if (flow.jurorsSubmitted.length < target) return
@@ -696,9 +694,7 @@ async function checkAutoConfirmOpenItem(broadcast: () => void): Promise<void> {
 
   const connectedCount = liveState.jurors.length
   const target =
-    connectedCount > 0
-      ? Math.min(liveState.expectedJurorCount || connectedCount, connectedCount)
-      : liveState.expectedJurorCount
+    liveState.expectedJurorCount > 0 ? liveState.expectedJurorCount : connectedCount
 
   if (target <= 0) return
 
@@ -2010,9 +2006,7 @@ export function registerSocketHandlers(io: Server): void {
       // Verifica se todos os jurados esperados submeteram
       const connectedCount = liveState.jurors.length
       const target =
-        connectedCount > 0
-          ? Math.min(liveState.expectedJurorCount || connectedCount, connectedCount)
-          : liveState.expectedJurorCount
+        liveState.expectedJurorCount > 0 ? liveState.expectedJurorCount : connectedCount
 
       if (target <= 0) return
       if (liveState.analyticEvaluation.jurorsSubmitted.length < target) return

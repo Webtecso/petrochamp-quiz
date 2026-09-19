@@ -23,7 +23,8 @@ const upload = multer({
   }
 })
 
-const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads', 'presentations')
+const UPLOADS_BASE_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', '..', 'uploads')
+const UPLOADS_ROOT = path.join(UPLOADS_BASE_DIR, 'presentations')
 
 // GET /api/presentation-documents
 router.get('/', async (req, res) => {
@@ -73,7 +74,7 @@ router.post('/', requireAdmin, upload.single('file'), async (req, res) => {
       // Ficheiro físico anterior: continua a ser apagado do disco imediatamente
       // - isso é local a esta máquina, não precisa (nem faz sentido)
       // sincronizar entre admin local e admin cloud.
-      await fs.unlink(path.join(__dirname, '..', '..', existing.fileUrl)).catch(() => {})
+      await fs.unlink(path.join(UPLOADS_BASE_DIR, existing.fileUrl.replace(/^\/uploads\//, ''))).catch(() => {})
     }
 
     const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
@@ -108,7 +109,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     }
 
     if (doc.fileUrl) {
-      await fs.unlink(path.join(__dirname, '..', '..', doc.fileUrl)).catch(() => {})
+      await fs.unlink(path.join(UPLOADS_BASE_DIR, doc.fileUrl.replace(/^\/uploads\//, ''))).catch(() => {})
     }
 
     await prisma.presentationDocument.update({ where: { id }, data: { deletedAt: new Date() } })

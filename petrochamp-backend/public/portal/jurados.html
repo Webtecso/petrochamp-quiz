@@ -306,7 +306,7 @@
 
   <p id="welcomeMsg" class="welcome hidden"></p>
 
-<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="socket.io.min.js"></script>
 <script>
   const backendUrl = `http://${window.location.hostname}:4000`
   const socket = io(backendUrl, { transports: ['polling', 'websocket'] })
