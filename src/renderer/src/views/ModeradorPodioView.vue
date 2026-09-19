@@ -160,7 +160,6 @@ async function advance(): Promise<void> {
         >
           {{ store.podiumReveal.finalRankingVisible ? 'Ocultar Ranking Final e Mostrar Podio' : 'Mostrar Ranking Final na Projecao' }}
         </button>
-        </button>
 
         <!-- @click="forceFinalizeChampionship" -->
         <button
