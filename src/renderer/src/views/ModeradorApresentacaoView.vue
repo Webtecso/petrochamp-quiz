@@ -181,7 +181,7 @@ const canGoNext = computed(() => {
 
 <template>
   <div class="flex-1 flex flex-col items-center justify-center px-10 py-12 gap-6">
-    <h1 class="text-2xl font-bold text-petro-primary">Apresentação de Projetos - Fase {{ store.phase }}</h1>
+    <div class="flex items-center gap-4"><button class="text-xs font-semibold px-3 py-2 rounded-lg bg-white/10 text-petro-primary hover:bg-white/20 transition" @click="router.push('/moderador/jogo')">&larr; Voltar ao Jogo</button><h1 class="text-2xl font-bold text-petro-primary">Apresentação de Projetos - Fase {{ store.phase }}</h1></div>
 
     <div v-if="!isPresentationPhase" class="bg-white rounded-2xl shadow p-6 max-w-md text-center">
       <p class="text-sm text-gray-500">

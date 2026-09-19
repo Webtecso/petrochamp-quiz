@@ -416,6 +416,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     showFinalRanking() {
       getSocket().emit('moderator:showFinalRanking')
     },
+    hideFinalRanking() {
+      getSocket().emit('moderator:hideFinalRanking')
+    },
     showPhaseTransition() {
       getSocket().emit('moderator:showPhaseTransition')
     },

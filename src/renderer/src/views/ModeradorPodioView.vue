@@ -78,8 +78,12 @@ function startFinalSequence(): void {
   store.startFinalPodiumSequence()
 }
 
-function showFinalRanking(): void {
-  store.showFinalRanking()
+function toggleFinalRanking(): void {
+  if (store.podiumReveal.finalRankingVisible) {
+    store.hideFinalRanking()
+  } else {
+    store.showFinalRanking()
+  }
 }
 
 function showTransition(): void {
@@ -143,7 +147,7 @@ async function advance(): Promise<void> {
 
         <button
           class="bg-petro-primary text-white rounded-lg px-6 py-3 font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-          :disabled="true"
+          :disabled="!canShowChampions || podiumSequenceAlreadyTriggered"
           @click="startFinalSequence"
         >
           {{ podiumSequenceAlreadyTriggered ? 'Sequência em curso...' : 'A aguardar sequência automática...' }}
@@ -152,9 +156,10 @@ async function advance(): Promise<void> {
         <button
           v-if="store.podiumReveal.stage === 'revealed'"
           class="text-sm text-petro-primary underline"
-          @click="showFinalRanking"
+          @click="toggleFinalRanking"
         >
-          Mostrar Ranking Final na Projeção
+          {{ store.podiumReveal.finalRankingVisible ? 'Ocultar Ranking Final e Mostrar Podio' : 'Mostrar Ranking Final na Projecao' }}
+        </button>
         </button>
 
         <!-- @click="forceFinalizeChampionship" -->

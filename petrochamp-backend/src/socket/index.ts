@@ -1682,6 +1682,11 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
+    socket.on('moderator:hideFinalRanking', () => {
+      liveState.podiumReveal.finalRankingVisible = false
+      broadcast()
+    })
+
     socket.on(
       'moderator:finalizeChampionship',
       async (
