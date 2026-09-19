@@ -109,7 +109,7 @@ onUnmounted(() => {
 
 @media (min-width: 1024px) {
   .organizer-grid {
-    grid-template-columns: minmax(20rem, 32vw) 1fr;
+    grid-template-columns: minmax(26rem, 44vw) 1fr;
     justify-items: start;
     text-align: left;
     gap: clamp(2rem, 5vw, 5rem);
@@ -123,7 +123,7 @@ onUnmounted(() => {
 }
 
 .organizer-logo-ring {
-  width: clamp(16rem, 30vw, 32rem);
+  width: clamp(20rem, 42vw, 42rem);
   aspect-ratio: 1 / 1;
   border-radius: 9999px;
   /* background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.08), rgba(255,255,255,0.02)); */

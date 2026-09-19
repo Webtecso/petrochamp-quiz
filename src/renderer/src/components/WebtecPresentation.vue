@@ -107,7 +107,7 @@ onUnmounted(() => {
 
 @media (min-width: 1024px) {
   .webtec-grid {
-    grid-template-columns: minmax(20rem, 32vw) 1fr;
+    grid-template-columns: minmax(26rem, 44vw) 1fr;
     justify-items: start;
     text-align: left;
     gap: clamp(2rem, 5vw, 5rem);
@@ -121,7 +121,7 @@ onUnmounted(() => {
 }
 
 .webtec-logo-ring {
-  width: clamp(14rem, 26vw, 26rem);
+  width: clamp(20rem, 42vw, 42rem);
   aspect-ratio: 1 / 1;
   border-radius: 2rem;
   background: white;
