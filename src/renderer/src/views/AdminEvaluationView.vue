@@ -244,10 +244,7 @@ async function saveItem(): Promise<void> {
     if (editingId.value !== null) {
       await quizContent.updateEvaluationItem(editingId.value, payload)
     } else {
-      await quizContent.addEvaluationItem(payload)
-      const savedItem = quizContent.evaluationItems.find(
-        (i) => i.text === payload.text && i.phase === payload.phase && i.mode === payload.mode
-      )
+      const savedItem = await quizContent.addEvaluationItem(payload)
       if (savedItem) {
         editItem(savedItem as unknown as EvaluationItemExtended)
         return
@@ -310,12 +307,19 @@ async function loadCriteria(itemId: string): Promise<void> {
 }
 
 async function addCriteria(): Promise<void> {
-  if (!editingId.value || !newCriteriaLabel.value.trim()) return
+  console.log('[DEBUG addCriteria] chamada. editingId:', editingId.value, 'label:', JSON.stringify(newCriteriaLabel.value))
+  if (!editingId.value || !newCriteriaLabel.value.trim()) {
+    console.log('[DEBUG addCriteria] a sair por causa do guard')
+    return
+  }
   try {
+    console.log('[DEBUG addCriteria] a chamar quizContent.addEvaluationCriteria')
     await quizContent.addEvaluationCriteria(editingId.value, newCriteriaLabel.value.trim(), newCriteriaPoints.value)
+    console.log('[DEBUG addCriteria] sucesso')
     newCriteriaLabel.value = ''
     newCriteriaPoints.value = 10
-  } catch {
+  } catch (err) {
+    console.error('[DEBUG addCriteria] ERRO:', err)
     errorMsg.value = 'Não foi possível adicionar o critério.'
   }
 }

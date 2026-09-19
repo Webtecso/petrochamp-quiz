@@ -37,7 +37,7 @@ onUnmounted(() => {
       :src="webtecLogo"
       alt="Webtec Solution"
       class="object-contain"
-      style="width: clamp(16rem, 55vmin, 40rem); height: clamp(16rem, 55vmin, 40rem); max-height: 55vh;"
+      style="width: clamp(22rem, 75vmin, 58rem); height: clamp(22rem, 75vmin, 58rem); max-height: 72vh;"
     />
     <div class="font-black tracking-widest text-[clamp(2.25rem,5.5vw,6rem)]">
       WEBTEC SOLUTION
