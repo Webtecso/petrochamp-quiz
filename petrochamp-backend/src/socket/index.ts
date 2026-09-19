@@ -267,13 +267,14 @@ type PoolItem =
 async function buildPool(): Promise<PoolItem[]> {
   const [questions, analyticItems, defaultTime] = await Promise.all([
     prisma.question.findMany({
-      where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+      where: { phase: liveState.phase, championship: liveState.championship ?? undefined, deletedAt: null }
     }),
     prisma.evaluationItem.findMany({
       where: {
         phase: liveState.phase,
         championship: liveState.championship ?? undefined,
-        type: 'analitica'
+        type: 'analitica',
+        deletedAt: null
       }
     }),
     getQuestionTimeSeconds()
@@ -306,13 +307,14 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
   } else if (!avoidRepeat) {
     const [questions, analyticItems, defaultTime] = await Promise.all([
       prisma.question.findMany({
-        where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+        where: { phase: liveState.phase, championship: liveState.championship ?? undefined, deletedAt: null }
       }),
       prisma.evaluationItem.findMany({
         where: {
           phase: liveState.phase,
           championship: liveState.championship ?? undefined,
-          type: 'analitica'
+          type: 'analitica',
+          deletedAt: null
         }
       }),
       getQuestionTimeSeconds()
@@ -453,7 +455,7 @@ async function recordRepescagemResult(
 
 async function drawTiebreakQuestion(): Promise<void> {
   const pool = await prisma.tiebreakQuestion.findMany({
-    where: { phase: liveState.phase, championship: liveState.championship ?? undefined }
+    where: { phase: liveState.phase, championship: liveState.championship ?? undefined, deletedAt: null }
   })
   const available = pool.filter((q) => !liveState.tiebreak.usedQuestionIds.includes(q.id))
   const finalPool = available.length > 0 ? available : pool
@@ -634,11 +636,6 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
         : liveState.phaseRankings.map((r) => r.teamId)
     const allPresentedAndEvaluated =
       allTeamIds.length > 0 && allTeamIds.every((id) => recordedTeamIds.includes(id))
-
-    console.log('[DEBUG] phaseConfig:', phaseConfig.id, phaseConfig.type, phaseConfig.noElimination)
-    console.log('[DEBUG] allTeamIds:', allTeamIds)
-    console.log('[DEBUG] recordedTeamIds:', recordedTeamIds)
-    console.log('[DEBUG] allPresentedAndEvaluated:', allPresentedAndEvaluated)
 
     if (allPresentedAndEvaluated) {
       if (phaseConfig.type === 'apresentacao') {
@@ -1532,38 +1529,6 @@ export function registerSocketHandlers(io: Server): void {
       await refreshExpectedJurorCount()
       broadcast()
     })
-
-    //     socket.on('moderator:confirmPresentationRanking', async () => {
-    //   if (!liveState.presentationRoundReady) return
-
-    //   const phaseConfig = await getCurrentPhaseConfig()
-    //   if (!phaseConfig || phaseConfig.type !== 'apresentacao') return
-
-    //   liveState.presentationRoundReady = false
-    //   resetPresentationFlow()
-    //   liveState.bracketVisible = false
-
-    //   const totalPhases = await getTotalPhases()
-    //   const questionTime = await getQuestionTimeSeconds()
-
-    //   if (liveState.phase < totalPhases) {
-    //     liveState.phase += 1
-    //     liveState.phaseRankings = []
-    //     liveState.teamA = null
-    //     liveState.teamB = null
-    //     liveState.eliminatedTeamIds = []
-    //     liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
-    //     liveState.phaseRankingReveal = { visible: false }
-    //     liveState.bracketVisible = true
-    //     resetMatch(questionTime)
-    //     await refreshExpectedJurorCount()
-    //   } else {
-    //     // Era a última fase
-    //     liveState.phaseFlow = { stage: 'partnersPending', suspensePhrase: null }
-    //   }
-
-    //   broadcast()
-    // })
 
     socket.on('moderator:advancePhase', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
       const force = Boolean(payload?.force)

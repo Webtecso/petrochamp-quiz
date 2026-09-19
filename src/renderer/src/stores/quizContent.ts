@@ -114,9 +114,18 @@ export const useQuizContentStore = defineStore('quizContent', {
       await api.delete(`/questions/${id}`)
       await this.fetchQuestions(championship)
     },
-    async addEvaluationItem(item: Omit<EvaluationItem, 'id'> & { championship: string }) {
-      await api.post('/evaluation-items', item)
+    // CORRIGIDO — antes não devolvia nada, e o chamador
+    // (AdminEvaluationView.vue) tinha de "adivinhar" qual item tinha
+    // sido criado, procurando na lista por texto+fase+modo. Se
+    // existisse mais que uma pergunta com o mesmo texto (ex: perguntas
+    // de teste antigas não apagadas), o find() podia devolver o item
+    // errado — e os critérios eram depois adicionados a essa pergunta
+    // errada, nunca à que o Quiz realmente sorteava. Agora devolve-se
+    // o item tal como o backend o criou, com o id real.
+    async addEvaluationItem(item: Omit<EvaluationItem, 'id'> & { championship: string }): Promise<EvaluationItem> {
+      const created = await api.post<EvaluationItem>('/evaluation-items', item)
       await this.fetchEvaluationItems(item.championship)
+      return created
     },
     async updateEvaluationItem(id: string, patch: Partial<EvaluationItem> & { championship: string }) {
       const current = this.evaluationItems.find((i) => i.id === id)

@@ -21,6 +21,10 @@ extraResources:
     to: petrochamp-backend/package.json
   - from: petrochamp-backend/prisma/seed.db
     to: petrochamp-backend/seed.db
+  - from: petrochamp-backend/public
+    to: petrochamp-backend/public
+  - from: petrochamp-backend/.env
+    to: petrochamp-backend/.env
 asarUnpack:
   - resources/**
 win:
@@ -35,7 +39,7 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSMicrophoneUsageDescription: Application requests access to the user's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false

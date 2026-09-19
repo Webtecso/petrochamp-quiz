@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Petrochamp - Painel dos Jurados</title>
+<title>Petrochamp — Painel dos Jurados</title>
 <style>
   :root {
     --petro-primary: #7a1a2e;
@@ -193,6 +193,50 @@
     color: var(--petro-primary);
   }
 
+  /* NOVO — cabeçalho e bloco de critério para a avaliação analítica.
+     Cada critério mostra o nome do rótulo/pontuação máxima e dois
+     inputs lado a lado (Equipa A e Equipa B), em vez da antiga
+     "nota única" por equipa. */
+  .criteria-block {
+    background: #fafafa;
+    border: 1px solid #f0f0f0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .criteria-block .criteria-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+  }
+  .criteria-block .criteria-max {
+    color: #9ca3af;
+    font-weight: 400;
+    font-size: 11px;
+  }
+  .criteria-teams {
+    display: flex;
+    gap: 10px;
+  }
+  .criteria-team-input {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .criteria-team-input span {
+    font-size: 11px;
+    color: #9ca3af;
+    text-align: center;
+  }
+  .criteria-team-input input {
+    width: 100%;
+    text-align: center;
+    font-weight: 700;
+    color: var(--petro-primary);
+  }
+
   .waiting {
     text-align: center;
     font-size: 13px;
@@ -241,12 +285,9 @@
   <div id="quizCard" class="card hidden">
     <div class="badge" id="phaseLabel">Fase</div>
     <div class="team-title" id="matchTitle">A aguardar equipas...</div>
-    <div id="analyticCriteriaArea"></div>
     <div id="mcItemsArea"></div>
-    <label id="itemSelectLabel" for="itemSelect">Pergunta / Item</label>
-    <select id="itemSelect"></select>
-    <div id="scoreArea" style="margin-top: 16px;"></div>
-    <button id="submitBtn">Confirmar Pontuação</button>
+    <div id="analyticArea" style="margin-top: 16px;"></div>
+    <button id="submitBtn">Confirmar Avaliação</button>
     <p id="submitStatus" class="status"></p>
   </div>
 
@@ -277,27 +318,30 @@
   // ---- Modo Batalha (Quiz) ----
   let evaluationItems = []
   let multipleChoiceItems = []
-  let openItems = []
-  let selectedItemId = null
-  const analyticCriteriaCache = {}
-  const analyticScoreDebounce = {}
-  const ANALYTIC_SCORE_DEBOUNCE_MS = 400
-  // NOVO - evita refazer o fetch da lista de perguntas analíticas e
-  // reconstruir o <select> a cada render() (que corre a cada segundo via
-  // state:sync, enquanto o timer está a correr). A lista não muda a meio
-  // de uma partida, por isso só faz sentido voltar a pedir ao servidor
-  // quando a fase muda.
-  let quizItemsFetchedForPhase = null
-
-  // ---- Modo Apresentação ----
-  let phasesCache = {}
-  let criteriaCache = {}
-  let currentPhaseRecord = null
-
-  // NOVO - controlo de debounce para envio de notas de apresentação ao
-  // servidor, por critério. Ver notas mais abaixo em updatePresentationScore.
-  const presentationScoreDebounce = {}
-  const PRESENTATION_SCORE_DEBOUNCE_MS = 400
+  // NOVO — o sistema de avaliação de perguntas analíticas passou a usar
+  // sempre critérios (label + pontuação máxima por critério, por
+  // equipa), tal como o backend já espera via os eventos
+  // juror:setAnalyticCriteriaScore / juror:submitAnalyticEvaluation e o
+  // estado state.analyticEvaluation. O antigo sistema de "nota única"
+  // (juror:setScore / jurorEntries) foi removido deste painel: era o
+  // que causava "processa e volta a pedir nota" em perguntas que já
+  // tinham critérios cadastrados — o jurado enviava uma nota genérica
+  // que o backend nunca chegava a contar para o estado de critérios,
+  // por isso a pergunta nunca ficava marcada como avaliada e o painel
+  // continuava a mostrar o formulário.
+  //
+  // O painel já não deixa escolher livremente qualquer pergunta da
+  // fase (o antigo <select> permitia "pré-avaliar" perguntas que ainda
+  // nem tinham sido sorteadas) — em vez disso, segue sempre a pergunta
+  // analítica que está a decorrer neste momento
+  // (state.currentAnalyticItemId), que é também a única que o backend
+  // aceita em juror:submitAnalyticEvaluation (compara com
+  // state.analyticEvaluation.itemId). Isto elimina outra fonte
+  // possível do mesmo bug: enviar notas para uma pergunta diferente da
+  // que o servidor está de facto à espera.
+  let criteriaCache = {} // itemId -> array de critérios
+  let criteriaFetchedForItem = null
+  let lastRenderedItemId = null
 
   function showError(msg) {
     const el = document.getElementById('registerError')
@@ -310,8 +354,7 @@
     const code = document.getElementById('codeInput').value.trim().toUpperCase()
     document.getElementById('registerError').classList.add('hidden')
 
-    // Nome é opcional no servidor (o código identifica o jurado).
-    // Aceitamos avançar apenas com o código.
+    if (!name) { showError('Introduz o teu nome.'); return }
     if (!code) { showError('Introduz o código de jurado.'); return }
 
     socket.emit('juror:register', { code }, (res) => {
@@ -320,7 +363,7 @@
         return
       }
       jurorId = res.jurorId
-      jurorName = name || ''
+      jurorName = name
       document.getElementById('registerCard').classList.add('hidden')
       const welcome = document.getElementById('welcomeMsg')
       welcome.innerHTML = `Bem-vindo(a), <b>${jurorName}</b>`
@@ -335,6 +378,16 @@
     await resolveCurrentPhase()
     render()
   })
+
+  // ---- Modo Apresentação ----
+  let phasesCache = {}
+  let criteriaCachePresentation = {}
+  let currentPhaseRecord = null
+
+  const presentationScoreDebounce = {}
+  const PRESENTATION_SCORE_DEBOUNCE_MS = 400
+  const analyticScoreDebounce = {}
+  const ANALYTIC_SCORE_DEBOUNCE_MS = 400
 
   async function resolveCurrentPhase() {
     if (!state?.championship) {
@@ -353,12 +406,12 @@
     currentPhaseRecord = phases.find((p) => p.order === state.phase) ?? null
   }
 
-  async function loadCriteria(phaseId) {
-    if (criteriaCache[phaseId]) return criteriaCache[phaseId]
+  async function loadCriteriaPresentation(phaseId) {
+    if (criteriaCachePresentation[phaseId]) return criteriaCachePresentation[phaseId]
     try {
       const res = await fetch(`${backendUrl}/api/presentation/criteria?phaseId=${phaseId}`)
       const data = await res.json()
-      criteriaCache[phaseId] = data
+      criteriaCachePresentation[phaseId] = data
       return data
     } catch {
       return []
@@ -368,7 +421,7 @@
   function isPresentationPhase() {
     return currentPhaseRecord?.type === 'apresentacao' || currentPhaseRecord?.type === 'apresentacao_quiz'
   }
-  
+
   function isEditingPresentationScore() {
     const active = document.activeElement
     return !!active && active.classList?.contains('pres-score-input')
@@ -392,44 +445,27 @@
       const teamB = state.teamB?.name ?? '?'
       document.getElementById('matchTitle').textContent = `${teamA} vs ${teamB}`
       await fetchQuizItems(state.phase)
-      void renderQuizScores()
+      await renderAnalyticArea()
     } else {
       document.getElementById('quizCard').classList.remove('hidden')
       document.getElementById('phaseLabel').textContent = `Fase ${state.phase}`
       document.getElementById('matchTitle').textContent = 'A aguardar equipas...'
       document.getElementById('mcItemsArea').innerHTML = ''
-      document.getElementById('itemSelect').innerHTML = ''
-      document.getElementById('scoreArea').innerHTML = ''
-      document.getElementById('submitBtn').disabled = true
+      document.getElementById('analyticArea').innerHTML = ''
+      document.getElementById('submitBtn').classList.add('hidden')
     }
   }
+
+  // ==================== MODO BATALHA (Quiz) ====================
+
+  let quizItemsFetchedForPhase = null
 
   async function fetchQuizItems(phase) {
     if (quizItemsFetchedForPhase !== phase) {
       const res = await fetch(`${backendUrl}/api/evaluation-items?phase=${phase}`)
       evaluationItems = await res.json()
       multipleChoiceItems = evaluationItems.filter((i) => i.mode === 'multipla_escolha')
-      openItems = evaluationItems.filter((i) => i.mode !== 'multipla_escolha')
       quizItemsFetchedForPhase = phase
-
-      const select = document.getElementById('itemSelect')
-      select.innerHTML = openItems
-        .map((i) => `<option value="${i.id}">Analítica · ${i.maxPoints} pts</option>`)
-        .join('')
-      select.onchange = async (e) => {
-        selectedItemId = e.target.value
-        await renderQuizScores()
-      }
-    }
-
-    const stillValid = selectedItemId && openItems.some((i) => i.id === selectedItemId)
-    if (!stillValid) {
-      selectedItemId = openItems.length ? openItems[0].id : null
-    }
-
-    const select = document.getElementById('itemSelect')
-    if (select.value !== selectedItemId) {
-      select.value = selectedItemId ?? ''
     }
   }
 
@@ -438,77 +474,28 @@
     return item.jurorIds.includes(jurorId)
   }
 
-  // NOVO - mesmo princípio do isEditingPresentationScore: não reconstrói
-  // os campos de nota do Quiz enquanto o jurado tem o foco neles, para
-  // não perder o valor a meio de escrever quando chega um state:sync.
-  function isEditingQuizScore() {
-    const active = document.activeElement
-    return !!active && (active.id === 'scoreA' || active.id === 'scoreB')
-  }
-
-  async function loadAnalyticCriteria(itemId) {
-    if (analyticCriteriaCache[itemId]) return analyticCriteriaCache[itemId]
+  async function loadCriteriaAnalytic(itemId) {
+    if (criteriaCache[itemId]) return criteriaCache[itemId]
     try {
       const res = await fetch(`${backendUrl}/api/evaluation-criteria?itemId=${encodeURIComponent(itemId)}`)
-      const criteria = await res.json()
-      analyticCriteriaCache[itemId] = criteria
-      return criteria
+      const data = await res.json()
+      criteriaCache[itemId] = data
+      return data
     } catch {
       return []
     }
   }
 
-  async function renderQuizScores() {
-    if (isEditingQuizScore()) return
+  // NOVO — mesmo princípio do isEditingPresentationScore: não
+  // reconstrói os campos de nota enquanto o jurado tem o foco neles.
+  function isEditingAnalyticScore() {
+    const active = document.activeElement
+    return !!active && active.classList?.contains('analytic-score-input')
+  }
 
-    const item = openItems.find((i) => i.id === selectedItemId)
-    const criteriaArea = document.getElementById('analyticCriteriaArea')
-    const activeItem = openItems.find((i) => i.id === state?.currentAnalyticItemId)
-    const activeCriteria = activeItem ? await loadAnalyticCriteria(activeItem.id) : []
+  async function renderAnalyticArea() {
+    if (isEditingAnalyticScore()) return
 
-    if (activeItem && activeCriteria.length) {
-      document.getElementById('itemSelect').classList.add('hidden')
-      document.getElementById('itemSelectLabel').classList.add('hidden')
-      document.getElementById('scoreArea').innerHTML = ''
-      document.getElementById('submitBtn').classList.add('hidden')
-      if (!jurorsAllowedFor(activeItem)) {
-        criteriaArea.innerHTML = '<p class="waiting">Esta pergunta está reservada a outros jurados.</p>'
-        return
-      }
-      const submitted = state.analyticEvaluation?.jurorsSubmitted?.includes(jurorId)
-      criteriaArea.innerHTML = `
-        <p class="sub" style="margin-top:16px"><b>${activeItem.text}</b><br>Avalie cada critério para as duas equipas.</p>
-        ${activeCriteria.map((c) => `
-          <div class="score-row" style="display:block">
-            <span style="display:block;margin-bottom:8px">${c.label} (máx. ${c.maxPoints})</span>
-            <div style="display:flex;gap:8px">
-              <input class="analytic-score-input" data-criteria-id="${c.id}" data-team="A" data-max="${c.maxPoints}" type="number" min="0" max="${c.maxPoints}" placeholder="${state.teamA?.name ?? 'Equipa A'}" value="${state.analyticEvaluation.criteriaScores.find((e) => e.jurorId === jurorId && e.criteriaId === c.id && e.team === 'A')?.score ?? 0}" ${submitted ? 'disabled' : ''} />
-              <input class="analytic-score-input" data-criteria-id="${c.id}" data-team="B" data-max="${c.maxPoints}" type="number" min="0" max="${c.maxPoints}" placeholder="${state.teamB?.name ?? 'Equipa B'}" value="${state.analyticEvaluation.criteriaScores.find((e) => e.jurorId === jurorId && e.criteriaId === c.id && e.team === 'B')?.score ?? 0}" ${submitted ? 'disabled' : ''} />
-            </div>
-          </div>`).join('')}
-        <button id="analyticSubmitBtn" ${submitted ? 'disabled' : ''}>${submitted ? 'Avaliação enviada ✓' : 'Confirmar Avaliação'}</button>`
-      criteriaArea.querySelectorAll('.analytic-score-input').forEach((input) => {
-        input.oninput = (e) => {
-          const target = e.target
-          const criteriaId = target.dataset.criteriaId
-          const team = target.dataset.team
-          const max = Number(target.dataset.max)
-          const score = Math.max(0, Math.min(max, Number(target.value) || 0))
-          const key = `${criteriaId}:${team}`
-          clearTimeout(analyticScoreDebounce[key])
-          analyticScoreDebounce[key] = setTimeout(() => {
-            socket.emit('juror:setAnalyticCriteriaScore', { jurorId, criteriaId, team, score })
-          }, ANALYTIC_SCORE_DEBOUNCE_MS)
-        }
-      })
-      const submit = document.getElementById('analyticSubmitBtn')
-      if (submit) submit.onclick = () => socket.emit('juror:submitAnalyticEvaluation', { jurorId, itemId: activeItem.id })
-      return
-    }
-
-    document.getElementById('itemSelect').classList.remove('hidden')
-    document.getElementById('itemSelectLabel').classList.remove('hidden')
-    criteriaArea.innerHTML = ''
     const mcArea = document.getElementById('mcItemsArea')
     if (mcArea) {
       mcArea.innerHTML = multipleChoiceItems.length
@@ -520,33 +507,127 @@
         : ''
     }
 
-    if (!item || !state) {
-      document.getElementById('scoreArea').innerHTML = ''
+    const analyticArea = document.getElementById('analyticArea')
+    const submitBtn = document.getElementById('submitBtn')
+    const statusEl = document.getElementById('submitStatus')
+
+    // Só há algo para avaliar quando existe uma pergunta analítica
+    // ('aberta') atualmente sorteada. Perguntas de escolha múltipla são
+    // respondidas pelas equipas nos ecrãs delas, não pelos jurados.
+    const hasActiveAnalytic =
+      state?.currentItemSource === 'analytic' &&
+      state?.currentItemMode === 'aberta' &&
+      state?.currentAnalyticItemId
+
+    if (!hasActiveAnalytic) {
+      analyticArea.innerHTML = ''
+      submitBtn.classList.add('hidden')
+      statusEl.textContent = ''
+      lastRenderedItemId = null
       return
     }
+
+    const itemId = state.currentAnalyticItemId
+    const item = evaluationItems.find((i) => i.id === itemId)
 
     if (!jurorsAllowedFor(item)) {
-      document.getElementById('scoreArea').innerHTML =
+      analyticArea.innerHTML =
         '<p style="font-size:12px;color:#9ca3af;text-align:center;">Esta pergunta está reservada a outros jurados.</p>'
-      document.getElementById('submitBtn').disabled = true
+      submitBtn.classList.add('hidden')
+      statusEl.textContent = ''
       return
     }
 
-    const alreadySubmitted = state.jurorSubmittedItemIds?.includes(item.id)
-    const myEntry = state.jurorEntries?.find((e) => e.jurorId === jurorId && e.itemId === item.id)
+    if (criteriaFetchedForItem !== itemId) {
+      await loadCriteriaAnalytic(itemId)
+      criteriaFetchedForItem = itemId
+    }
+    const criteria = criteriaCache[itemId] ?? []
 
-    document.getElementById('scoreArea').innerHTML = `    <div class="score-row">      <span>${state.teamA?.name ?? 'Equipa A'}</span>      <input id="scoreA" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreA ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />    </div>    <div class="score-row">      <span>${state.teamB?.name ?? 'Equipa B'}</span>      <input id="scoreB" type="number" min="0" max="${item.maxPoints}" value="${myEntry?.scoreB ?? 0}" ${alreadySubmitted ? 'disabled' : ''} />    </div>  `
-    document.getElementById('submitBtn').disabled = alreadySubmitted
-    document.getElementById('submitStatus').textContent = alreadySubmitted ? 'Já confirmado ✓' : ''
+    if (!criteria.length) {
+      analyticArea.innerHTML =
+        '<p style="font-size:12px;color:#9ca3af;text-align:center;">Nenhum critério cadastrado para esta pergunta.</p>'
+      submitBtn.classList.add('hidden')
+      return
+    }
+
+    const analyticEval = state.analyticEvaluation
+    const alreadySubmitted =
+      analyticEval?.itemId === itemId && analyticEval.jurorsSubmitted.includes(jurorId)
+
+    if (lastRenderedItemId !== itemId) {
+      analyticArea.innerHTML = criteria
+        .map((c) => {
+          const entryA = analyticEval?.itemId === itemId
+            ? analyticEval.criteriaScores.find((e) => e.jurorId === jurorId && e.criteriaId === c.id && e.team === 'A')
+            : null
+          const entryB = analyticEval?.itemId === itemId
+            ? analyticEval.criteriaScores.find((e) => e.jurorId === jurorId && e.criteriaId === c.id && e.team === 'B')
+            : null
+          return `
+            <div class="criteria-block">
+              <div class="criteria-label">${c.label} <span class="criteria-max">(máx. ${c.maxPoints})</span></div>
+              <div class="criteria-teams">
+                <div class="criteria-team-input">
+                  <span>${state.teamA?.name ?? 'Equipa A'}</span>
+                  <input
+                    class="analytic-score-input"
+                    data-criteria-id="${c.id}"
+                    data-team="A"
+                    data-max="${c.maxPoints}"
+                    type="number" min="0" max="${c.maxPoints}"
+                    value="${entryA?.score ?? 0}"
+                    ${alreadySubmitted ? 'disabled' : ''}
+                  />
+                </div>
+                <div class="criteria-team-input">
+                  <span>${state.teamB?.name ?? 'Equipa B'}</span>
+                  <input
+                    class="analytic-score-input"
+                    data-criteria-id="${c.id}"
+                    data-team="B"
+                    data-max="${c.maxPoints}"
+                    type="number" min="0" max="${c.maxPoints}"
+                    value="${entryB?.score ?? 0}"
+                    ${alreadySubmitted ? 'disabled' : ''}
+                  />
+                </div>
+              </div>
+            </div>
+          `
+        })
+        .join('')
+
+      analyticArea.querySelectorAll('.analytic-score-input').forEach((input) => {
+        input.oninput = (e) => {
+          const criteriaId = e.target.dataset.criteriaId
+          const team = e.target.dataset.team
+          const max = Number(e.target.dataset.max)
+          let score = Number(e.target.value)
+          if (Number.isNaN(score)) score = 0
+          score = Math.max(0, Math.min(max, score))
+
+          const key = `${jurorId}::${criteriaId}::${team}`
+          if (analyticScoreDebounce[key]) clearTimeout(analyticScoreDebounce[key])
+          analyticScoreDebounce[key] = setTimeout(() => {
+            socket.emit('juror:setAnalyticCriteriaScore', { jurorId, criteriaId, team, score })
+            delete analyticScoreDebounce[key]
+          }, ANALYTIC_SCORE_DEBOUNCE_MS)
+        }
+      })
+
+      lastRenderedItemId = itemId
+    }
+
+    submitBtn.classList.remove('hidden')
+    submitBtn.disabled = alreadySubmitted
+    statusEl.textContent = alreadySubmitted ? 'Avaliação enviada ✓' : ''
   }
 
   document.getElementById('submitBtn').onclick = () => {
-    const item = openItems.find((i) => i.id === selectedItemId)
-    if (!item || !jurorId) return
-    const scoreA = Number(document.getElementById('scoreA').value)
-    const scoreB = Number(document.getElementById('scoreB').value)
-    socket.emit('juror:setScore', { jurorId, itemId: item.id, scoreA, scoreB })
-    document.getElementById('submitStatus').textContent = 'Pontuação enviada ✓'
+    if (!jurorId || !state?.currentAnalyticItemId) return
+    socket.emit('juror:submitAnalyticEvaluation', { jurorId, itemId: state.currentAnalyticItemId })
+    document.getElementById('submitStatus').textContent = 'Avaliação enviada ✓'
   }
 
   // ==================== MODO APRESENTAÇÃO DE PROJETOS ====================
@@ -555,7 +636,7 @@
     idle: 'A aguardar o Moderador',
     countdown: 'A preparar a apresentação...',
     presenting: 'Em apresentação',
-    concluded: 'Apresentação concluída - a avaliar'
+    concluded: 'Apresentação concluída — a avaliar'
   }
 
   async function renderPresentation() {
@@ -590,7 +671,7 @@
     }
 
     if (!currentPhaseRecord) return
-    const criteria = await loadCriteria(currentPhaseRecord.id)
+    const criteria = await loadCriteriaPresentation(currentPhaseRecord.id)
     if (!criteria.length) {
       noCriteriaEl.classList.remove('hidden')
       return
@@ -598,8 +679,6 @@
 
     const alreadySubmitted = flow.jurorsSubmitted.includes(jurorId)
 
-    // CORRIGIDO - c.id é um cuid (string), NÃO um número. O
-    // data-criteria-id guarda esse valor tal como está.
     scoreAreaEl.innerHTML = criteria
       .map((c) => {
         const entry = flow.criteriaScores.find((e) => e.jurorId === jurorId && e.criteriaId === c.id)
@@ -619,22 +698,9 @@
       })
       .join('')
 
-    // CORRIGIDO - bug principal estava aqui: `Number(e.target.dataset.criteriaId)`
-    // convertia o cuid (ex: "clxyz123abc") para NaN, porque criteriaId
-    // NUNCA foi um número - é sempre uma string cuid gerada pelo Prisma
-    // (ver schema.prisma: PresentationCriteria.id String @default(cuid())).
-    // Isso fazia o servidor guardar a nota sob criteriaId: NaN, que depois
-    // nunca correspondia ao c.id real (string) ao tentar mostrar o valor
-    // de volta - por isso o campo aparecia sempre a "voltar a zero", mesmo
-    // a nota tendo sido gravada corretamente no servidor sob a chave errada.
-    //
-    // Também trocado de 'onchange' para 'oninput' com debounce, para dar
-    // feedback mais rápido e consistente com o resto da app (o valor
-    // digitado fica imediatamente visível, e só é enviado ao servidor
-    // depois de uma pequena pausa sem nova tecla).
     scoreAreaEl.querySelectorAll('.pres-score-input').forEach((input) => {
       input.oninput = (e) => {
-        const criteriaId = e.target.dataset.criteriaId // string - NUNCA usar Number() aqui
+        const criteriaId = e.target.dataset.criteriaId
         const max = Number(e.target.dataset.max)
         let score = Number(e.target.value)
         if (Number.isNaN(score)) score = 0
