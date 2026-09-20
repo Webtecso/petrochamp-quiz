@@ -36,7 +36,7 @@ function toggleShowOnScreen(): void {
 <template>
   <div class="flex-1 px-10 py-8">
     <div class="flex items-center justify-between max-w-2xl mx-auto mb-6">
-      <div class="flex items-center gap-4"><button class="text-xs font-semibold px-3 py-2 rounded-lg bg-white/10 text-petro-primary hover:bg-white/20 transition" @click="router.push('/moderador/jogo')">&larr; Voltar ao Jogo</button><h1 class="text-2xl font-bold text-petro-primary">Ranking da Fase {{ store.phase }}</h1></div>
+      <div class="flex items-center gap-4"><button class="text-xs font-semibold px-3 py-2 rounded-lg bg-white/10 text-petro-primary hover:bg-white/20 transition" @click="router.push('/moderador/jogo')">&larr; Voltar ao Jogo</button><h1 class="text-2xl font-bold text-white" style="color: white;">Ranking da Fase {{ store.phase }}</h1></div>
       <button
         class="text-xs font-semibold px-4 py-2 rounded-lg transition"
         :class="store.phaseRankingReveal?.visible ? 'bg-petro-primary text-white' : 'bg-petro-primary/10 text-petro-primary'"

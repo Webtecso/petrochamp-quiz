@@ -11,6 +11,7 @@ release/
 *.exe
 *.AppImage
 *.db-journal
-*.db
+*.db    
+*.sql
 petrochamp-admin-cloud/
 petrochamp-backend/prisma/petrochamp.db

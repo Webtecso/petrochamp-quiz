@@ -43,6 +43,58 @@ const stageHeight = ref(0)
 let stageResizeObserver: ResizeObserver | null = null
 let resizeRaf = 0
 
+// --- Auto-fit da pergunta ---
+const questionWrapperRef = ref<HTMLElement | null>(null) // o div que tem overflow-y-auto
+const questionTextRef = ref<HTMLElement | null>(null)     // o <h1>
+
+const fittedQuestionFontSize = ref(64) 
+
+const MAX_QUESTION_FONT = 72 
+const MIN_QUESTION_FONT = 14 
+
+function fitQuestionText(): void {
+  const wrapper = questionWrapperRef.value
+  const textEl = questionTextRef.value
+  if (!wrapper || !textEl) return
+
+  let lo = MIN_QUESTION_FONT
+  let hi = MAX_QUESTION_FONT
+
+  const fitsAt = (size: number): boolean => {
+    textEl.style.fontSize = `${size}px`
+
+    return textEl.scrollHeight <= wrapper.clientHeight + 1 && textEl.scrollWidth <= wrapper.clientWidth + 1
+  }
+
+  // Se até no tamanho máximo já cabe, usa o máximo direto
+  if (fitsAt(hi)) {
+    fittedQuestionFontSize.value = hi
+    return
+  }
+
+  // Busca binária pelo maior tamanho que ainda cabe
+  while (hi - lo > 0.5) {
+    const mid = (lo + hi) / 2
+    if (fitsAt(mid)) lo = mid
+    else hi = mid
+  }
+
+  fittedQuestionFontSize.value = Math.floor(lo)
+  textEl.style.fontSize = `${fittedQuestionFontSize.value}px`
+}
+
+let questionFitRaf = 0
+function scheduleQuestionFit(): void {
+  if (questionFitRaf) cancelAnimationFrame(questionFitRaf)
+  questionFitRaf = requestAnimationFrame(() => {
+    // roda 2x seguidas: a 1ª pode medir um layout ainda "assentando"
+    fitQuestionText()
+    requestAnimationFrame(fitQuestionText)
+  })
+}
+
+let questionResizeObserver: ResizeObserver | null = null
+
 function recomputeStageSize(): void {
   const el = stageOuterRef.value
   if (!el) return
@@ -77,6 +129,10 @@ onMounted(async () => {
     await loadDocuments()
     await suspensePhrases.fetchPhrases()
     if (store.championship) await liveBracketStore.fetchBracket(store.championship)
+    if (questionWrapperRef.value) {
+      questionResizeObserver = new ResizeObserver(() => scheduleQuestionFit())
+      questionResizeObserver.observe(questionWrapperRef.value)
+    }
   } catch (err) {
     console.error('Erro ao carregar dados na Projeção:', err)
   }
@@ -94,6 +150,8 @@ onUnmounted(() => {
   stageResizeObserver?.disconnect()
   window.removeEventListener('resize', scheduleRecompute)
   if (resizeRaf) cancelAnimationFrame(resizeRaf)
+  questionResizeObserver?.disconnect()
+  if (questionFitRaf) cancelAnimationFrame(questionFitRaf)
 })
 
 interface DocumentInfo {
@@ -329,6 +387,12 @@ watch(
     await quizContent.fetchTiebreakQuestions(newVal)
     await phasesStore.fetchPhases(newVal)
   }
+)
+
+watch(
+  [() => currentQuestion.value?.text, () => questionImage.value, stageWidth, stageHeight],
+  () => nextTick(() => scheduleQuestionFit()),
+  { immediate: true }
 )
 
 let repescagemPollHandle: ReturnType<typeof setInterval> | null = null
@@ -1011,12 +1075,15 @@ const roundJustEnded = computed(() => {
                 <span>❓</span> {{ questionImage ? 'ENUNCIADO' : 'QUESTÃO POR RESPONDER' }}
               </div>
 
-              <!-- Scroll só vertical; texto parte a linha -->
-              <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
+              <div
+                ref="questionWrapperRef"
+                class="flex-1 min-h-0 overflow-hidden overscroll-contain pr-1"
+              >
                 <h1
-                  class="font-extrabold text-slate-800 leading-snug break-words [overflow-wrap:anywhere] whitespace-normal transition-all duration-300"
+                  ref="questionTextRef"
+                  class="font-extrabold text-slate-800 leading-snug break-words [overflow-wrap:anywhere] whitespace-normal"
                   :class="questionImage ? 'text-left' : 'text-center'"
-                  :style="{ fontSize: questionFontSizeStyle }"
+                  :style="{ fontSize: fittedQuestionFontSize + 'px' }"
                 >
                   {{ currentQuestion?.text }}
                 </h1>
@@ -1042,7 +1109,6 @@ const roundJustEnded = computed(() => {
               </div>
             </div>
 
-            <!-- Imagem: cabe toda; mais baixa se o texto for muito longo -->
             <div
               v-if="questionImage"
               class="flex justify-center items-center overflow-hidden relative shrink-0"
