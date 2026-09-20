@@ -359,6 +359,9 @@ export const useCampeonatoStore = defineStore('campeonato', {
     showPartners() {
       getSocket().emit('moderator:showPartners')
     },
+    skipInstitutionalSequence() {
+      getSocket().emit('moderator:skipInstitutionalSequence')
+    },
     startNextPhase(force = false): Promise<{ success: boolean; error?: string } | void> {
       return new Promise((resolve) => {
         getSocket().emit('moderator:startNextPhase', { force }, (res?: { success?: boolean; error?: string }) => {

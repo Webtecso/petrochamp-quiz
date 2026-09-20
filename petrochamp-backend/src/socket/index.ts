@@ -18,6 +18,15 @@ import {
 let timerHandle: ReturnType<typeof setInterval> | null = null
 let countdownHandle: ReturnType<typeof setInterval> | null = null
 let partnersTimerHandle: ReturnType<typeof setTimeout> | null = null
+let partnersNextStep: (() => void | Promise<void>) | null = null
+
+function scheduleInstitutionalStep(fn: () => void | Promise<void>, ms: number): void {
+  partnersNextStep = fn
+  partnersTimerHandle = setTimeout(() => {
+    partnersNextStep = null
+    fn()
+  }, ms)
+}
 let moderatorSocketId: string | null = null
 let moderatorRegisteredEver = false
 
@@ -763,6 +772,15 @@ export function registerSocketHandlers(io: Server): void {
     }, 1000)
   }
 
+  // NOVO - grace period antes de expulsar um jurado que desligou.
+  // Sem isto, qualquer soluco de rede (Wi-Fi instavel em eventos ao vivo)
+  // fazia o backend apagar o jurado de liveState.jurors/jurorEntries no
+  // 'disconnect' imediato, mesmo que o socket.io do cliente reconectasse
+  // sozinho 1-2 segundos depois com um socket.id novo - o jurado tinha de
+  // fazer login outra vez e uma nota a meio de ser enviada perdia-se.
+  const jurorDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const JUROR_DISCONNECT_GRACE_MS = 25000
+
   io.on('connection', (socket: Socket) => {
     console.log('Cliente ligado:', socket.id)
     socket.emit('state:sync', liveState)
@@ -1417,7 +1435,7 @@ export function registerSocketHandlers(io: Server): void {
 
       if (partnersTimerHandle) clearTimeout(partnersTimerHandle)
 
-      partnersTimerHandle = setTimeout(() => {
+      scheduleInstitutionalStep(() => {
         if (liveState.phaseFlow.stage !== 'partners') return
 
         // Fluxo especial:
@@ -1433,13 +1451,13 @@ export function registerSocketHandlers(io: Server): void {
         liveState.phaseFlow = { stage: 'webtec', suspensePhrase: null }
         broadcast()
 
-        partnersTimerHandle = setTimeout(() => {
+        scheduleInstitutionalStep(() => {
           if (liveState.phaseFlow.stage !== 'webtec') return
 
           liveState.phaseFlow = { stage: 'organizer', suspensePhrase: null }
           broadcast()
 
-          partnersTimerHandle = setTimeout(async () => {
+          scheduleInstitutionalStep(async () => {
             if (liveState.phaseFlow.stage !== 'organizer') return
 
             if (isLastPhase) {
@@ -1457,6 +1475,15 @@ export function registerSocketHandlers(io: Server): void {
           }, seconds * 1000)
         }, seconds * 1000)
       }, seconds * 1000)
+    })
+
+    socket.on('moderator:skipInstitutionalSequence', () => {
+      if (!partnersTimerHandle || !partnersNextStep) return
+      clearTimeout(partnersTimerHandle)
+      partnersTimerHandle = null
+      const step = partnersNextStep
+      partnersNextStep = null
+      step()
     })
 
     socket.on('moderator:startNextPhase', async (payload?: { force?: boolean }, callback?: (res: { success: boolean; error?: string }) => void) => {
@@ -1985,8 +2012,15 @@ export function registerSocketHandlers(io: Server): void {
     socket.on(
       'juror:setAnalyticCriteriaScore',
       (payload: { jurorId: string; criteriaId: string; team: 'A' | 'B'; score: number }) => {
-        if (liveState.currentItemSource !== 'analytic') return
-        if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== liveState.currentAnalyticItemId) return
+        console.log("[DEBUG setAnalyticCriteriaScore] payload=", payload, "currentItemSource=", liveState.currentItemSource, "currentAnalyticItemId=", liveState.currentAnalyticItemId, "analyticEvaluation.itemId=", liveState.analyticEvaluation?.itemId)
+        if (liveState.currentItemSource !== 'analytic') {
+          console.log("[DEBUG setAnalyticCriteriaScore] ABORTOU: currentItemSource nao e analytic")
+          return
+        }
+        if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== liveState.currentAnalyticItemId) {
+          console.log("[DEBUG setAnalyticCriteriaScore] ABORTOU: analyticEvaluation.itemId nao bate com currentAnalyticItemId")
+          return
+        }
         if (!payload.criteriaId) return
         const existing = liveState.analyticEvaluation.criteriaScores.find(
           (e) => e.jurorId === payload.jurorId && e.criteriaId === payload.criteriaId && e.team === payload.team
@@ -2001,9 +2035,19 @@ export function registerSocketHandlers(io: Server): void {
     )
 
     socket.on('juror:submitAnalyticEvaluation', async (payload: { jurorId: string; itemId: string }) => {
-      if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== payload.itemId) return
-      if (liveState.analyticEvaluation.jurorsSubmitted.includes(payload.jurorId)) return
-      if (!liveState.jurors.some((j) => j.id === payload.jurorId)) return
+      console.log("[DEBUG submitAnalyticEvaluation] payload=", payload, "analyticEvaluation.itemId=", liveState.analyticEvaluation?.itemId, "jurorsSubmitted=", liveState.analyticEvaluation?.jurorsSubmitted, "jurorsConectados=", liveState.jurors.map((j) => j.id))
+      if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== payload.itemId) {
+        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: itemId nao bate certo")
+        return
+      }
+      if (liveState.analyticEvaluation.jurorsSubmitted.includes(payload.jurorId)) {
+        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: jurado ja estava na lista de submetidos")
+        return
+      }
+      if (!liveState.jurors.some((j) => j.id === payload.jurorId)) {
+        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: jurado nao esta na lista de jurados ligados")
+        return
+      }
 
       liveState.analyticEvaluation.jurorsSubmitted.push(payload.jurorId)
       broadcast()
@@ -2013,8 +2057,16 @@ export function registerSocketHandlers(io: Server): void {
       const target =
         liveState.expectedJurorCount > 0 ? liveState.expectedJurorCount : connectedCount
 
-      if (target <= 0) return
-      if (liveState.analyticEvaluation.jurorsSubmitted.length < target) return
+      console.log("[DEBUG submitAnalyticEvaluation] target=", target, "connectedCount=", connectedCount, "expectedJurorCount=", liveState.expectedJurorCount, "jurorsSubmitted.length=", liveState.analyticEvaluation.jurorsSubmitted.length)
+      if (target <= 0) {
+        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: target <= 0")
+        return
+      }
+      if (liveState.analyticEvaluation.jurorsSubmitted.length < target) {
+        console.log("[DEBUG submitAnalyticEvaluation] A AGUARDAR mais jurados (nao atingiu target ainda)")
+        return
+      }
+      console.log("[DEBUG submitAnalyticEvaluation] TARGET ATINGIDO, vai processar e avancar")
 
       // Persistir cada critério por jurado e equipa
       const valid = liveState.analyticEvaluation.criteriaScores
@@ -2166,7 +2218,19 @@ export function registerSocketHandlers(io: Server): void {
           return
         }
 
-        liveState.jurors.push({ id: juror.id, name: juror.name })
+        // CORRIGIDO - reconexao (mesmo jurorId a re-registar-se) ja
+        // nao duplica a entrada em liveState.jurors nem apaga as notas
+        // que ja tinha submetido; so re-associa o socket.id novo.
+        const pendingRemoval = jurorDisconnectTimers.get(juror.id)
+        if (pendingRemoval) {
+          clearTimeout(pendingRemoval)
+          jurorDisconnectTimers.delete(juror.id)
+          console.log('[juror:register] reconexao dentro do grace period, notas preservadas:', juror.id)
+        }
+        const alreadyPresent = liveState.jurors.some((j) => j.id === juror.id)
+        if (!alreadyPresent) {
+          liveState.jurors.push({ id: juror.id, name: juror.name })
+        }
         socket.data.jurorId = juror.id
         await refreshExpectedJurorCount()
         broadcast()
@@ -2311,10 +2375,24 @@ export function registerSocketHandlers(io: Server): void {
       }
       const jurorId = socket.data?.jurorId as string | undefined
       if (jurorId) {
-        liveState.jurors = liveState.jurors.filter((j) => j.id !== jurorId)
-        liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== jurorId)
-        await checkAllJurorsSubmitted(broadcast)
-        broadcast()
+        // CORRIGIDO - antes removia o jurado do liveState de imediato.
+        // Agora da-lhe JUROR_DISCONNECT_GRACE_MS para reconectar (o
+        // socket.io do cliente ja tenta sozinho); so se o tempo passar
+        // sem um novo 'juror:register' com o mesmo jurorId e que o
+        // expulsamos de facto.
+        const existingTimer = jurorDisconnectTimers.get(jurorId)
+        if (existingTimer) clearTimeout(existingTimer)
+        jurorDisconnectTimers.set(
+          jurorId,
+          setTimeout(async () => {
+            jurorDisconnectTimers.delete(jurorId)
+            liveState.jurors = liveState.jurors.filter((j) => j.id !== jurorId)
+            liveState.jurorEntries = liveState.jurorEntries.filter((e) => e.jurorId !== jurorId)
+            await checkAllJurorsSubmitted(broadcast)
+            broadcast()
+            console.log('[disconnect] grace period esgotado, jurado removido:', jurorId)
+          }, JUROR_DISCONNECT_GRACE_MS)
+        )
       }
       const localJurorIds: string[] = socket.data?.locallyRegisteredJurorIds || []
       if (localJurorIds.length) {

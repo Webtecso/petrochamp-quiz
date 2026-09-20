@@ -1,4 +1,5 @@
-import { app, shell, BrowserWindow, screen, session } from 'electron'
+import { app, shell, BrowserWindow, screen, session, dialog } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { join } from 'path'
 // import { pathToFileURL } from 'url'
 import { existsSync, copyFileSync, mkdirSync, appendFileSync } from 'fs'
@@ -57,7 +58,53 @@ if (!gotSingleInstanceLock) {
     return dbPath
   }
 
-  function startLocalBackend(): void {
+  function runPrismaMigrations(backendPath: string, dbPath: string): Promise<void> {
+    return new Promise((resolve) => {
+      const prismaCliEntry = join(backendPath, "node_modules", "prisma", "build", "index.js")
+
+      if (!existsSync(prismaCliEntry)) {
+        logToFile("Aviso: CLI do Prisma nao encontrado em " + prismaCliEntry + ". A saltar migrate deploy.")
+        resolve()
+        return
+      }
+
+      logToFile("A aplicar migracoes pendentes a: " + dbPath)
+
+      const migrateProcess = spawn(process.execPath, [prismaCliEntry, "migrate", "deploy"], {
+        cwd: backendPath,
+        shell: false,
+        windowsHide: true,
+        stdio: "pipe",
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: "1",
+          DATABASE_URL: "file:" + dbPath.replace(/\\/g, "/")
+        }
+      })
+
+      migrateProcess.stdout?.on("data", (data: Buffer) => {
+        const text = data.toString("utf8").trim()
+        if (text) logToFile("[Migrate] " + text)
+      })
+
+      migrateProcess.stderr?.on("data", (data: Buffer) => {
+        const text = data.toString("utf8").trim()
+        if (text) logToFile("[Migrate Error] " + text)
+      })
+
+      migrateProcess.on("error", (err) => {
+        logToFile("Falha ao arrancar o processo de migracao: " + err)
+        resolve()
+      })
+
+      migrateProcess.on("exit", (code) => {
+        logToFile("Migrate deploy terminou, codigo: " + code)
+        resolve()
+      })
+    })
+  }
+
+  async function startLocalBackend(): Promise<void> {
     if (backendProcess) return
 
     logToFile(`startLocalBackend chamado. is.dev=${is.dev}`)
@@ -76,6 +123,8 @@ if (!gotSingleInstanceLock) {
       const backendPath = join(process.resourcesPath, 'petrochamp-backend')
       const entryPoint = join(backendPath, 'dist', 'index.js')
       const dbPath = ensureProdDatabase()
+
+      await runPrismaMigrations(backendPath, dbPath)
 
       logToFile(
         `A arrancar backend local (produção). backendPath=${backendPath} entryPoint=${entryPoint} entryPointExiste=${existsSync(entryPoint)} cwdExiste=${existsSync(backendPath)} dbPath=${dbPath} execPath=${process.execPath}`
@@ -276,6 +325,68 @@ if (!gotSingleInstanceLock) {
     }
   }
 
+  function initAutoUpdater(): void {
+    if (is.dev) {
+      logToFile('[auto-update] Saltado - ambiente de desenvolvimento.')
+      return
+    }
+
+    autoUpdater.autoDownload = false
+    autoUpdater.autoInstallOnAppQuit = false
+
+    autoUpdater.on('update-available', (info) => {
+      logToFile('[auto-update] Nova versao disponivel: ' + info.version)
+      const win = BrowserWindow.getAllWindows()[0]
+      dialog
+        .showMessageBox(win ?? undefined, {
+          type: 'info',
+          buttons: ['Atualizar agora', 'Mais tarde'],
+          defaultId: 0,
+          cancelId: 1,
+          title: 'Nova versão disponível',
+          message: 'Uma nova versão (' + info.version + ') está disponível.',
+          detail:
+            'Os dados do campeonato, jurados e notas não são afetados pela atualização. Queres transferir e instalar agora?'
+        })
+        .then((result) => {
+          if (result.response === 0) {
+            logToFile('[auto-update] Utilizador aceitou - a transferir.')
+            autoUpdater.downloadUpdate()
+          } else {
+            logToFile('[auto-update] Utilizador recusou - pergunta-se de novo na proxima abertura.')
+          }
+        })
+    })
+
+    autoUpdater.on('update-downloaded', (info) => {
+      logToFile('[auto-update] Download concluido: ' + info.version)
+      const win = BrowserWindow.getAllWindows()[0]
+      dialog
+        .showMessageBox(win ?? undefined, {
+          type: 'info',
+          buttons: ['Reiniciar e instalar', 'Mais tarde'],
+          defaultId: 0,
+          cancelId: 1,
+          title: 'Atualização pronta',
+          message: 'A atualização foi transferida.',
+          detail: 'A app vai fechar e reabrir com a nova versão. Os teus dados mantêm-se.'
+        })
+        .then((result) => {
+          if (result.response === 0) {
+            autoUpdater.quitAndInstall()
+          }
+        })
+    })
+
+    autoUpdater.on('error', (err) => {
+      logToFile('[auto-update] Erro ao verificar/transferir atualizacao: ' + err)
+    })
+
+    autoUpdater.checkForUpdates().catch((err) => {
+      logToFile('[auto-update] Falha ao verificar atualizacoes: ' + err)
+    })
+  }
+
   app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.petrochamp.quiz')
 
@@ -288,7 +399,7 @@ if (!gotSingleInstanceLock) {
     })
 
     logToFile('=== App a arrancar ===')
-    startLocalBackend()
+    await startLocalBackend()
     try {
       await waitForBackend('http://localhost:4000/health', 40000)
       console.log('Backend local pronto.')
@@ -302,6 +413,7 @@ if (!gotSingleInstanceLock) {
 
     createModeratorWindow()
     createProjectionWindow()
+    initAutoUpdater()
 
     app.on('activate', function () {
       if (BrowserWindow.getAllWindows().length === 0) {

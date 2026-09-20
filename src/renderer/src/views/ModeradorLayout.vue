@@ -92,6 +92,20 @@ onMounted(() => {
           Jurados
         </button>
         <button
+          v-if="battleInProgress"
+          class="px-4 py-1 rounded-lg text-sm bg-emerald-500/80 text-white hover:bg-emerald-500 transition font-semibold"
+          @click="router.push('/moderador/jogo')"
+        >
+          🎮 Voltar ao Jogo
+        </button>
+        <button
+          v-if="['partners', 'webtec', 'organizer'].includes(store.phaseFlow.stage)"
+          class="px-4 py-1 rounded-lg text-sm bg-amber-400 text-petro-dark hover:bg-amber-300 transition font-semibold"
+          @click="store.skipInstitutionalSequence()"
+        >
+          ⏭ Saltar Sequência
+        </button>
+        <button
           class="px-3 py-1 rounded-lg text-xs bg-amber-400 text-petro-dark hover:bg-petro-gold/30 transition font-semibold"
           @click="showPortalModal = true"
         >

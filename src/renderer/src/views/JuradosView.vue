@@ -26,7 +26,10 @@ onMounted(async () => {
   await phasesStore.fetchPhases(store.championship ?? undefined)
   await settings.fetchSettings()
   jurados.listenToServer()
+  await jurados.restoreSession()
+  jurados.listenForReconnect()
   startConfigSync()
+  await loadAvailableJurors()
 })
 
 watch(
@@ -71,6 +74,35 @@ async function addJuror(): Promise<void> {
   registerError.value = ''
   newJurorName.value = ''
   newJurorCode.value = ''
+}
+
+const availableLocalJurors = ref<{ id: string; name: string }[]>([])
+const selectedLocalJurorId = ref('')
+const localRegisterError = ref('')
+
+async function loadAvailableJurors(): Promise<void> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/api/jurors`)
+    if (res.ok) {
+      availableLocalJurors.value = await res.json()
+    }
+  } catch {
+    // sem internet/backend indisponível - lista fica vazia, sem crash
+  }
+}
+
+async function addJurorLocally(): Promise<void> {
+  if (!selectedLocalJurorId.value) {
+    localRegisterError.value = 'Escolhe um jurado da lista.'
+    return
+  }
+  const result = await jurados.registerJurorLocally(selectedLocalJurorId.value)
+  if (!result.success) {
+    localRegisterError.value = result.error || 'Falha ao registar jurado localmente.'
+    return
+  }
+  localRegisterError.value = ''
+  selectedLocalJurorId.value = ''
 }
 
 // ==================== Notas Iniciais ====================
@@ -299,6 +331,18 @@ const presentationStageLabel = computed(() => {
         Registar
       </button>
       <p v-if="registerError" class="text-xs text-red-400">{{ registerError }}</p>
+
+      <div class="border-t border-white/10 pt-3 mt-1 flex flex-col gap-2">
+        <p class="text-xs text-gray-400">Ou seleciona um jurado já cadastrado (avaliação local, sem portal):</p>
+        <select v-model="selectedLocalJurorId" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-transparent text-red">
+          <option value="" disabled>Escolhe um jurado</option>
+          <option v-for="j in availableLocalJurors" :key="j.id" :value="j.id">{{ j.name }}</option>
+        </select>
+        <button class="bg-petro-dark text-white rounded-lg px-4 py-2 text-sm font-semibold" @click="addJurorLocally">
+          Registar Localmente
+        </button>
+        <p v-if="localRegisterError" class="text-xs text-red-400">{{ localRegisterError }}</p>
+      </div>
     </div>
 
     <div

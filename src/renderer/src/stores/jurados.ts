@@ -1,6 +1,30 @@
 import { defineStore } from 'pinia'
 import { getSocket } from '../services/socket'
 
+const JUROR_SESSION_STORAGE_KEY = 'petrochamp:jurorSession'
+
+interface StoredJurorSession {
+  code: string
+  jurorId: string
+}
+
+function loadStoredJurorSession(): StoredJurorSession | null {
+  try {
+    const raw = localStorage.getItem(JUROR_SESSION_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as StoredJurorSession
+  } catch {
+    return null
+  }
+}
+
+function saveStoredJurorSession(session: StoredJurorSession): void {
+  try {
+    localStorage.setItem(JUROR_SESSION_STORAGE_KEY, JSON.stringify(session))
+  } catch {
+  }
+}
+
 export interface Juror {
   id: string
   name: string
@@ -52,6 +76,27 @@ export const useJuradosStore = defineStore('jurados', {
     pendingInitialScores: {} as Record<string, { scoreA?: number; scoreB?: number }>
   }),
   actions: {
+    async restoreSession(): Promise<void> {
+      const stored = loadStoredJurorSession()
+      if (!stored) return
+      const result = await this.registerJuror(stored.code)
+      if (!result.success) {
+        try {
+          localStorage.removeItem(JUROR_SESSION_STORAGE_KEY)
+        } catch {
+        }
+      }
+    },
+    listenForReconnect() {
+      getSocket().on('connect', () => {
+        if (this.myJurorId) {
+          const stored = loadStoredJurorSession()
+          if (stored && stored.jurorId === this.myJurorId) {
+            this.registerJuror(stored.code)
+          }
+        }
+      })
+    },
     listenToServer() {
       getSocket().on('state:sync', (incoming: JurorSyncPayload) => {
         if (incoming.jurors) this.jurors = incoming.jurors
@@ -82,9 +127,19 @@ export const useJuradosStore = defineStore('jurados', {
         getSocket().emit('juror:register', { code }, (res: { success: boolean; jurorId?: string; error?: string }) => {
           if (res.success && res.jurorId) {
             this.myJurorId = res.jurorId
+            saveStoredJurorSession({ code, jurorId: res.jurorId })
           }
           resolve(res)
         })
+      })
+    },
+    async registerJurorLocally(jurorId: string): Promise<{ success: boolean; error?: string }> {
+      return new Promise((resolve) => {
+        getSocket().emit(
+          'moderator:registerJurorLocally',
+          { jurorId },
+          (res: { success: boolean; error?: string }) => resolve(res)
+        )
       })
     },
     removeJuror(id: string) {
