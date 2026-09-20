@@ -50,7 +50,8 @@ const questionTextRef = ref<HTMLElement | null>(null)     // o <h1>
 const fittedQuestionFontSize = ref(64) 
 
 const MAX_QUESTION_FONT = 72 
-const MIN_QUESTION_FONT = 14 
+const MIN_QUESTION_FONT = 14
+const ABSOLUTE_MIN_QUESTION_FONT = 8
 
 function fitQuestionText(): void {
   const wrapper = questionWrapperRef.value
@@ -69,6 +70,26 @@ function fitQuestionText(): void {
   // Se até no tamanho máximo já cabe, usa o máximo direto
   if (fitsAt(hi)) {
     fittedQuestionFontSize.value = hi
+    return
+  }
+
+  // Caso extremo: nem o tamanho mínimo "normal" cabe - continua encolhendo
+  // até um piso absoluto, em vez de assumir que MIN_QUESTION_FONT sempre cabe.
+  if (!fitsAt(lo)) {
+    let extremeLo = ABSOLUTE_MIN_QUESTION_FONT
+    let extremeHi = lo
+    if (!fitsAt(extremeLo)) {
+      fittedQuestionFontSize.value = ABSOLUTE_MIN_QUESTION_FONT
+      textEl.style.fontSize = `${ABSOLUTE_MIN_QUESTION_FONT}px`
+      return
+    }
+    while (extremeHi - extremeLo > 0.5) {
+      const mid = (extremeLo + extremeHi) / 2
+      if (fitsAt(mid)) extremeLo = mid
+      else extremeHi = mid
+    }
+    fittedQuestionFontSize.value = Math.floor(extremeLo)
+    textEl.style.fontSize = `${fittedQuestionFontSize.value}px`
     return
   }
 
@@ -389,12 +410,6 @@ watch(
   }
 )
 
-watch(
-  [() => currentQuestion.value?.text, () => questionImage.value, stageWidth, stageHeight],
-  () => nextTick(() => scheduleQuestionFit()),
-  { immediate: true }
-)
-
 let repescagemPollHandle: ReturnType<typeof setInterval> | null = null
 watch(
   () => store.repescagemReveal.stage,
@@ -491,6 +506,12 @@ const teamBLogo = computed(() => store.teamB?.logoUrl ?? null)
 
 const questionImage = computed(() => (currentQuestion.value as { imageUrl?: string | null } | undefined)?.imageUrl ?? null)
 
+watch(
+  [() => currentQuestion.value?.text, () => questionImage.value, stageWidth, stageHeight],
+  () => nextTick(() => scheduleQuestionFit()),
+  { immediate: true }
+)
+
 const questionTextLength = computed(() => currentQuestion.value?.text?.length ?? 0)
 
 const questionCardWidthClass = computed(() => {
@@ -499,24 +520,6 @@ const questionCardWidthClass = computed(() => {
   if (len > 400) return 'max-w-[92vw]'
   if (len > 250) return 'max-w-7xl'
   return 'max-w-6xl'
-})
-
-const questionFontSizeStyle = computed(() => {
-  const len = questionTextLength.value
-  const hasImage = !!questionImage.value
-  if (len > 900) {
-    return hasImage ? 'clamp(0.85rem, 1.25vw, 1.15rem)' : 'clamp(0.95rem, 1.4vw, 1.3rem)'
-  }
-  if (len > 600) {
-    return hasImage ? 'clamp(0.95rem, 1.4vw, 1.3rem)' : 'clamp(1.05rem, 1.6vw, 1.45rem)'
-  }
-  if (len > 400) {
-    return hasImage ? 'clamp(1.05rem, 1.6vw, 1.45rem)' : 'clamp(1.1rem, 1.8vw, 1.6rem)'
-  }
-  if (len > 120) {
-    return hasImage ? 'clamp(1.25rem, 2.2vw, 1.9rem)' : 'clamp(1.4rem, 2.6vw, 2.25rem)'
-  }
-  return hasImage ? 'clamp(1.5rem, 3vw, 2.75rem)' : 'clamp(1.8rem, 3.8vw, 3.5rem)'
 })
 
 const questionCardPaddingClass = computed(() => {
@@ -1252,6 +1255,20 @@ const roundJustEnded = computed(() => {
 </template>
 
 <style scoped>
+.team-turn-glow {
+  animation: teamTurnGlow 1.6s ease-in-out infinite;
+}
+@keyframes teamTurnGlow {
+  0%, 100% {
+    box-shadow: inset 0 0 20px 4px rgba(251, 191, 36, 0.15);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: inset 0 0 40px 10px rgba(251, 191, 36, 0.45);
+    filter: brightness(1.15);
+  }
+}
+
 body:has(.pptx-projection) {
   overflow: hidden !important;
 }
@@ -1320,14 +1337,6 @@ body:has(.pptx-projection) {
 .pptx-projection [class*='workspace'],
 .pptx-projection [class*='Main'],
 .pptx-projection [class*='main-content'] {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
   background: #000 !important;
 }
 
