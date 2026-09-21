@@ -1,6 +1,6 @@
 {
   "name": "petrochamp-quiz",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "An Electron application with Vue and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -19,10 +19,11 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build:backend && npm run build && electron-builder --win",
-    "release:win": "npm run build:backend && npm run build && electron-builder --win --publish always",
+    "release:win": "npm run check:migrations && npm run build:backend && npm run build && electron-builder --win --publish always",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
-    "build:backend": "cd petrochamp-backend && npm install && npm run build"
+    "build:backend": "cd petrochamp-backend && npm install && npm run build",
+    "check:migrations": "cd petrochamp-backend && npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url file:./shadow.db --exit-code"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
