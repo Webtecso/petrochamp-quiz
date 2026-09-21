@@ -58,6 +58,49 @@ if (!gotSingleInstanceLock) {
     return dbPath
   }
 
+  function runPrismaDbPush(backendPath: string, dbPath: string): Promise<void> {
+    return new Promise((resolve) => {
+      const prismaCliEntry = join(backendPath, "node_modules", "prisma", "build", "index.js")
+      logToFile("A tentar 'prisma db push' como recuperacao (base de dados legada sem historico de migracoes)...")
+
+      const pushProcess = spawn(
+        process.execPath,
+        [prismaCliEntry, "db", "push", "--skip-generate", "--accept-data-loss"],
+        {
+          cwd: backendPath,
+          shell: false,
+          windowsHide: true,
+          stdio: "pipe",
+          env: {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: "1",
+            DATABASE_URL: "file:" + dbPath.replace(/\\/g, "/")
+          }
+        }
+      )
+
+      pushProcess.stdout?.on("data", (data: Buffer) => {
+        const text = data.toString("utf8").trim()
+        if (text) logToFile("[DB Push] " + text)
+      })
+
+      pushProcess.stderr?.on("data", (data: Buffer) => {
+        const text = data.toString("utf8").trim()
+        if (text) logToFile("[DB Push Error] " + text)
+      })
+
+      pushProcess.on("error", (err) => {
+        logToFile("Falha ao arrancar 'prisma db push': " + err)
+        resolve()
+      })
+
+      pushProcess.on("exit", (code) => {
+        logToFile("'prisma db push' terminou, codigo: " + code)
+        resolve()
+      })
+    })
+  }
+
   function runPrismaMigrations(backendPath: string, dbPath: string): Promise<void> {
     return new Promise((resolve) => {
       const prismaCliEntry = join(backendPath, "node_modules", "prisma", "build", "index.js")
@@ -97,8 +140,11 @@ if (!gotSingleInstanceLock) {
         resolve()
       })
 
-      migrateProcess.on("exit", (code) => {
+      migrateProcess.on("exit", async (code) => {
         logToFile("Migrate deploy terminou, codigo: " + code)
+        if (code !== 0) {
+          await runPrismaDbPush(backendPath, dbPath)
+        }
         resolve()
       })
     })
@@ -134,6 +180,8 @@ if (!gotSingleInstanceLock) {
         logToFile('ABORTADO: petrochamp-backend não foi empacotado em extraResources.')
         return
       }
+
+      await freePort(4000)
 
       backendProcess = spawn(process.execPath, [entryPoint], {
         cwd: backendPath,
@@ -179,6 +227,59 @@ if (!gotSingleInstanceLock) {
       console.log('Backend local terminou, código:', code)
       logToFile(`Backend local terminou, código: ${code}`)
       backendProcess = null
+    })
+  }
+
+  function freePort(port: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (process.platform !== 'win32') {
+        resolve()
+        return
+      }
+
+      const netstatProcess = spawn('cmd', ['/c', `netstat -ano | findstr :${port}`], {
+        windowsHide: true,
+        shell: false,
+        stdio: 'pipe'
+      })
+
+      let output = ''
+      netstatProcess.stdout?.on('data', (data: Buffer) => {
+        output += data.toString('utf8')
+      })
+
+      netstatProcess.on('close', () => {
+        const pids = new Set<string>()
+        for (const line of output.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed || !trimmed.includes('LISTENING')) continue
+          const parts = trimmed.split(/\s+/)
+          const pid = parts[parts.length - 1]
+          if (pid && pid !== '0') pids.add(pid)
+        }
+
+        if (pids.size === 0) {
+          resolve()
+          return
+        }
+
+        logToFile(`A porta ${port} esta ocupada por processo(s) orfao(s): ${[...pids].join(', ')}. A libertar...`)
+
+        let remaining = pids.size
+        for (const pid of pids) {
+          const killer = spawn('taskkill', ['/pid', pid, '/f', '/t'], { windowsHide: true })
+          killer.on('close', () => {
+            remaining -= 1
+            if (remaining <= 0) resolve()
+          })
+          killer.on('error', () => {
+            remaining -= 1
+            if (remaining <= 0) resolve()
+          })
+        }
+      })
+
+      netstatProcess.on('error', () => resolve())
     })
   }
 
