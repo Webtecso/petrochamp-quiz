@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import TimerRing from './TimerRing.vue'
 import AnswerOptions from './AnswerOptions.vue'
 
@@ -45,32 +45,69 @@ const cardPaddingClass = computed(() => {
   return 'p-4 sm:p-5 md:p-6 lg:p-8'
 })
 
-const questionTextSizeClass = computed(() => {
-  const len = textLen.value
-  if (len > 900) {
-    return hasImage.value
-      ? 'text-xs sm:text-xs md:text-sm leading-snug'
-      : 'text-xs sm:text-sm md:text-base leading-snug'
+const questionWrapperRef = ref<HTMLElement | null>(null)
+const questionTextRef = ref<HTMLElement | null>(null)
+const fittedQuestionFontSize = ref(20)
+
+const MAX_QUESTION_FONT = 32
+const MIN_QUESTION_FONT = 10
+
+function fitQuestionText(): void {
+  const wrapper = questionWrapperRef.value
+  const textEl = questionTextRef.value
+  if (!wrapper || !textEl) return
+
+  let lo = MIN_QUESTION_FONT
+  let hi = MAX_QUESTION_FONT
+
+  const fitsAt = (size: number): boolean => {
+    textEl.style.fontSize = `${size}px`
+    return textEl.scrollHeight <= wrapper.clientHeight + 1 && textEl.scrollWidth <= wrapper.clientWidth + 1
   }
-  if (len > 600) {
-    return hasImage.value
-      ? 'text-xs sm:text-sm md:text-sm lg:text-base leading-snug'
-      : 'text-sm sm:text-sm md:text-base leading-snug'
+
+  if (fitsAt(hi)) {
+    fittedQuestionFontSize.value = hi
+    return
   }
-  if (len > 400) {
-    return hasImage.value
-      ? 'text-sm sm:text-sm md:text-base leading-snug'
-      : 'text-sm sm:text-base md:text-lg leading-snug'
+
+  while (hi - lo > 0.5) {
+    const mid = (lo + hi) / 2
+    if (fitsAt(mid)) lo = mid
+    else hi = mid
   }
-  if (len > 250) {
-    return hasImage.value
-      ? 'text-sm sm:text-base md:text-base lg:text-lg leading-snug'
-      : 'text-sm sm:text-base md:text-lg leading-snug'
+
+  fittedQuestionFontSize.value = Math.floor(lo)
+  textEl.style.fontSize = `${fittedQuestionFontSize.value}px`
+}
+
+let questionFitRaf = 0
+function scheduleQuestionFit(): void {
+  if (questionFitRaf) cancelAnimationFrame(questionFitRaf)
+  questionFitRaf = requestAnimationFrame(() => {
+    fitQuestionText()
+    requestAnimationFrame(fitQuestionText)
+  })
+}
+
+let questionResizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  if (questionWrapperRef.value) {
+    questionResizeObserver = new ResizeObserver(() => scheduleQuestionFit())
+    questionResizeObserver.observe(questionWrapperRef.value)
   }
-  return hasImage.value
-    ? 'text-base sm:text-lg md:text-lg leading-snug'
-    : 'text-base sm:text-lg md:text-xl leading-snug'
+  scheduleQuestionFit()
 })
+
+onUnmounted(() => {
+  questionResizeObserver?.disconnect()
+  if (questionFitRaf) cancelAnimationFrame(questionFitRaf)
+})
+
+watch(
+  () => [props.questionText, props.imageUrl],
+  () => nextTick(() => scheduleQuestionFit())
+)
 
 /** Imagem mais alta; texto longo → um pouco mais baixa para equilibrar */
 const imageBoxClass = computed(() => {
@@ -124,10 +161,12 @@ const gapClass = computed(() => {
       />
     </div>
 
-    <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+    <div ref="questionWrapperRef" class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
       <h2
+        ref="questionTextRef"
         class="font-semibold break-words [overflow-wrap:anywhere] whitespace-normal"
-        :class="[questionTextSizeClass, imageUrl ? 'text-left' : 'text-center']"
+        :class="imageUrl ? 'text-left' : 'text-center'"
+        :style="{ fontSize: fittedQuestionFontSize + 'px' }"
       >
         {{ questionText }}
       </h2>

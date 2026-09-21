@@ -1,5 +1,9 @@
 import { defineStore } from 'pinia'
-import { getSocket } from '../services/socket'
+import { getSocket, onSocketRecreated } from '../services/socket'
+import type { Socket } from 'socket.io-client'
+
+let syncedSocket: Socket | null = null
+let subscribedToSyncSocketChanges = false
 import type { PodiumEntry } from '../data/podiumResults'
 
 export type ChampionshipType = 'universitario' | 'ensino_medio' | 'exibicao'
@@ -286,8 +290,11 @@ export const useCampeonatoStore = defineStore('campeonato', {
     exitAdmin() {
       this.adminAccessedRemotely = false
     },
-    listenToServer() {
-      getSocket().on('state:sync', (incoming: LiveState) => {
+    attachSyncListener() {
+      const socket = getSocket()
+      if (syncedSocket === socket) return
+      syncedSocket = socket
+      socket.on('state:sync', (incoming: LiveState) => {
         this.$patch((state) => {
           Object.assign(state, incoming)
           if (incoming.presentationFlow) {
@@ -295,6 +302,15 @@ export const useCampeonatoStore = defineStore('campeonato', {
           }
         })
       })
+    },
+    listenToServer() {
+      this.attachSyncListener()
+      if (!subscribedToSyncSocketChanges) {
+        subscribedToSyncSocketChanges = true
+        onSocketRecreated(() => {
+          this.attachSyncListener()
+        })
+      }
     },
     selectChampionship(type: ChampionshipType, editionName?: string): Promise<void> {
       return new Promise((resolve) => {

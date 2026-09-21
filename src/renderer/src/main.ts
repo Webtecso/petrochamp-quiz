@@ -1,5 +1,12 @@
 import './assets/main.css'
 import { createApp } from 'vue'
+
+void Promise.all([
+  document.fonts.load('16px Carlito'),
+  document.fonts.load('bold 16px Carlito'),
+  document.fonts.load('italic 16px Carlito'),
+  document.fonts.load('italic bold 16px Carlito')
+]).catch(() => {})
 import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { translationsEn, keyToLabel } from 'pptx-vue-viewer/i18n'

@@ -15,3 +15,5 @@ release/
 *.sql
 petrochamp-admin-cloud/
 petrochamp-backend/prisma/petrochamp.db
+
+petrochamp-backend/uploads/

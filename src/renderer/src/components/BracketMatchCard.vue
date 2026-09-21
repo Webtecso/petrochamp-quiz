@@ -23,8 +23,8 @@ function logoFor(slot?: Slot): string | undefined {
 function rowClass(team?: Slot): string {
   if (!team) return 'text-gray-300 bg-gray-50 italic'
   if (!props.winnerId) return 'text-gray-700'
-  if (team.id === props.winnerId) return 'bg-petro-primary text-white font-semibold winner-pulse'
-  return 'text-black line-through opacity-60'
+  if (team.id === props.winnerId) return 'bg-petro-primary text-white font-semibold winner-glow'
+  return 'text-gray-500 opacity-70'
 }
 </script>
 
@@ -50,15 +50,15 @@ function rowClass(team?: Slot): string {
 </template>
 
 <style scoped>
-.winner-pulse {
-  animation: winnerPulse 1s ease;
+.winner-glow {
+  animation: winnerGlow 1.8s ease-in-out infinite;
 }
-@keyframes winnerPulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(122, 26, 46, 0.5);
+@keyframes winnerGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(122, 26, 46, 0.55), 0 0 12px 2px rgba(122, 26, 46, 0.35);
   }
-  100% {
-    box-shadow: 0 0 0 10px rgba(122, 26, 46, 0);
+  50% {
+    box-shadow: 0 0 0 6px rgba(122, 26, 46, 0), 0 0 22px 6px rgba(122, 26, 46, 0.6);
   }
 }
 </style>

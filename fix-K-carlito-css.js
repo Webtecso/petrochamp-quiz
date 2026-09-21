@@ -1,4 +1,21 @@
-@import "tailwindcss";
+﻿const fs = require("fs")
+
+const filePath = "src\\renderer\\src\\assets\\main.css"
+const raw = fs.readFileSync(filePath, "utf8")
+const hasCRLF = raw.includes("\r\n")
+let content = raw.replace(/\r\n/g, "\n")
+
+const anchor = `@import "tailwindcss";
+@source "../../node_modules/pptx-vue-viewer/dist";`
+
+const count = content.split(anchor).length - 1
+console.log("ancora K1: encontrada " + count + "x")
+if (count !== 1) {
+  console.error("Abortado: ancora K1 nao encontrada exatamente 1x.")
+  process.exit(1)
+}
+
+const replacement = `@import "tailwindcss";
 @source "../../node_modules/pptx-vue-viewer/dist";
 
 @font-face {
@@ -28,32 +45,10 @@
   font-weight: 700;
   font-style: italic;
   font-display: block;
-}
+}`
 
-@theme {
-  --color-petro-dark: #4a0f1c;
-  --color-petro-primary: #7a1a2e;
-  --color-petro-bg: #f7f5f3;
-}
+content = content.replace(anchor, replacement)
 
-body {
-  margin: 0;
-  font-family: 'Segoe UI', system-ui, sans-serif;
-}
-
-/* --- Tamanho Padrão (Projeção e restante aplicação) --- */
-.petrochamp-logo,
-img[src*="logo"] {
-  width: 190px !important;
-  height: auto !important;
-  max-width: 100%;
-  object-fit: contain;
-}
-
-/* --- Tamanho Direto para a Tela do Moderador --- */
-.logo-moderator {
-  width: 40px !important;
-  height: auto !important;
-  max-width: 100%;
-  object-fit: contain;
-}
+if (hasCRLF) content = content.replace(/\n/g, "\r\n")
+fs.writeFileSync(filePath, content, "utf8")
+console.log("OK: main.css atualizado.")

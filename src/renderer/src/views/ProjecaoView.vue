@@ -407,6 +407,7 @@ watch(
     await quizContent.fetchEvaluationItems(newVal)
     await quizContent.fetchTiebreakQuestions(newVal)
     await phasesStore.fetchPhases(newVal)
+    await liveBracketStore.fetchBracket(newVal)
   }
 )
 
