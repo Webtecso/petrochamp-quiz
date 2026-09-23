@@ -500,7 +500,7 @@ const bracket = computed<any>(() => {
     const live = liveBracketStore.forTournamentBracket
     if (live && live.rounds && live.rounds.length > 0) {
       const label = championshipLabels[store.championship] || 'Campeonato'
-      return { ...live, title: `${label} · Chaveamento` }
+      return { ...live, title: label }
     }
   }
   if (store.championship) {
@@ -511,7 +511,7 @@ const bracket = computed<any>(() => {
     }
   }
   return {
-    title: 'Chaveamento do Campeonato',
+    title: 'Campeonato',
     rounds: [],
     finalMatch: null
   }

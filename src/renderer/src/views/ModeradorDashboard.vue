@@ -27,6 +27,7 @@ const loadingMissingItem = ref(false)
 watch(
   () => [store.teamA, store.teamB],
   ([newA, newB]) => {
+    if (store.thirdPlaceTiebreak.active) return // NOVO - nao expulsa durante a disputa do 3o/4o lugar
     if (!newA || !newB) {
       if (store.phaseFlow.stage === 'repescagem') {
         router.replace('/moderador/repescagem')
@@ -55,6 +56,7 @@ watch(
 watch(
   () => store.phase,
   async (newPhase, oldPhase) => {
+    if (store.thirdPlaceTiebreak.active) return // NOVO
     if (newPhase === oldPhase || !store.championship) return
 
     await phasesStore.fetchPhases(store.championship)
@@ -155,6 +157,7 @@ const isPresentationPhase = computed(() => {
 })
 
 function redirectIfPresentationPhase(): boolean {
+  if (store.thirdPlaceTiebreak.active) return false // NOVO
   if (store.teamA && store.teamB) return false
 
   const type = currentPhaseFull.value?.type
@@ -187,6 +190,65 @@ const currentTiebreakQuestion = computed(() =>
   tiebreakPhaseQuestions.value.find((q) => String(q.id) === String(store.tiebreak?.currentQuestionId))
 )
 
+// NOVO - reconhece a disputa do 3o/4o lugar dentro do mesmo ecra de
+// batalha que ja e usado para o desempate normal (store.tiebreak).
+const isThirdPlaceActive = computed(() => store.thirdPlaceTiebreak.active)
+
+// CORRIGIDO — o backend sorteia a pergunta de desempate do 3º/4º
+// lugar sem filtrar por fase (drawThirdPlaceQuestion busca por
+// championship apenas, já que o campeonato terminou nesta altura).
+// Usar tiebreakPhaseQuestions (filtrado por store.phase) aqui nunca
+// encontrava a pergunta sorteada, porque store.phase pode já não
+// bater com a fase original da pergunta — currentThirdPlaceQuestion
+// ficava sempre undefined e o ecrã nunca saía de "A carregar
+// pergunta de desempate...". Usa a lista completa em vez da filtrada.
+const currentThirdPlaceQuestion = computed(() =>
+  tiebreakQuestions.questions.find(
+    (q) => String(q.id) === String(store.thirdPlaceTiebreak.currentQuestionId)
+  )
+)
+
+const activeTiebreakQuestion = computed(() =>
+  isThirdPlaceActive.value ? currentThirdPlaceQuestion.value : currentTiebreakQuestion.value
+)
+
+const tiebreakTeamAName = computed(() =>
+  isThirdPlaceActive.value ? (store.thirdPlaceTiebreak.teamAName ?? '') : (store.teamA?.name ?? '')
+)
+const tiebreakTeamBName = computed(() =>
+  isThirdPlaceActive.value ? (store.thirdPlaceTiebreak.teamBName ?? '') : (store.teamB?.name ?? '')
+)
+const tiebreakTeamAInstitution = computed(() =>
+  isThirdPlaceActive.value
+    ? (store.thirdPlaceTiebreak.teamAInstitution ?? '')
+    : (store.teamA?.institution ?? '')
+)
+const tiebreakTeamBInstitution = computed(() =>
+  isThirdPlaceActive.value
+    ? (store.thirdPlaceTiebreak.teamBInstitution ?? '')
+    : (store.teamB?.institution ?? '')
+)
+const tiebreakTeamAAnswer = computed(() =>
+  isThirdPlaceActive.value ? store.thirdPlaceTiebreak.teamAAnswer : store.teamAAnswer
+)
+const tiebreakTeamBAnswer = computed(() =>
+  isThirdPlaceActive.value ? store.thirdPlaceTiebreak.teamBAnswer : store.teamBAnswer
+)
+const tiebreakTeamACorrect = computed(() =>
+  isThirdPlaceActive.value ? store.thirdPlaceTiebreak.teamACorrect : store.teamACorrect
+)
+const tiebreakTeamBCorrect = computed(() =>
+  isThirdPlaceActive.value ? store.thirdPlaceTiebreak.teamBCorrect : store.teamBCorrect
+)
+
+function pickActiveTiebreakAnswer(team: 'A' | 'B', label: string): void {
+  if (isThirdPlaceActive.value) {
+    store.submitThirdPlaceAnswer(team, label)
+  } else {
+    store.submitTiebreakAnswer(team, label)
+  }
+}
+
 const canFinish = computed(
   () => roundIsComplete.value && !isTiedUnresolved.value && !store.awaitingJuryEvaluation
 )
@@ -200,10 +262,6 @@ function endOpenQuestion(): void {
 
 function pickAnswer(team: 'A' | 'B', label: string): void {
   store.submitPlayerAnswer(team, label)
-}
-
-function pickTiebreakAnswer(team: 'A' | 'B', label: string): void {
-  store.submitTiebreakAnswer(team, label)
 }
 
 function startTiebreak(): void {
@@ -243,6 +301,18 @@ watch(
   }
 )
 
+// NOVO - quando a disputa do 3o/4o lugar termina (active passa de true
+// para false), o backend ja marcou podiumReveal.stage = 'revealed';
+// volta sozinho para o Podio.
+watch(
+  () => store.thirdPlaceTiebreak.active,
+  (active, wasActive) => {
+    if (wasActive && !active) {
+      router.push('/moderador/podio')
+    }
+  }
+)
+
 function goToDashboard(): void {
   router.push('/moderador/ranking')
 }
@@ -259,7 +329,7 @@ function finishMatch(): void {
 </script>
 
 <template>
-  <div v-if="store.teamA && store.teamB" class="flex-1 flex flex-col bg-petro-bg h-screen w-screen overflow-hidden">
+  <div v-if="(store.teamA && store.teamB) || store.thirdPlaceTiebreak.active" class="flex-1 flex flex-col bg-petro-bg h-screen w-screen overflow-hidden">
     <header class="flex items-center justify-between px-4 sm:px-8 py-4 bg-white shadow-sm">
       <div class="flex items-center gap-2">
         <div
@@ -284,7 +354,7 @@ function finishMatch(): void {
 
     <!-- Fase de apresentação: nunca mostrar quiz / "sem perguntas" -->
     <main
-      v-if="isPresentationPhase"
+      v-if="isPresentationPhase && !store.thirdPlaceTiebreak.active"
       class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4"
     >
       <p class="text-gray-500 text-sm max-w-sm">
@@ -300,7 +370,7 @@ function finishMatch(): void {
 
     <!-- Fase sem perguntas automáticas (ex.: só jurados) -->
     <main
-      v-else-if="!phaseConfig.useQuestions"
+      v-else-if="!phaseConfig.useQuestions && !store.thirdPlaceTiebreak.active"
       class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-6 text-center gap-4"
     >
       <p class="text-gray-500 text-sm max-w-sm">
@@ -317,62 +387,65 @@ function finishMatch(): void {
     </main>
 
     <!-- Desempate -->
-    <template v-else-if="store.tiebreak?.active || store.tiebreak?.pending">
+    <template v-else-if="store.tiebreak?.active || store.tiebreak?.pending || isThirdPlaceActive">
       <div class="flex items-center justify-center py-3 px-4 sm:px-8">
         <span
           class="bg-amber-100 text-amber-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wide"
         >
-          ⚔️ Desempate
+          ⚔️ {{ isThirdPlaceActive ? 'Desempate 3º/4º lugar' : 'Desempate' }}
         </span>
       </div>
       <main
-        v-if="store.tiebreak.pending"
+        v-if="store.tiebreak.pending && !isThirdPlaceActive"
         class="flex-1 flex flex-col items-center justify-center gap-3 px-4 sm:px-8 py-6"
       >
         <div class="text-6xl font-black text-amber-500">{{ store.countdown.value }}</div>
         <p class="text-sm text-amber-600 font-semibold">O desempate vai começar...</p>
       </main>
       <main
-        v-else-if="currentTiebreakQuestion"
+        v-else-if="activeTiebreakQuestion"
         class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto"
       >
         <TeamScoreCard
-          :name="store.teamA?.name ?? ''"
-          :score="store.teamAScore"
-          :logo-url="store.teamA?.logoUrl ?? undefined"
-          :institution="store.teamA?.institution ?? ''"
-          :active="!store.teamAAnswer"
+          :name="tiebreakTeamAName"
+          :score="isThirdPlaceActive ? 0 : store.teamAScore"
+          :logo-url="isThirdPlaceActive ? undefined : (store.teamA?.logoUrl ?? undefined)"
+          :institution="tiebreakTeamAInstitution"
+          :active="!tiebreakTeamAAnswer"
         />
         <QuestionPanel
-          :question-text="currentTiebreakQuestion.text"
-          :options="currentTiebreakQuestion.options"
+          :question-text="activeTiebreakQuestion.text"
+          :options="activeTiebreakQuestion.options"
           :question-number="1"
           :total-questions="1"
           :time-left="store.timeLeft"
-          :correct-index="currentTiebreakQuestion.correctIndex"
-          :image-url="currentTiebreakQuestion.imageUrl"
-          :team-a-answer="store.teamAAnswer"
-          :team-b-answer="store.teamBAnswer"
-          :team-a-correct="store.teamACorrect"
-          :team-b-correct="store.teamBCorrect"
+          :correct-index="activeTiebreakQuestion.correctIndex"
+          :image-url="activeTiebreakQuestion.imageUrl"
+          :team-a-answer="tiebreakTeamAAnswer"
+          :team-b-answer="tiebreakTeamBAnswer"
+          :team-a-correct="tiebreakTeamACorrect"
+          :team-b-correct="tiebreakTeamBCorrect"
         />
         <TeamScoreCard
-          :name="store.teamB?.name ?? ''"
-          :score="store.teamBScore"
-          :logo-url="store.teamB?.logoUrl ?? undefined"
-          :institution="store.teamB?.institution ?? ''"
-          :active="!store.teamBAnswer"
+          :name="tiebreakTeamBName"
+          :score="isThirdPlaceActive ? 0 : store.teamBScore"
+          :logo-url="isThirdPlaceActive ? undefined : (store.teamB?.logoUrl ?? undefined)"
+          :institution="tiebreakTeamBInstitution"
+          :active="!tiebreakTeamBAnswer"
         />
       </main>
+      <main v-else class="flex-1 flex items-center justify-center">
+        <p class="text-sm text-amber-600">A carregar pergunta de desempate...</p>
+      </main>
       <ModeratorAnswerPicker
-        v-if="!usesDevices && currentTiebreakQuestion"
-        :team-a-name="store.teamA?.name ?? ''"
-        :team-b-name="store.teamB?.name ?? ''"
-        :team-a-options="currentTiebreakQuestion.options"
-        :team-b-options="currentTiebreakQuestion.options"
-        :team-a-answer="store.teamAAnswer"
-        :team-b-answer="store.teamBAnswer"
-        @pick="pickTiebreakAnswer"
+        v-if="!usesDevices && activeTiebreakQuestion"
+        :team-a-name="tiebreakTeamAName"
+        :team-b-name="tiebreakTeamBName"
+        :team-a-options="activeTiebreakQuestion.options"
+        :team-b-options="activeTiebreakQuestion.options"
+        :team-a-answer="tiebreakTeamAAnswer"
+        :team-b-answer="tiebreakTeamBAnswer"
+        @pick="pickActiveTiebreakAnswer"
       />
     </template>
 

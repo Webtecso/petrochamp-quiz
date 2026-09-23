@@ -202,7 +202,6 @@ function clearActiveChampionshipState(): void {
   liveState.phaseRankingReveal = { visible: false }
   liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
   liveState.presentationPhaseScores = []
-  console.log('[DEBUG RESET carried] #1 (reset geral)', new Error().stack?.split('\n').slice(1,4).join(' | '))
   liveState.carriedPresentationScores = []
   liveState.jurors = []
   liveState.jurorEntries = []
@@ -399,6 +398,9 @@ async function drawNextItemInner(team: 'A' | 'B'): Promise<void> {
       liveState.currentItemMode = null
       return
     }
+    const allAssignmentsForTeamPhase = await prisma.questionAssignment.findMany({
+      where: { phaseId: phaseConfig.id, teamId: teamEntity.id, deletedAt: null }
+    })
     const nextAssignment = await prisma.questionAssignment.findFirst({
       where: {
         phaseId: phaseConfig.id,
@@ -727,7 +729,6 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
     }
   } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
     // Apresentação sem eliminação: ranking + nota para o quiz seguinte
-    console.log('[DEBUG carried] a processar apresentacao, team=', team?.id, 'average=', average, 'phaseConfig.id=', phaseConfig?.id)
     addToPhaseRanking(team, average)
     if (team) {
       const existingCarried = liveState.carriedPresentationScores.find(
@@ -749,7 +750,6 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
           quizWeight
         })
       }
-      console.log('[DEBUG carried] carriedPresentationScores agora=', JSON.stringify(liveState.carriedPresentationScores))
     }
   } else if (phaseConfig?.type === 'apresentacao') {
     // Apresentação isolada COM eliminação: grava nota e, assim que
@@ -1048,7 +1048,6 @@ export function registerSocketHandlers(io: Server): void {
         liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
         liveState.championReveal = { active: false, teamName: null, logoUrl: null }
         liveState.presentationPhaseScores = []
-        console.log('[DEBUG RESET carried] #2 (handler 8-espacos, bracketVisible=true)', new Error().stack?.split('\n').slice(1,4).join(' | '))
         liveState.carriedPresentationScores = []
         resetPresentationFlow()
         liveState.bracketVisible = true
@@ -1525,7 +1524,6 @@ export function registerSocketHandlers(io: Server): void {
       for (const team of [liveState.teamA, liveState.teamB]) {
         if (!team) continue
         const idx = liveState.carriedPresentationScores.findIndex((p) => p.teamId === team.id)
-        console.log('[DEBUG finishMatch] team=', team.id, 'idx carried=', idx, 'carriedList=', JSON.stringify(liveState.carriedPresentationScores))
         if (idx === -1) continue
         const carried = liveState.carriedPresentationScores[idx]
         const rawScore =
@@ -1847,7 +1845,6 @@ export function registerSocketHandlers(io: Server): void {
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.championReveal = { active: false, teamName: null, logoUrl: null }
       liveState.presentationPhaseScores = []
-      console.log('[DEBUG RESET carried] #3 (bracketVisible = !!championship)', new Error().stack?.split('\n').slice(1,4).join(' | '))
       liveState.carriedPresentationScores = []
       resetPresentationFlow()
       liveState.bracketVisible = !!liveState.championship
@@ -1878,7 +1875,6 @@ export function registerSocketHandlers(io: Server): void {
       liveState.phaseRankingReveal = { visible: false }
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.presentationPhaseScores = []
-      console.log('[DEBUG RESET carried] #4 (bracketVisible = false)', new Error().stack?.split('\n').slice(1,4).join(' | '))
       liveState.carriedPresentationScores = []
       resetPresentationFlow()
       liveState.bracketVisible = false
@@ -2242,13 +2238,10 @@ export function registerSocketHandlers(io: Server): void {
     socket.on(
       'juror:setAnalyticCriteriaScore',
       (payload: { jurorId: string; criteriaId: string; team: 'A' | 'B'; score: number }) => {
-        console.log("[DEBUG setAnalyticCriteriaScore] payload=", payload, "currentItemSource=", liveState.currentItemSource, "currentAnalyticItemId=", liveState.currentAnalyticItemId, "analyticEvaluation.itemId=", liveState.analyticEvaluation?.itemId)
         if (liveState.currentItemSource !== 'analytic') {
-          console.log("[DEBUG setAnalyticCriteriaScore] ABORTOU: currentItemSource nao e analytic")
           return
         }
         if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== liveState.currentAnalyticItemId) {
-          console.log("[DEBUG setAnalyticCriteriaScore] ABORTOU: analyticEvaluation.itemId nao bate com currentAnalyticItemId")
           return
         }
         if (!payload.criteriaId) return
@@ -2265,17 +2258,13 @@ export function registerSocketHandlers(io: Server): void {
     )
 
     socket.on('juror:submitAnalyticEvaluation', async (payload: { jurorId: string; itemId: string }) => {
-      console.log("[DEBUG submitAnalyticEvaluation] payload=", payload, "analyticEvaluation.itemId=", liveState.analyticEvaluation?.itemId, "jurorsSubmitted=", liveState.analyticEvaluation?.jurorsSubmitted, "jurorsConectados=", liveState.jurors.map((j) => j.id))
       if (!liveState.analyticEvaluation || liveState.analyticEvaluation.itemId !== payload.itemId) {
-        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: itemId nao bate certo")
         return
       }
       if (liveState.analyticEvaluation.jurorsSubmitted.includes(payload.jurorId)) {
-        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: jurado ja estava na lista de submetidos")
         return
       }
       if (!liveState.jurors.some((j) => j.id === payload.jurorId)) {
-        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: jurado nao esta na lista de jurados ligados")
         return
       }
 
@@ -2287,16 +2276,12 @@ export function registerSocketHandlers(io: Server): void {
       const target =
         liveState.expectedJurorCount > 0 ? liveState.expectedJurorCount : connectedCount
 
-      console.log("[DEBUG submitAnalyticEvaluation] target=", target, "connectedCount=", connectedCount, "expectedJurorCount=", liveState.expectedJurorCount, "jurorsSubmitted.length=", liveState.analyticEvaluation.jurorsSubmitted.length)
       if (target <= 0) {
-        console.log("[DEBUG submitAnalyticEvaluation] ABORTOU: target <= 0")
         return
       }
       if (liveState.analyticEvaluation.jurorsSubmitted.length < target) {
-        console.log("[DEBUG submitAnalyticEvaluation] A AGUARDAR mais jurados (nao atingiu target ainda)")
         return
       }
-      console.log("[DEBUG submitAnalyticEvaluation] TARGET ATINGIDO, vai processar e avancar")
 
       // Persistir cada critério por jurado e equipa
       const valid = liveState.analyticEvaluation.criteriaScores

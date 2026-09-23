@@ -13,6 +13,8 @@ const phasesStore = usePhasesStore()
 const liveBracketStore = useLiveBracketStore()
 const isTabletOrPhone = Capacitor.isNativePlatform()
 
+// NOVO - desempate 3o/4o lugar: perguntas nao filtram por fase (o
+// campeonato ja terminou), mesmo padrao usado na ProjecaoView.vue.
 onMounted(async () => {
   await phasesStore.fetchPhases(store.championship ?? undefined)
   if (store.championship) {
@@ -81,6 +83,7 @@ function startFinalSequence(): void {
 // NOVO - desempate automatico do 3o/4o lugar
 function startThirdPlaceTiebreak(): void {
   store.startThirdPlaceTiebreak()
+  router.push('/moderador/jogo')
 }
 
 function toggleFinalRanking(): void {
@@ -170,6 +173,7 @@ async function advance(): Promise<void> {
             {{ store.thirdPlaceTiebreak.active ? 'Desempate em curso...' : '⚔️ Iniciar Desempate 3º/4º lugar' }}
           </button>
         </div>
+
 
         <button
           v-if="store.podiumReveal.stage === 'revealed'"
