@@ -162,7 +162,7 @@ router.post('/push', async (req, res) => {
     res.json({ success: true, applied })
   } catch (error) {
     console.error('Erro em /api/sync/push:', error)
-    res.status(500).json({ error: 'Falha ao aplicar dados de sincronização.' })
+    res.status(500).json({ error: 'Falha ao aplicar dados de sincronização.', detail: String((error as any)?.message ?? error).slice(0, 500) })
   }
 })
 

@@ -12,6 +12,7 @@ import { evaluationCriteriaRouter } from './routes/evaluationCriteria'
 import settingsRouter from './routes/settings'
 import uploadRouter from './routes/upload'
 import phasesRouter from './routes/phases'
+import { questionAssignmentsRouter } from './routes/questionAssignments'
 import tiebreakQuestionsRouter from './routes/tiebreakQuestions'
 import tiebreakMatchesRouter from './routes/tiebreakMatches'
 import bracketRouter from './routes/bracket'
@@ -73,6 +74,7 @@ app.use('/api/evaluation-criteria', evaluationCriteriaRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/upload', uploadRouter)
 app.use('/api/phases', phasesRouter)
+app.use('/api/question-assignments', questionAssignmentsRouter)
 app.use('/api/tiebreak-questions', tiebreakQuestionsRouter)
 app.use('/api/tiebreak-matches', tiebreakMatchesRouter)
 app.use('/api/bracket', bracketRouter)

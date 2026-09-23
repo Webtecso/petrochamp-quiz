@@ -22,6 +22,9 @@ export interface Phase {
   // nota fica guardada para ser somada (com presentationWeight/quizWeight)
   // à nota do Quiz da fase seguinte.
   noElimination?: boolean
+  // NOVO - 'automatic' (padrao, sorteio aleatorio) ou 'per_team' (usa a
+  // lista atribuida em QuestionAssignment, por ordem, por equipa).
+  questionSelectionMode?: 'automatic' | 'per_team'
 }
 
 const DEFAULT_LABELS: Record<number, string> = {

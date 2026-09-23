@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
+import { useQuizContentStore } from '../stores/quizContent'
 import { playSelectSound, playCorrectSound, playWrongSound } from '../services/sound'
 import LogoMark from '../components/LogoMark.vue'
 import TimerRing from '../components/TimerRing.vue'
@@ -21,6 +22,52 @@ const myQuestion = computed(() => (myTeam.value === 'A' ? playerState.teamAQuest
 const myAnswer = computed(() => (myTeam.value === 'A' ? store.teamAAnswer : store.teamBAnswer))
 const opponentAnswer = computed(() => (myTeam.value === 'A' ? store.teamBAnswer : store.teamAAnswer))
 const myCorrect = computed(() => (myTeam.value === 'A' ? store.teamACorrect : store.teamBCorrect))
+
+// NOVO - desempate automatico do 3o/4o lugar do podio final. Reaproveita
+// myTeam (vem do link ?team=A/?team=B dado pelo moderador as duas equipas
+// empatadas) para saber a que lado o jogador pertence neste confronto.
+const quizContent = useQuizContentStore()
+
+const thirdPlaceQuestion = computed(() =>
+  quizContent.tiebreakQuestions.find(
+    (q) => String(q.id) === String(store.thirdPlaceTiebreak.currentQuestionId)
+  )
+)
+const myThirdPlaceAnswer = computed(() =>
+  myTeam.value === 'A' ? store.thirdPlaceTiebreak.teamAAnswer : store.thirdPlaceTiebreak.teamBAnswer
+)
+const opponentThirdPlaceAnswer = computed(() =>
+  myTeam.value === 'A' ? store.thirdPlaceTiebreak.teamBAnswer : store.thirdPlaceTiebreak.teamAAnswer
+)
+const myThirdPlaceCorrect = computed(() =>
+  myTeam.value === 'A' ? store.thirdPlaceTiebreak.teamACorrect : store.thirdPlaceTiebreak.teamBCorrect
+)
+const thirdPlaceFlashLabel = ref<string | null>(null)
+
+function selectThirdPlaceOption(label: string): void {
+  if (!thirdPlaceQuestion.value || myThirdPlaceAnswer.value) return
+  thirdPlaceFlashLabel.value = label
+  playSelectSound()
+  setTimeout(() => {
+    store.submitThirdPlaceAnswer(myTeam.value, label)
+    thirdPlaceFlashLabel.value = null
+  }, 350)
+}
+
+function thirdPlaceOptionClass(label: string): string {
+  if (myThirdPlaceAnswer.value === label && myThirdPlaceCorrect.value === true) return 'bg-green-500 text-white border-green-500'
+  if (myThirdPlaceAnswer.value === label && myThirdPlaceCorrect.value === false) return 'bg-red-500 text-white border-red-500'
+  if (
+    myThirdPlaceCorrect.value === false &&
+    thirdPlaceQuestion.value &&
+    thirdPlaceQuestion.value.options.findIndex((o) => o.label === label) === thirdPlaceQuestion.value.correctIndex
+  ) {
+    return 'bg-green-500 text-white border-green-500'
+  }
+  if (thirdPlaceFlashLabel.value === label) return 'scale-95 bg-yellow-100 border-yellow-300'
+  if (myThirdPlaceAnswer.value && myThirdPlaceAnswer.value !== label) return 'border-gray-100 text-gray-300'
+  return 'border-gray-200 active:border-petro-primary'
+}
 
 const flashLabel = ref<string | null>(null)
 
@@ -72,7 +119,65 @@ function optionClass(label: string): string {
       </span>
     </header>
 
-    <div v-if="!myQuestion" class="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+    <!-- NOVO - desempate automatico do 3o/4o lugar. Tem prioridade sobre
+         o fluxo normal do quiz: se o campeonato ja terminou e este jogador
+         faz parte do desempate, mostramos este ecra em vez do de espera. -->
+    <template v-if="store.thirdPlaceTiebreak.active">
+      <div class="flex items-center justify-center">
+        <TimerRing :seconds="store.timeLeft" />
+      </div>
+
+      <div class="text-center flex flex-col items-center gap-1">
+        <span class="bg-red-600 text-white font-black uppercase tracking-widest rounded-full text-[clamp(0.65rem,2vw,0.85rem)] px-[clamp(0.7rem,2vw,1.1rem)] py-[clamp(0.25rem,0.8vh,0.5rem)]">
+          ⚔️ Desempate 3º/4º lugar
+        </span>
+        <span
+          v-if="!myThirdPlaceAnswer"
+          class="bg-petro-primary/10 text-petro-primary font-semibold rounded-full text-[clamp(0.7rem,2.2vw,0.95rem)] px-[clamp(0.7rem,2vw,1.1rem)] py-[clamp(0.25rem,0.8vh,0.5rem)]"
+        >
+          Responde já
+        </span>
+        <template v-else>
+          <span
+            class="font-semibold rounded-full text-[clamp(0.7rem,2.2vw,0.95rem)] px-[clamp(0.7rem,2vw,1.1rem)] py-[clamp(0.25rem,0.8vh,0.5rem)]"
+            :class="myThirdPlaceCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'"
+          >
+            {{ myThirdPlaceCorrect ? 'Acertaste! ✓' : 'Não foi desta vez ✕' }}
+          </span>
+          <span v-if="!opponentThirdPlaceAnswer" class="text-[clamp(0.65rem,2vw,0.85rem)] text-gray-400">
+            Aguardando resposta da equipa adversária...
+          </span>
+        </template>
+      </div>
+
+      <img
+        v-if="thirdPlaceQuestion?.imageUrl"
+        :src="thirdPlaceQuestion.imageUrl"
+        alt="Imagem da pergunta"
+        class="w-full max-h-[clamp(10rem,28vh,20rem)] object-contain rounded-xl"
+      />
+
+      <h2 v-if="thirdPlaceQuestion" class="text-[clamp(1.05rem,3.4vw,1.6rem)] font-semibold text-center">{{ thirdPlaceQuestion.text }}</h2>
+      <p v-else class="text-[clamp(0.85rem,2.6vw,1.15rem)] text-gray-400 text-center">A aguardar pergunta do moderador...</p>
+
+      <div v-if="thirdPlaceQuestion" class="flex flex-col gap-[clamp(0.6rem,1.8vh,1rem)]">
+        <button
+          v-for="opt in thirdPlaceQuestion.options"
+          :key="opt.label"
+          class="flex items-center gap-3 border rounded-xl text-left transition-all duration-200 px-[clamp(1rem,3vw,1.5rem)] py-[clamp(0.7rem,2vh,1.1rem)] text-[clamp(0.95rem,2.8vw,1.3rem)]"
+          :class="thirdPlaceOptionClass(opt.label)"
+          :disabled="!!myThirdPlaceAnswer"
+          @click="selectThirdPlaceOption(opt.label)"
+        >
+          <span class="rounded-full flex items-center justify-center font-bold shrink-0 bg-petro-primary/10 text-petro-primary w-[clamp(1.75rem,5.5vw,2.5rem)] h-[clamp(1.75rem,5.5vw,2.5rem)] text-[clamp(0.75rem,2.2vw,1rem)]">
+            {{ opt.label }}
+          </span>
+          {{ opt.text }}
+        </button>
+      </div>
+    </template>
+
+    <div v-else-if="!myQuestion" class="flex-1 flex flex-col items-center justify-center gap-3 text-center">
       <!-- AUMENTADO - text-sm fixo trocado por clamp(). -->
       <p class="text-[clamp(0.85rem,2.6vw,1.15rem)] text-gray-400">A aguardar o moderador iniciar a pergunta...</p>
     </div>

@@ -32,6 +32,23 @@ interface MatchCodes {
   teamBPlayerName: string | null
 }
 
+interface ThirdPlaceTiebreakState {
+  active: boolean
+  teamAId: string | null
+  teamBId: string | null
+  teamAName: string | null
+  teamBName: string | null
+  teamAInstitution: string | null
+  teamBInstitution: string | null
+  currentQuestionId: string | null
+  usedQuestionIds: string[]
+  teamAAnswer: string | null
+  teamBAnswer: string | null
+  teamACorrect: boolean | null
+  teamBCorrect: boolean | null
+  winnerId: string | null
+}
+
 interface TiebreakState {
   active: boolean
   pending: boolean
@@ -41,7 +58,7 @@ interface TiebreakState {
 }
 
 interface PodiumRevealState {
-  stage: 'idle' | 'suspense' | 'countdown' | 'revealed'
+  stage: 'idle' | 'suspense' | 'countdown' | 'revealed' | 'awaitingTiebreak'
   countdownValue: number
   suspensePhrase: string | null
   finalRankingVisible: boolean
@@ -151,6 +168,7 @@ interface LiveState {
   teamBCorrect: boolean | null
   countdown: { active: boolean; value: number }
   tiebreak: TiebreakState
+  thirdPlaceTiebreak: ThirdPlaceTiebreakState
   podiumReveal: PodiumRevealState
   phaseTransition: PhaseTransitionState
   phaseFlow: PhaseFlowState
@@ -254,6 +272,22 @@ export const useCampeonatoStore = defineStore('campeonato', {
     teamBCorrect: null,
     countdown: { active: false, value: 0 },
     tiebreak: { active: false, pending: false, matchId: null, currentQuestionId: null, usedQuestionIds: [] },
+    thirdPlaceTiebreak: {
+      active: false,
+      teamAId: null,
+      teamBId: null,
+      teamAName: null,
+      teamBName: null,
+      teamAInstitution: null,
+      teamBInstitution: null,
+      currentQuestionId: null,
+      usedQuestionIds: [],
+      teamAAnswer: null,
+      teamBAnswer: null,
+      teamACorrect: null,
+      teamBCorrect: null,
+      winnerId: null
+    },
     podiumReveal: { stage: 'idle', countdownValue: 0, suspensePhrase: null, finalRankingVisible: false },
     phaseTransition: { stage: 'idle' },
     phaseFlow: { stage: 'idle', suspensePhrase: null },
@@ -351,6 +385,12 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     submitTiebreakAnswer(team: 'A' | 'B', optionLabel: string) {
       getSocket().emit('tiebreak:submitAnswer', { team, optionLabel })
+    },
+    startThirdPlaceTiebreak() {
+      getSocket().emit('moderator:startThirdPlaceTiebreak')
+    },
+    submitThirdPlaceAnswer(team: 'A' | 'B', optionLabel: string) {
+      getSocket().emit('thirdPlace:submitAnswer', { team, optionLabel })
     },
     finishMatch() {
       getSocket().emit('moderator:finishMatch')

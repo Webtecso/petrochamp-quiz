@@ -30,6 +30,7 @@ import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminTeamsView from '../views/AdminTeamsView.vue'
 import AdminPhasesView from '../views/AdminPhasesView.vue'
 import AdminQuestionsView from '../views/AdminQuestionsView.vue'
+import AdminQuestionAssignmentsView from '../views/AdminQuestionAssignmentsView.vue'
 import AdminEvaluationView from '../views/AdminEvaluationView.vue'
 import AdminJurorsView from '../views/AdminJurorsView.vue'
 import AdminPresentationView from '../views/AdminPresentationView.vue'
@@ -81,6 +82,7 @@ const router = createRouter({
         { path: 'equipas', name: 'admin-equipas', component: AdminTeamsView },
         { path: 'fases', name: 'admin-fases', component: AdminPhasesView },
         { path: 'perguntas', name: 'admin-perguntas', component: AdminQuestionsView },
+        { path: 'perguntas-por-equipa', name: 'admin-perguntas-por-equipa', component: AdminQuestionAssignmentsView },
         { path: 'desempate', name: 'admin-desempate', component: AdminTiebreakView },
         { path: 'avaliacao', name: 'admin-avaliacao', component: AdminEvaluationView },
         { path: 'jurados', name: 'admin-jurados', component: AdminJurorsView },

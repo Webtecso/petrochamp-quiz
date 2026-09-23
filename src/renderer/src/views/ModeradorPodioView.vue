@@ -78,6 +78,11 @@ function startFinalSequence(): void {
   store.startFinalPodiumSequence()
 }
 
+// NOVO - desempate automatico do 3o/4o lugar
+function startThirdPlaceTiebreak(): void {
+  store.startThirdPlaceTiebreak()
+}
+
 function toggleFinalRanking(): void {
   if (store.podiumReveal.finalRankingVisible) {
     store.hideFinalRanking()
@@ -152,6 +157,19 @@ async function advance(): Promise<void> {
         >
           {{ podiumSequenceAlreadyTriggered ? 'Sequência em curso...' : 'A aguardar sequência automática...' }}
         </button>
+
+        <div v-if="store.podiumReveal.stage === 'awaitingTiebreak'" class="flex flex-col items-center gap-3 bg-amber-50 border border-amber-300 rounded-xl p-4 w-full">
+          <p class="text-sm text-amber-700 font-semibold">
+            Empate detetado no 3º/4º lugar! É preciso desempate antes de revelar o pódio.
+          </p>
+          <button
+            class="bg-amber-500 text-white rounded-lg px-6 py-3 font-semibold disabled:opacity-60"
+            :disabled="store.thirdPlaceTiebreak.active"
+            @click="startThirdPlaceTiebreak"
+          >
+            {{ store.thirdPlaceTiebreak.active ? 'Desempate em curso...' : '⚔️ Iniciar Desempate 3º/4º lugar' }}
+          </button>
+        </div>
 
         <button
           v-if="store.podiumReveal.stage === 'revealed'"

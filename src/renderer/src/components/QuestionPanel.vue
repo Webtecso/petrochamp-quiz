@@ -49,7 +49,7 @@ const questionWrapperRef = ref<HTMLElement | null>(null)
 const questionTextRef = ref<HTMLElement | null>(null)
 const fittedQuestionFontSize = ref(20)
 
-const MAX_QUESTION_FONT = 32
+const MAX_QUESTION_FONT = 56
 const MIN_QUESTION_FONT = 10
 
 function fitQuestionText(): void {
@@ -113,12 +113,12 @@ watch(
 const imageBoxClass = computed(() => {
   const len = textLen.value
   if (len > 500) {
-    return 'h-[200px] sm:h-[240px] md:h-[280px] lg:h-[320px]'
+    return 'h-[min(28vh,320px)] lg:h-[min(32vh,420px)]'
   }
   if (len > 300) {
-    return 'h-[220px] sm:h-[270px] md:h-[310px] lg:h-[360px]'
+    return 'h-[min(32vh,360px)] lg:h-[min(36vh,460px)]'
   }
-  return 'h-[240px] sm:h-[300px] md:h-[340px] lg:h-[400px]'
+  return 'h-[min(36vh,400px)] lg:h-[min(40vh,520px)]'
 })
 
 const gapClass = computed(() => {
@@ -130,7 +130,7 @@ const gapClass = computed(() => {
 
 <template>
   <div
-    class="bg-white rounded-2xl shadow flex flex-col min-h-0 max-h-[min(92vh,920px)] overflow-x-hidden"
+    class="bg-white rounded-2xl shadow flex flex-col min-h-0 max-h-[94vh] overflow-x-hidden"
     :class="[cardWidthClass, cardPaddingClass, gapClass]"
   >
     <div class="flex items-center justify-between text-[10px] sm:text-xs shrink-0">

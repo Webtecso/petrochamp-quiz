@@ -6,7 +6,9 @@ const router = Router()
 const DEFAULTS = {
   questionTimeSeconds: 30,
   maxJurors: 5,
-  partnersDurationSeconds: 20
+  partnersDurationSeconds: 20,
+  tiebreakAutoEnabled: false,
+  tiebreakMethod: 'quiz'
 }
 
 router.get('/', async (_req, res) => {
@@ -15,12 +17,14 @@ router.get('/', async (_req, res) => {
   res.json({
     questionTimeSeconds: Number(map.questionTimeSeconds ?? DEFAULTS.questionTimeSeconds),
     maxJurors: Number(map.maxJurors ?? DEFAULTS.maxJurors),
-    partnersDurationSeconds: Number(map.partnersDurationSeconds ?? DEFAULTS.partnersDurationSeconds)
+    partnersDurationSeconds: Number(map.partnersDurationSeconds ?? DEFAULTS.partnersDurationSeconds),
+    tiebreakAutoEnabled: (map.tiebreakAutoEnabled ?? String(DEFAULTS.tiebreakAutoEnabled)) === 'true',
+    tiebreakMethod: map.tiebreakMethod ?? DEFAULTS.tiebreakMethod
   })
 })
 
 router.put('/', async (req, res) => {
-  const { questionTimeSeconds, maxJurors, partnersDurationSeconds } = req.body
+  const { questionTimeSeconds, maxJurors, partnersDurationSeconds, tiebreakAutoEnabled, tiebreakMethod } = req.body
   await prisma.setting.upsert({
     where: { key: 'questionTimeSeconds' },
     update: { value: String(questionTimeSeconds) },
@@ -36,7 +40,21 @@ router.put('/', async (req, res) => {
     update: { value: String(partnersDurationSeconds) },
     create: { key: 'partnersDurationSeconds', value: String(partnersDurationSeconds) }
   })
-  res.json({ questionTimeSeconds, maxJurors, partnersDurationSeconds })
+  if (tiebreakAutoEnabled !== undefined) {
+    await prisma.setting.upsert({
+      where: { key: 'tiebreakAutoEnabled' },
+      update: { value: String(tiebreakAutoEnabled) },
+      create: { key: 'tiebreakAutoEnabled', value: String(tiebreakAutoEnabled) }
+    })
+  }
+  if (tiebreakMethod !== undefined) {
+    await prisma.setting.upsert({
+      where: { key: 'tiebreakMethod' },
+      update: { value: String(tiebreakMethod) },
+      create: { key: 'tiebreakMethod', value: String(tiebreakMethod) }
+    })
+  }
+  res.json({ questionTimeSeconds, maxJurors, partnersDurationSeconds, tiebreakAutoEnabled, tiebreakMethod })
 })
 
 export default router

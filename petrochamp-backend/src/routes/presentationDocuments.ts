@@ -11,8 +11,16 @@ const router = Router()
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdir(UPLOADS_TMP, { recursive: true })
+        .then(() => cb(null, UPLOADS_TMP))
+        .catch((e) => cb(e as Error, UPLOADS_TMP))
+    },
+    filename: (_req, _file, cb) =>
+      cb(null, Date.now() + '-' + Math.random().toString(36).slice(2) + '.tmp')
+  }),
+  limits: { fileSize: 250 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => {
     const isPptx = file.mimetype === PPTX_MIME || file.originalname.toLowerCase().endsWith('.pptx')
     if (!isPptx) {
@@ -25,6 +33,7 @@ const upload = multer({
 
 const UPLOADS_BASE_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', '..', 'uploads')
 const UPLOADS_ROOT = path.join(UPLOADS_BASE_DIR, 'presentations')
+const UPLOADS_TMP = path.join(UPLOADS_ROOT, '_tmp')
 
 // GET /api/presentation-documents
 router.get('/', async (req, res) => {
@@ -49,17 +58,27 @@ router.get('/', async (req, res) => {
 })
 
 // POST /api/presentation-documents
-router.post('/', requireAdmin, upload.single('file'), async (req, res) => {
+router.post('/', requireAdmin, (req, res, next) => {
+  upload.single('file')(req, res, (err: any) => {
+    if (!err) return next()
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Ficheiro demasiado grande (maximo 250 MB).' })
+    }
+    return res.status(400).json({ error: err.message || 'Falha ao receber o ficheiro.' })
+  })
+}, async (req, res) => {
   try {
     const { duplaId, teamId } = req.body as { duplaId?: string; teamId?: string }
     const file = req.file
 
     if (!duplaId || !teamId || !file) {
+      if (file) await fs.unlink(file.path).catch(() => {})
       return res.status(400).json({ error: 'duplaId, teamId e um ficheiro .pptx são obrigatórios.' })
     }
 
     const dupla = await prisma.presentationDupla.findUnique({ where: { id: duplaId } })
     if (!dupla || (dupla.teamAId !== teamId && dupla.teamBId !== teamId)) {
+      await fs.unlink(file.path).catch(() => {})
       return res.status(400).json({ error: 'Esta equipa não pertence a esta dupla.' })
     }
 
@@ -78,7 +97,10 @@ router.post('/', requireAdmin, upload.single('file'), async (req, res) => {
     }
 
     const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-    await fs.writeFile(path.join(folder, safeName), file.buffer)
+    await fs.rename(file.path, path.join(folder, safeName)).catch(async () => {
+      await fs.copyFile(file.path, path.join(folder, safeName))
+      await fs.unlink(file.path).catch(() => {})
+    })
     const fileUrl = `/uploads/presentations/${dupla.phaseId}/${teamId}/${safeName}`
 
     const doc = await prisma.presentationDocument.upsert({
@@ -90,6 +112,7 @@ router.post('/', requireAdmin, upload.single('file'), async (req, res) => {
     emitConfigUpdated('presentation')
     return res.status(201).json(doc)
   } catch (error: any) {
+    if (req.file) await fs.unlink(req.file.path).catch(() => {})
     return res.status(400).json({ error: error?.message || 'Falha ao enviar o ficheiro.' })
   }
 })

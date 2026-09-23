@@ -35,8 +35,10 @@ router.post('/authorizations', requireAdmin, async (req, res) => {
     return
   }
   try {
-    const auth = await prisma.phaseJurorAuthorization.create({
-      data: {
+    const auth = await prisma.phaseJurorAuthorization.upsert({
+      where: { phaseId_jurorId: { phaseId: String(phaseId), jurorId: String(jurorId) } },
+      update: { deletedAt: null },
+      create: {
         phaseId: String(phaseId),
         jurorId: String(jurorId)
       }

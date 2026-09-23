@@ -93,6 +93,39 @@ onMounted(() => {
 
       <div class="flex items-center justify-between">
         <div>
+          <label class="text-sm font-semibold text-gray-600 block">Desempate automático (3.º/4.º lugar)</label>
+          <p class="text-xs text-gray-400">Se duas ou mais equipas terminarem empatadas na classificação final, cria automaticamente um desempate antes de fixar o pódio.</p>
+        </div>
+        <button
+          class="w-12 h-6 rounded-full transition relative shrink-0"
+          :class="settings.tiebreakAutoEnabled ? 'bg-petro-primary' : 'bg-gray-200'"
+          @click="settings.setTiebreakConfig(!settings.tiebreakAutoEnabled, settings.tiebreakMethod)"
+        >
+          <span
+            class="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all"
+            :class="settings.tiebreakAutoEnabled ? 'left-6' : 'left-0.5'"
+          ></span>
+        </button>
+      </div>
+
+      <div v-if="settings.tiebreakAutoEnabled">
+        <label class="text-sm font-semibold text-gray-600 block mb-2">Método de desempate</label>
+        <select
+          :value="settings.tiebreakMethod"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2"
+          @change="settings.setTiebreakConfig(settings.tiebreakAutoEnabled, ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="quiz">Quiz de desempate</option>
+          <option value="battle">Batalha</option>
+          <option value="analytic">Perguntas analíticas</option>
+        </select>
+        <p class="text-xs text-gray-400 mt-1">
+          Define como as equipas empatadas disputam a posição final.
+        </p>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <div>
           <label class="text-sm font-semibold text-gray-600 block">Mostrar pontuação na Projeção</label>
           <p class="text-xs text-gray-400">O moderador continua a ver sempre a pontuação, mesmo desativado aqui.</p>
         </div>

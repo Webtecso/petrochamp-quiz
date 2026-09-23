@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
+import { playCorrectSound, playWrongSound } from '../services/sound'
 import { useQuizContentStore } from '../stores/quizContent'
 import { useTiebreakQuestionsStore } from '../stores/tiebreakQuestions'
 import { useModeStore } from '../stores/mode'
@@ -209,6 +210,39 @@ function startTiebreak(): void {
   store.startTiebreak()
 }
 
+// NOVO - som de acerto/erro sincronizado. Toca assim que o backend confirma
+// o resultado (teamACorrect/teamBCorrect deixam de ser null), nunca no
+// clique do botao. Cobre quiz normal e desempate 1x1 (campos partilhados)
+// e o desempate do 3o/4o lugar (campos proprios em thirdPlaceTiebreak).
+watch(
+  () => store.teamACorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+watch(
+  () => store.teamBCorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+watch(
+  () => store.thirdPlaceTiebreak.teamACorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+watch(
+  () => store.thirdPlaceTiebreak.teamBCorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+
 function goToDashboard(): void {
   router.push('/moderador/ranking')
 }
@@ -225,7 +259,7 @@ function finishMatch(): void {
 </script>
 
 <template>
-  <div v-if="store.teamA && store.teamB" class="flex-1 flex flex-col bg-petro-bg min-h-screen">
+  <div v-if="store.teamA && store.teamB" class="flex-1 flex flex-col bg-petro-bg h-screen w-screen overflow-hidden">
     <header class="flex items-center justify-between px-4 sm:px-8 py-4 bg-white shadow-sm">
       <div class="flex items-center gap-2">
         <div
@@ -353,7 +387,7 @@ function finishMatch(): void {
     <!-- Pergunta / item analítico ativo -->
     <template v-else-if="activeDisplay">
       <main
-        class="flex-1 flex flex-col lg:flex-row items-stretch lg:items-center justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto min-h-0"
+        class="flex-1 flex flex-col lg:flex-row items-stretch justify-center gap-4 sm:gap-6 px-4 sm:px-8 py-6 overflow-y-auto min-h-0"
       >
         <TeamScoreCard
           :name="store.teamA?.name ?? ''"

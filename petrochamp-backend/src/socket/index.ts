@@ -91,6 +91,34 @@ async function getPartnersDurationSeconds(): Promise<number> {
   return row ? Number(row.value) : 20
 }
 
+async function getTiebreakConfig(): Promise<{ autoEnabled: boolean; method: string }> {
+  const rows = await prisma.setting.findMany({
+    where: { key: { in: ['tiebreakAutoEnabled', 'tiebreakMethod'] } }
+  })
+  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  return {
+    autoEnabled: (map.tiebreakAutoEnabled ?? 'false') === 'true',
+    method: map.tiebreakMethod ?? 'quiz'
+  }
+}
+
+async function drawThirdPlaceQuestion(): Promise<void> {
+  const pool = await prisma.tiebreakQuestion.findMany({
+    where: { championship: liveState.championship ?? undefined, deletedAt: null }
+  })
+  const available = pool.filter(
+    (q) => !liveState.thirdPlaceTiebreak.usedQuestionIds.includes(q.id)
+  )
+  const finalPool = available.length > 0 ? available : pool
+  if (finalPool.length === 0) {
+    liveState.thirdPlaceTiebreak.currentQuestionId = null
+    return
+  }
+  const chosen = finalPool[Math.floor(Math.random() * finalPool.length)]
+  liveState.thirdPlaceTiebreak.currentQuestionId = chosen.id
+  liveState.thirdPlaceTiebreak.usedQuestionIds.push(chosen.id)
+}
+
 async function getCurrentPhaseConfig() {
   return prisma.phase.findFirst({
     where: {
@@ -174,6 +202,7 @@ function clearActiveChampionshipState(): void {
   liveState.phaseRankingReveal = { visible: false }
   liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
   liveState.presentationPhaseScores = []
+  console.log('[DEBUG RESET carried] #1 (reset geral)', new Error().stack?.split('\n').slice(1,4).join(' | '))
   liveState.carriedPresentationScores = []
   liveState.jurors = []
   liveState.jurorEntries = []
@@ -236,19 +265,48 @@ async function triggerFinalPodiumSequence(broadcast: () => void): Promise<void> 
     liveState.podiumReveal.stage = 'countdown'
     liveState.podiumReveal.countdownValue = 10
     broadcast()
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       liveState.podiumReveal.countdownValue -= 1
       if (liveState.podiumReveal.countdownValue <= 0) {
         clearInterval(interval)
-        const top3 = [...liveState.championshipRankings]
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 3)
-          .map((r) => ({
-            id: r.teamId,
-            name: r.name,
-            institution: r.institution,
-            score: r.score
-          }))
+        const ranked = [...liveState.championshipRankings].sort((a, b) => b.score - a.score)
+        const thirdEntry = ranked[2]
+        const fourthEntry = ranked[3]
+        const tiebreakConfig = await getTiebreakConfig()
+
+        if (
+          tiebreakConfig.autoEnabled &&
+          thirdEntry &&
+          fourthEntry &&
+          thirdEntry.score === fourthEntry.score
+        ) {
+          liveState.thirdPlaceTiebreak = {
+            active: false,
+            teamAId: thirdEntry.teamId,
+            teamBId: fourthEntry.teamId,
+            teamAName: thirdEntry.name,
+            teamBName: fourthEntry.name,
+            teamAInstitution: thirdEntry.institution,
+            teamBInstitution: fourthEntry.institution,
+            currentQuestionId: null,
+            usedQuestionIds: [],
+            teamAAnswer: null,
+            teamBAnswer: null,
+            teamACorrect: null,
+            teamBCorrect: null,
+            winnerId: null
+          }
+          liveState.podiumReveal.stage = 'awaitingTiebreak'
+          broadcast()
+          return
+        }
+
+        const top3 = ranked.slice(0, 3).map((r) => ({
+          id: r.teamId,
+          name: r.name,
+          institution: r.institution,
+          score: r.score
+        }))
         liveState.podium.active = true
         liveState.podium.phaseNumber = liveState.phase
         liveState.podium.phaseLabel = 'Grande Final'
@@ -304,9 +362,78 @@ async function buildPool(): Promise<PoolItem[]> {
   return pool
 }
 
+let isDrawingNextItem = false
+
+// NOVO - lock de reentrancia. Duas chamadas quase simultaneas a drawNextItem
+// (ex: duplo clique em "proxima pergunta", ou evento repetido por lentidao
+// de rede) liam o mesmo pool antes de qualquer uma escrever em
+// liveState.usedQuestionIds, podendo escolher a mesma pergunta. Este wrapper
+// ignora silenciosamente qualquer chamada que chegue enquanto uma anterior
+// ainda esta a decorrer, sem alterar a logica de sorteio em si.
 async function drawNextItem(team: 'A' | 'B'): Promise<void> {
+  if (isDrawingNextItem) {
+    console.warn('[drawNextItem] chamada ignorada - ja existe um sorteio em curso')
+    return
+  }
+  isDrawingNextItem = true
+  try {
+    await drawNextItemInner(team)
+  } finally {
+    isDrawingNextItem = false
+  }
+}
+
+async function drawNextItemInner(team: 'A' | 'B'): Promise<void> {
   const phaseConfig = await getCurrentPhaseConfig()
   const avoidRepeat = phaseConfig?.avoidRepeatQuestions ?? true
+
+  // NOVO - modo "por equipa": consome QuestionAssignment em vez do pool
+  // aleatorio. Nao mexe em usedQuestionIds/buildPool (o modo automatico
+  // continua identico); usa o campo usedAt da propria atribuicao.
+  if (phaseConfig?.questionSelectionMode === 'per_team') {
+    const teamEntity = team === 'A' ? liveState.teamA : liveState.teamB
+    if (!teamEntity || !phaseConfig?.id) {
+      liveState.currentQuestionId = null
+      liveState.currentItemSource = null
+      liveState.currentAnalyticItemId = null
+      liveState.currentItemMode = null
+      return
+    }
+    const nextAssignment = await prisma.questionAssignment.findFirst({
+      where: {
+        phaseId: phaseConfig.id,
+        teamId: teamEntity.id,
+        deletedAt: null,
+        usedAt: null
+      },
+      orderBy: { order: 'asc' },
+      include: { question: true }
+    })
+    if (!nextAssignment) {
+      liveState.currentQuestionId = null
+      liveState.currentItemSource = null
+      liveState.currentAnalyticItemId = null
+      liveState.currentItemMode = null
+      return
+    }
+    const defaultTime = await getQuestionTimeSeconds()
+    await prisma.questionAssignment.update({
+      where: { id: nextAssignment.id },
+      data: { usedAt: new Date() }
+    })
+    liveState.currentQuestionIndex += 1
+    liveState.isRunning = false
+    liveState.awaitingJuryEvaluation = false
+    resetAnswerState()
+    liveState.currentItemSource = 'question'
+    liveState.currentItemMode = null
+    liveState.currentQuestionId = nextAssignment.questionId
+    liveState.currentAnalyticItemId = null
+    liveState.usedQuestionIds.push(nextAssignment.questionId)
+    liveState.activeTeam = team
+    liveState.timeLeft = defaultTime
+    return
+  }
 
   let pool = await buildPool()
   if (avoidRepeat && pool.length === 0) {
@@ -600,6 +727,7 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
     }
   } else if (phaseConfig?.type === 'apresentacao' && phaseConfig.noElimination) {
     // Apresentação sem eliminação: ranking + nota para o quiz seguinte
+    console.log('[DEBUG carried] a processar apresentacao, team=', team?.id, 'average=', average, 'phaseConfig.id=', phaseConfig?.id)
     addToPhaseRanking(team, average)
     if (team) {
       const existingCarried = liveState.carriedPresentationScores.find(
@@ -621,6 +749,7 @@ async function checkAllJurorsSubmitted(broadcast: () => void): Promise<void> {
           quizWeight
         })
       }
+      console.log('[DEBUG carried] carriedPresentationScores agora=', JSON.stringify(liveState.carriedPresentationScores))
     }
   } else if (phaseConfig?.type === 'apresentacao') {
     // Apresentação isolada COM eliminação: grava nota e, assim que
@@ -919,6 +1048,7 @@ export function registerSocketHandlers(io: Server): void {
         liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
         liveState.championReveal = { active: false, teamName: null, logoUrl: null }
         liveState.presentationPhaseScores = []
+        console.log('[DEBUG RESET carried] #2 (handler 8-espacos, bracketVisible=true)', new Error().stack?.split('\n').slice(1,4).join(' | '))
         liveState.carriedPresentationScores = []
         resetPresentationFlow()
         liveState.bracketVisible = true
@@ -1136,6 +1266,103 @@ export function registerSocketHandlers(io: Server): void {
       })
     })
 
+    socket.on('moderator:startThirdPlaceTiebreak', async () => {
+      if (liveState.podiumReveal.stage !== 'awaitingTiebreak') return
+      if (liveState.thirdPlaceTiebreak.active) return
+      if (!liveState.thirdPlaceTiebreak.teamAId || !liveState.thirdPlaceTiebreak.teamBId) return
+
+      startCountdown(5, async () => {
+        if (liveState.podiumReveal.stage !== 'awaitingTiebreak') return
+        liveState.thirdPlaceTiebreak.active = true
+        liveState.thirdPlaceTiebreak.teamAAnswer = null
+        liveState.thirdPlaceTiebreak.teamBAnswer = null
+        liveState.thirdPlaceTiebreak.teamACorrect = null
+        liveState.thirdPlaceTiebreak.teamBCorrect = null
+        await drawThirdPlaceQuestion()
+        liveState.timeLeft = await getQuestionTimeSeconds()
+        broadcast()
+      })
+    })
+
+    socket.on(
+      'thirdPlace:submitAnswer',
+      async (payload: { team: 'A' | 'B'; optionLabel: string }) => {
+        const tb = liveState.thirdPlaceTiebreak
+        if (!tb.active || tb.currentQuestionId === null) return
+        if (payload.team === 'A' && tb.teamAAnswer) return
+        if (payload.team === 'B' && tb.teamBAnswer) return
+
+        if (payload.team === 'A') {
+          tb.teamAAnswer = payload.optionLabel
+        } else {
+          tb.teamBAnswer = payload.optionLabel
+        }
+
+        const question = await prisma.tiebreakQuestion.findUnique({
+          where: { id: tb.currentQuestionId }
+        })
+        if (!question) {
+          if (payload.team === 'A') tb.teamAAnswer = null
+          else tb.teamBAnswer = null
+          return
+        }
+        const correctIdxs = parseCorrectIndexes(question.correctIndexes)
+        const isCorrect = correctIdxs.includes(labelToIndex(payload.optionLabel))
+        if (payload.team === 'A') {
+          tb.teamACorrect = isCorrect
+        } else {
+          tb.teamBCorrect = isCorrect
+        }
+        broadcast()
+
+        if (tb.teamAAnswer && tb.teamBAnswer) {
+          setTimeout(async () => {
+            const aCorrect = tb.teamACorrect
+            const bCorrect = tb.teamBCorrect
+            let winner: 'A' | 'B' | null = null
+            if (aCorrect && !bCorrect) winner = 'A'
+            else if (bCorrect && !aCorrect) winner = 'B'
+
+            if (winner) {
+              const winnerId = winner === 'A' ? tb.teamAId : tb.teamBId
+              const loserId = winner === 'A' ? tb.teamBId : tb.teamAId
+              const winnerName = winner === 'A' ? tb.teamAName : tb.teamBName
+              const loserName = winner === 'A' ? tb.teamBName : tb.teamAName
+              const winnerInstitution = winner === 'A' ? tb.teamAInstitution : tb.teamBInstitution
+              tb.active = false
+              tb.winnerId = winnerId
+
+              const ranked = [...liveState.championshipRankings].sort((a, b) => b.score - a.score)
+              const first = ranked[0]
+              const second = ranked[1]
+              const tiedScore = ranked[2]?.score ?? 0
+
+              liveState.podium.active = true
+              liveState.podium.phaseNumber = liveState.phase
+              liveState.podium.phaseLabel = 'Grande Final'
+              liveState.podium.entries = [
+                first && { id: first.teamId, name: first.name, institution: first.institution, score: first.score },
+                second && { id: second.teamId, name: second.name, institution: second.institution, score: second.score },
+                winnerId && winnerName
+                  ? { id: winnerId, name: winnerName, institution: winnerInstitution ?? '', score: tiedScore }
+                  : null
+              ].filter(Boolean) as typeof liveState.podium.entries
+              liveState.podium.isGrandFinal = true
+              liveState.podiumReveal.stage = 'revealed'
+              broadcast()
+            } else {
+              tb.teamAAnswer = null
+              tb.teamBAnswer = null
+              tb.teamACorrect = null
+              tb.teamBCorrect = null
+              await drawThirdPlaceQuestion()
+              broadcast()
+            }
+          }, 2500)
+        }
+      }
+    )
+
     socket.on(
       'tiebreak:submitAnswer',
       async (payload: { team: 'A' | 'B'; optionLabel: string }) => {
@@ -1298,6 +1525,7 @@ export function registerSocketHandlers(io: Server): void {
       for (const team of [liveState.teamA, liveState.teamB]) {
         if (!team) continue
         const idx = liveState.carriedPresentationScores.findIndex((p) => p.teamId === team.id)
+        console.log('[DEBUG finishMatch] team=', team.id, 'idx carried=', idx, 'carriedList=', JSON.stringify(liveState.carriedPresentationScores))
         if (idx === -1) continue
         const carried = liveState.carriedPresentationScores[idx]
         const rawScore =
@@ -1619,6 +1847,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.championReveal = { active: false, teamName: null, logoUrl: null }
       liveState.presentationPhaseScores = []
+      console.log('[DEBUG RESET carried] #3 (bracketVisible = !!championship)', new Error().stack?.split('\n').slice(1,4).join(' | '))
       liveState.carriedPresentationScores = []
       resetPresentationFlow()
       liveState.bracketVisible = !!liveState.championship
@@ -1649,6 +1878,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.phaseRankingReveal = { visible: false }
       liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.presentationPhaseScores = []
+      console.log('[DEBUG RESET carried] #4 (bracketVisible = false)', new Error().stack?.split('\n').slice(1,4).join(' | '))
       liveState.carriedPresentationScores = []
       resetPresentationFlow()
       liveState.bracketVisible = false

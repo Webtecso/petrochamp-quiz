@@ -131,7 +131,8 @@ router.post('/', requireAdmin, async (req, res) => {
       presentationMinutes,
       presentationWeight,
       quizWeight,
-      noElimination
+      noElimination,
+      questionSelectionMode
     } = req.body || {}
 
     const phaseLabel =
@@ -185,6 +186,8 @@ router.post('/', requireAdmin, async (req, res) => {
       dataToCreate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToCreate.quizWeight = Number(quizWeight)
     if (noElimination !== undefined) dataToCreate.noElimination = Boolean(noElimination)
+    if (questionSelectionMode !== undefined)
+      dataToCreate.questionSelectionMode = String(questionSelectionMode)
 
     const phase = await prisma.phase.create({ data: dataToCreate })
 
@@ -220,7 +223,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
       presentationMinutes,
       presentationWeight,
       quizWeight,
-      noElimination
+      noElimination,
+      questionSelectionMode
     } = req.body || {}
 
     if (!id || id === 'undefined' || id === 'null') {
@@ -257,6 +261,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
       dataToUpdate.presentationWeight = Number(presentationWeight)
     if (quizWeight !== undefined) dataToUpdate.quizWeight = Number(quizWeight)
     if (noElimination !== undefined) dataToUpdate.noElimination = Boolean(noElimination)
+    if (questionSelectionMode !== undefined)
+      dataToUpdate.questionSelectionMode = String(questionSelectionMode)
 
     const phase = await prisma.phase.update({ where: { id }, data: dataToUpdate })
 

@@ -47,6 +47,7 @@ async function logout(): Promise<void> {
         <RouterLink to="/admin/equipas" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Equipas</RouterLink>
         <RouterLink to="/admin/fases" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Fases</RouterLink>
         <RouterLink to="/admin/perguntas" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Perguntas</RouterLink>
+        <RouterLink to="/admin/perguntas-por-equipa" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Perguntas por Equipa</RouterLink>
         <RouterLink to="/admin/desempate" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Desempate</RouterLink>
         <RouterLink to="/admin/avaliacao" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Avaliação (Analíticas)</RouterLink>
         <RouterLink to="/admin/jurados" class="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white transition" active-class="bg-petro-primary text-white">Jurados</RouterLink>

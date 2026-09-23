@@ -6,6 +6,8 @@ interface SettingsPayload {
   maxJurors: number
   showScoreOnProjection: boolean
   partnersDurationSeconds: number
+  tiebreakAutoEnabled: boolean
+  tiebreakMethod: string
 }
 
 export const useSettingsStore = defineStore('settings', {
@@ -13,7 +15,9 @@ export const useSettingsStore = defineStore('settings', {
     questionTimeSeconds: 30,
     maxJurors: 5,
     showScoreOnProjection: true,
-    partnersDurationSeconds: 20
+    partnersDurationSeconds: 20,
+    tiebreakAutoEnabled: false,
+    tiebreakMethod: 'quiz'
   }),
   actions: {
     async fetchSettings() {
@@ -22,6 +26,8 @@ export const useSettingsStore = defineStore('settings', {
       this.maxJurors = data.maxJurors
       this.showScoreOnProjection = data.showScoreOnProjection
       this.partnersDurationSeconds = data.partnersDurationSeconds
+      this.tiebreakAutoEnabled = data.tiebreakAutoEnabled
+      this.tiebreakMethod = data.tiebreakMethod
     },
     async setQuestionTime(seconds: number) {
       const clamped = Math.max(5, Math.min(120, seconds))
@@ -62,6 +68,19 @@ export const useSettingsStore = defineStore('settings', {
         partnersDurationSeconds: clamped
       })
       this.partnersDurationSeconds = clamped
+    },
+    // NOVO - desempate automatico do 3o/4o lugar no podio final
+    async setTiebreakConfig(autoEnabled: boolean, method: string) {
+      await api.put('/settings', {
+        questionTimeSeconds: this.questionTimeSeconds,
+        maxJurors: this.maxJurors,
+        showScoreOnProjection: this.showScoreOnProjection,
+        partnersDurationSeconds: this.partnersDurationSeconds,
+        tiebreakAutoEnabled: autoEnabled,
+        tiebreakMethod: method
+      })
+      this.tiebreakAutoEnabled = autoEnabled
+      this.tiebreakMethod = method
     }
   }
 })

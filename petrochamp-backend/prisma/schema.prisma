@@ -28,6 +28,7 @@ model Team {
   duplasA         PresentationDupla[] @relation("DuplaTeamA")
   duplasB         PresentationDupla[] @relation("DuplaTeamB")
   scores          PresentationScore[]
+  questionAssignments QuestionAssignment[]
 }
 
 model Question {
@@ -49,6 +50,25 @@ model Question {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
+
+  assignments    QuestionAssignment[]
+}
+
+model QuestionAssignment {
+  id         String    @id @default(cuid())
+  questionId String
+  question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  teamId     String
+  team       Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  phaseId    String
+  phase      Phase     @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  order      Int
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  @@unique([questionId, teamId, phaseId])
 }
 
 model TiebreakQuestion {
@@ -96,6 +116,7 @@ model Phase {
   presentationWeight    Int?                      @default(50)
   quizWeight            Int?                      @default(50)
   noElimination         Boolean                   @default(false)
+  questionSelectionMode String                    @default("automatic")
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
   deletedAt             DateTime?
@@ -103,6 +124,7 @@ model Phase {
   duplas                PresentationDupla[]
   criteria              PresentationCriteria[]
   jurorAuthorizations   PhaseJurorAuthorization[]
+  questionAssignments   QuestionAssignment[]
 }
 
 model PresentationDupla {

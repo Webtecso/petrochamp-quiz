@@ -1,8 +1,13 @@
 import { app, shell, BrowserWindow, screen, session, dialog } from 'electron'
+import { mouse, Point, Button } from '@nut-tree-fork/nut-js'
+
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 import { autoUpdater } from 'electron-updater'
 import { join } from 'path'
 // import { pathToFileURL } from 'url'
-import { existsSync, copyFileSync, mkdirSync, appendFileSync } from 'fs'
+import { existsSync, copyFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
 import http from 'http'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -58,62 +63,10 @@ if (!gotSingleInstanceLock) {
     return dbPath
   }
 
-  function runPrismaDbPush(backendPath: string, dbPath: string): Promise<void> {
+  function runPrismaCommand(backendPath: string, dbPath: string, args: string[], logPrefix: string): Promise<number> {
     return new Promise((resolve) => {
       const prismaCliEntry = join(backendPath, "node_modules", "prisma", "build", "index.js")
-      logToFile("A tentar 'prisma db push' como recuperacao (base de dados legada sem historico de migracoes)...")
-
-      const pushProcess = spawn(
-        process.execPath,
-        [prismaCliEntry, "db", "push", "--skip-generate", "--accept-data-loss"],
-        {
-          cwd: backendPath,
-          shell: false,
-          windowsHide: true,
-          stdio: "pipe",
-          env: {
-            ...process.env,
-            ELECTRON_RUN_AS_NODE: "1",
-            DATABASE_URL: "file:" + dbPath.replace(/\\/g, "/")
-          }
-        }
-      )
-
-      pushProcess.stdout?.on("data", (data: Buffer) => {
-        const text = data.toString("utf8").trim()
-        if (text) logToFile("[DB Push] " + text)
-      })
-
-      pushProcess.stderr?.on("data", (data: Buffer) => {
-        const text = data.toString("utf8").trim()
-        if (text) logToFile("[DB Push Error] " + text)
-      })
-
-      pushProcess.on("error", (err) => {
-        logToFile("Falha ao arrancar 'prisma db push': " + err)
-        resolve()
-      })
-
-      pushProcess.on("exit", (code) => {
-        logToFile("'prisma db push' terminou, codigo: " + code)
-        resolve()
-      })
-    })
-  }
-
-  function runPrismaMigrations(backendPath: string, dbPath: string): Promise<void> {
-    return new Promise((resolve) => {
-      const prismaCliEntry = join(backendPath, "node_modules", "prisma", "build", "index.js")
-
-      if (!existsSync(prismaCliEntry)) {
-        logToFile("Aviso: CLI do Prisma nao encontrado em " + prismaCliEntry + ". A saltar migrate deploy.")
-        resolve()
-        return
-      }
-
-      logToFile("A aplicar migracoes pendentes a: " + dbPath)
-
-      const migrateProcess = spawn(process.execPath, [prismaCliEntry, "migrate", "deploy"], {
+      const proc = spawn(process.execPath, [prismaCliEntry, ...args], {
         cwd: backendPath,
         shell: false,
         windowsHide: true,
@@ -125,29 +78,114 @@ if (!gotSingleInstanceLock) {
         }
       })
 
-      migrateProcess.stdout?.on("data", (data: Buffer) => {
+      proc.stdout?.on("data", (data: Buffer) => {
         const text = data.toString("utf8").trim()
-        if (text) logToFile("[Migrate] " + text)
+        if (text) logToFile("[" + logPrefix + "] " + text)
       })
 
-      migrateProcess.stderr?.on("data", (data: Buffer) => {
+      proc.stderr?.on("data", (data: Buffer) => {
         const text = data.toString("utf8").trim()
-        if (text) logToFile("[Migrate Error] " + text)
+        if (text) logToFile("[" + logPrefix + " Error] " + text)
       })
 
-      migrateProcess.on("error", (err) => {
-        logToFile("Falha ao arrancar o processo de migracao: " + err)
-        resolve()
+      proc.on("error", (err) => {
+        logToFile("Falha ao arrancar '" + logPrefix + "': " + err)
+        resolve(-1)
       })
 
-      migrateProcess.on("exit", async (code) => {
-        logToFile("Migrate deploy terminou, codigo: " + code)
-        if (code !== 0) {
-          await runPrismaDbPush(backendPath, dbPath)
-        }
-        resolve()
+      proc.on("exit", (code) => {
+        logToFile("'" + logPrefix + "' terminou, codigo: " + code)
+        resolve(code ?? -1)
       })
     })
+  }
+
+  function backupDatabase(dbPath: string): void {
+    try {
+      if (!existsSync(dbPath)) return
+      const backupsDir = join(app.getPath("userData"), "backups")
+      mkdirSync(backupsDir, { recursive: true })
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+      const backupPath = join(backupsDir, "petrochamp-" + stamp + ".db")
+      copyFileSync(dbPath, backupPath)
+      logToFile("Backup da base de dados criado em: " + backupPath)
+
+      const files = readdirSync(backupsDir)
+        .filter((f) => f.startsWith("petrochamp-") && f.endsWith(".db"))
+        .map((f) => ({ name: f, time: statSync(join(backupsDir, f)).mtimeMs }))
+        .sort((a, b) => b.time - a.time)
+
+      for (const old of files.slice(5)) {
+        try {
+          unlinkSync(join(backupsDir, old.name))
+          logToFile("Backup antigo removido: " + old.name)
+        } catch (err) {
+          logToFile("Nao foi possivel remover backup antigo " + old.name + ": " + err)
+        }
+      }
+    } catch (err) {
+      logToFile("Falha ao criar backup da base de dados (a continuar sem backup): " + err)
+    }
+  }
+
+  async function baselineAllMigrations(backendPath: string, dbPath: string): Promise<void> {
+    const migrationsDir = join(backendPath, "prisma", "migrations")
+    if (!existsSync(migrationsDir)) {
+      logToFile("Aviso: pasta de migracoes nao encontrada em " + migrationsDir + ". A saltar baseline.")
+      return
+    }
+    const entries = readdirSync(migrationsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort()
+
+    for (const migrationName of entries) {
+      const code = await runPrismaCommand(
+        backendPath,
+        dbPath,
+        ["migrate", "resolve", "--applied", migrationName],
+        "Baseline"
+      )
+      if (code !== 0) {
+        logToFile("Aviso: falha ao marcar '" + migrationName + "' como aplicada (codigo " + code + "). A continuar com as restantes.")
+      }
+    }
+  }
+
+  async function runPrismaDbPush(backendPath: string, dbPath: string): Promise<void> {
+    logToFile("A tentar 'prisma db push' como recuperacao (base de dados legada sem historico de migracoes)...")
+    backupDatabase(dbPath)
+
+    const code = await runPrismaCommand(backendPath, dbPath, ["db", "push", "--skip-generate"], "DB Push")
+
+    if (code === 0) {
+      logToFile("'prisma db push' aplicado com sucesso. A marcar migracoes como baseline...")
+      await baselineAllMigrations(backendPath, dbPath)
+    } else {
+      logToFile(
+        "AVISO IMPORTANTE: 'prisma db push' recusou-se a aplicar alteracoes (codigo " + code + "), provavelmente por risco de perda de dados. " +
+        "A base de dados NAO foi alterada. Foi feito um backup em userData/backups antes desta tentativa. " +
+        "E preciso resolver isto manualmente."
+      )
+    }
+  }
+
+  async function runPrismaMigrations(backendPath: string, dbPath: string): Promise<void> {
+    const prismaCliEntry = join(backendPath, "node_modules", "prisma", "build", "index.js")
+
+    if (!existsSync(prismaCliEntry)) {
+      logToFile("Aviso: CLI do Prisma nao encontrado em " + prismaCliEntry + ". A saltar migrate deploy.")
+      return
+    }
+
+    logToFile("A aplicar migracoes pendentes a: " + dbPath)
+    backupDatabase(dbPath)
+
+    const code = await runPrismaCommand(backendPath, dbPath, ["migrate", "deploy"], "Migrate")
+
+    if (code !== 0) {
+      await runPrismaDbPush(backendPath, dbPath)
+    }
   }
 
   async function startLocalBackend(): Promise<void> {
@@ -415,8 +453,23 @@ if (!gotSingleInstanceLock) {
 
     projectionWindow.on('ready-to-show', () => {
       projectionWindow.setBounds(targetDisplay.bounds)
+      projectionWindow.webContents.setBackgroundThrottling(false)
       projectionWindow.show()
       projectionWindow.setFullScreen(true)
+      setTimeout(async () => {
+        try {
+          const bounds = projectionWindow.getBounds()
+          const screenX = bounds.x + Math.floor(bounds.width / 2)
+          const screenY = bounds.y + Math.floor(bounds.height / 2)
+          console.log('[gesto-real] a mover rato para', screenX, screenY)
+          mouse.config.mouseSpeed = 4000
+          await mouse.setPosition(new Point(screenX, screenY))
+          await mouse.click(Button.LEFT)
+          console.log('[gesto-real] clique real disparado')
+        } catch (err) {
+          console.error('[gesto-real] falhou', err)
+        }
+      }, 600)
     })
 
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

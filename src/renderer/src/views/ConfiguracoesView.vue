@@ -84,6 +84,32 @@ async function changeServer(): Promise<void> {
       </div>
 
       <div>
+        <label class="text-sm font-semibold text-gray-600 block mb-2">Desempate automático (3º/4º lugar)</label>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-600">Ativar desempate automático no pódio final</span>
+          <button
+            class="w-12 h-6 rounded-full transition relative shrink-0"
+            :class="settings.tiebreakAutoEnabled ? 'bg-petro-primary' : 'bg-gray-200'"
+            @click="settings.setTiebreakConfig(!settings.tiebreakAutoEnabled, settings.tiebreakMethod)"
+          >
+            <span
+              class="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+              :class="settings.tiebreakAutoEnabled ? 'left-6' : 'left-0.5'"
+            ></span>
+          </button>
+        </div>
+        <select
+          :value="settings.tiebreakMethod"
+          :disabled="!settings.tiebreakAutoEnabled"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-petro-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          @change="settings.setTiebreakConfig(settings.tiebreakAutoEnabled, ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="quiz">Pergunta de desempate (quiz)</option>
+        </select>
+        <p class="text-xs text-gray-600 mt-1">Se ativado, um empate no 3º/4º lugar do pódio final dispara automaticamente um desempate.</p>
+      </div>
+
+      <div>
         <label class="text-sm font-semibold text-gray-600 block mb-2">Categoria do campeonato</label>
         <select
           v-model="category"

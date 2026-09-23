@@ -29,7 +29,8 @@ const form = ref({
   presentationMinutes: null as number | null,
   presentationWeight: 50 as number | null,
   quizWeight: 50 as number | null,
-  noElimination: false
+  noElimination: false,
+  questionSelectionMode: 'automatic' as 'automatic' | 'per_team'
 })
 
 onMounted(() => {
@@ -71,7 +72,8 @@ function resetForm(): void {
     presentationMinutes: null,
     presentationWeight: 50,
     quizWeight: 50,
-    noElimination: false
+    noElimination: false,
+    questionSelectionMode: 'automatic'
   }
 }
 
@@ -92,7 +94,8 @@ function editPhase(p: Phase): void {
     presentationMinutes: p.presentationMinutes ?? null,
     presentationWeight: p.presentationWeight ?? 50,
     quizWeight: p.quizWeight ?? 50,
-    noElimination: p.noElimination ?? false
+    noElimination: p.noElimination ?? false,
+    questionSelectionMode: p.questionSelectionMode ?? 'automatic'
   }
 }
 
@@ -327,6 +330,16 @@ function typeLabel(type: string): string {
           </div>
         </template> -->
 
+        <div v-if="form.type === 'quiz'" class="flex items-center justify-between">
+          <span class="text-sm text-gray-600">Seleção de perguntas por equipa?</span>
+          <button
+            class="w-12 h-6 rounded-full transition relative shrink-0"
+            :class="form.questionSelectionMode === 'per_team' ? 'bg-petro-primary' : 'bg-gray-200'"
+            @click="form.questionSelectionMode = form.questionSelectionMode === 'per_team' ? 'automatic' : 'per_team'"
+          >
+            <span class="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all" :class="form.questionSelectionMode === 'per_team' ? 'left-6' : 'left-0.5'"></span>
+          </button>
+        </div>
         <div class="flex items-center justify-between">
           <span class="text-sm text-gray-600">Usa Avaliação dos Jurados?</span>
           <button

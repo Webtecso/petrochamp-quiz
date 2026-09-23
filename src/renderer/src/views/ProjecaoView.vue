@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, Teleport } from 'vue'
 import { useCampeonatoStore } from '../stores/campeonato'
+import { playCorrectSound, playWrongSound } from '../services/sound'
 import { useQuizContentStore } from '../stores/quizContent'
 import { useSettingsStore } from '../stores/settings'
 import { usePhasesStore } from '../stores/phases'
@@ -35,6 +36,40 @@ const liveBracketStore = useLiveBracketStore()
 const suspensePhrases = useSuspensePhrasesStore()
 const repescagemStore = useRepescagemStore()
 
+// NOVO - som de acerto/erro sincronizado na Projecao. Toca assim que o
+// backend confirma o resultado (teamACorrect/teamBCorrect deixam de ser
+// null), nunca no clique do botao. Cobre quiz normal e desempate 1x1
+// (campos partilhados) e o desempate do 3o/4o lugar (campos proprios em
+// thirdPlaceTiebreak). Mesmo padrao usado no ModeradorDashboard.vue.
+watch(
+  () => store.teamACorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+watch(
+  () => store.teamBCorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+watch(
+  () => store.thirdPlaceTiebreak.teamACorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+watch(
+  () => store.thirdPlaceTiebreak.teamBCorrect,
+  (value) => {
+    if (value === true) playCorrectSound()
+    else if (value === false) playWrongSound()
+  }
+)
+
 
 const stageOuterRef = ref<HTMLElement | null>(null)
 const stageWidth = ref(0)
@@ -47,9 +82,9 @@ let resizeRaf = 0
 const questionWrapperRef = ref<HTMLElement | null>(null) // o div que tem overflow-y-auto
 const questionTextRef = ref<HTMLElement | null>(null)     // o <h1>
 
-const fittedQuestionFontSize = ref(64) 
+const fittedQuestionFontSize = ref(64)
 
-const MAX_QUESTION_FONT = 72 
+const MAX_QUESTION_FONT = 72
 const MIN_QUESTION_FONT = 14
 const ABSOLUTE_MIN_QUESTION_FONT = 8
 
@@ -138,8 +173,16 @@ const championshipLabels: Record<string, string> = {
   exibicao: 'Batalha de Exibição'
 }
 
+const fullscreenBarTarget = ref<Element | null>(null)
+
+function handleFullscreenChange(): void {
+  fullscreenBarTarget.value = document.fullscreenElement
+}
+
 onMounted(async () => {
   try {
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('click', handleFirstProjectionClick, { once: true })
     store.listenToServer()
     startConfigSync()
     await quizContent.fetchQuestions(store.championship ?? undefined)
@@ -168,6 +211,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
   stageResizeObserver?.disconnect()
   window.removeEventListener('resize', scheduleRecompute)
   if (resizeRaf) cancelAnimationFrame(resizeRaf)
@@ -257,6 +301,26 @@ watch(
   { immediate: true }
 )
 
+
+function handleFirstProjectionClick(): void {
+  const viewer = viewerRef.value as any
+  console.log('[proj] clique sintetico recebido, a chamar startPresenting()')
+  viewer?.startPresenting?.()
+}
+
+function forceRepaint(): void {
+  const el = stageOuterRef.value as HTMLElement | null
+  if (!el) return
+  // Ler uma propriedade de layout forca o browser a recalcular e repintar de imediato
+  void el.offsetHeight
+  el.style.transform = 'translateZ(0)'
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.style.transform = ''
+    })
+  })
+}
+
 function applyPageToViewer(page: number): void {
   const viewer = viewerRef.value as any
   if (!viewer || !viewerContent.value) return
@@ -264,17 +328,23 @@ function applyPageToViewer(page: number): void {
   const target = Math.max(0, (page ?? 1) - 1)
 
   try {
-    // Garantir modo em que goTo funciona (não present)
-    if (typeof viewer.setMode === 'function') {
-      const mode = viewer.getMode?.()
-      if (mode === 'present') {
-        viewer.setMode('preview')
-      }
-    }
+    const currentActive =
+      typeof viewer.getActiveSlideIndex === 'function' ? viewer.getActiveSlideIndex() : null
 
-    if (typeof viewer.setActiveSlideIndex === 'function') {
+    if (typeof currentActive === 'number' && currentActive !== target && typeof viewer.goNext === 'function' && typeof viewer.goPrev === 'function') {
+      let steps = target - currentActive
+      const direction = steps > 0 ? 1 : -1
+      steps = Math.abs(steps)
+      console.log('[proj] usando goNext/goPrev, steps=', steps, 'direction=', direction)
+      for (let i = 0; i < steps; i++) {
+        if (direction > 0) viewer.goNext()
+        else viewer.goPrev()
+      }
+    } else if (typeof viewer.setActiveSlideIndex === 'function') {
+      console.log('[proj] usando setActiveSlideIndex (fallback)')
       viewer.setActiveSlideIndex(target)
     } else if (typeof viewer.goTo === 'function') {
+      console.log('[proj] usando goTo (fallback)')
       viewer.goTo(target)
     }
 
@@ -284,6 +354,7 @@ function applyPageToViewer(page: number): void {
         : null
     projActiveSlideIndex.value = active ?? target
     console.log('[proj] goTo', target, 'active=', active)
+    forceRepaint()
   } catch (e) {
     console.error('[proj] apply failed', e)
   }
@@ -294,11 +365,6 @@ function onProjViewerMounted(): void {
     try {
       const viewer = viewerRef.value as any
       const readCount = () => viewer?.getSlideCount?.() ?? 0
-
-      if (typeof viewer?.setMode === 'function') {
-        const mode = viewer.getMode?.()
-        if (mode === 'present') viewer.setMode('preview')
-      }
 
       let count = readCount()
       projSlideCount.value = count
@@ -541,6 +607,14 @@ const currentTiebreakQuestion = computed(() =>
 )
 const tiebreakQuestionImage = computed(() => currentTiebreakQuestion.value?.imageUrl ?? null)
 
+// NOVO - desempate automatico do 3o/4o lugar no podio final. Usa o mesmo
+// banco de perguntas de desempate, mas sem filtrar por fase (o campeonato
+// ja terminou nesta altura, entao usamos todas as perguntas disponiveis).
+const currentThirdPlaceQuestion = computed(() =>
+  quizContent.tiebreakQuestions.find((q) => String(q.id) === String(store.thirdPlaceTiebreak.currentQuestionId))
+)
+const thirdPlaceQuestionImage = computed(() => currentThirdPlaceQuestion.value?.imageUrl ?? null)
+
 function formatImageUrl(url: string | null | undefined): string {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('file://')) {
@@ -766,6 +840,7 @@ const roundJustEnded = computed(() => {
       v-else-if="store.presentationFlow.stage === 'presenting' && store.presentationFlow.presentationMode === 'document'"
       class="h-screen w-screen bg-black flex flex-col overflow-hidden pptx-projection"
     >
+      <Teleport :to="fullscreenBarTarget" :disabled="!fullscreenBarTarget">
       <div class="h-16 shrink-0 flex items-center justify-between px-6 bg-black text-white gap-4 relative z-[40]">
         <div class="flex items-center gap-3 min-w-0">
           <span
@@ -800,6 +875,7 @@ const roundJustEnded = computed(() => {
           </span>
         </div>
       </div>
+      </Teleport>
 
       <div
         ref="stageOuterRef"
@@ -881,6 +957,102 @@ const roundJustEnded = computed(() => {
         :eliminated-team-ids="store.eliminatedTeamIds"
         :highlight-qualified="highlightQualified"
       />
+    </div>
+
+    <div
+      v-else-if="store.thirdPlaceTiebreak.active"
+      class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container tiebreak-container"
+    >
+      <header class="flex flex-col items-center justify-center gap-2 px-4 py-3 w-full max-w-7xl mx-auto shrink-0">
+        <div class="bg-red-600 text-white font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg animate-pulse" style="font-size: clamp(0.65rem, 1vw, 0.85rem)">
+          Desempate 3º/4º lugar
+        </div>
+        <TimerRing :seconds="store.timeLeft" />
+      </header>
+
+      <main class="flex-1 flex flex-col items-center justify-center my-4 px-4 w-full max-w-6xl mx-auto min-h-0">
+        <div v-if="currentThirdPlaceQuestion" class="w-full h-full bg-white rounded-3xl p-8 md:p-10 shadow-2xl border-2 border-red-400/70 relative overflow-hidden flex flex-col justify-center">
+          <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-red-600 via-amber-500 to-red-600"></div>
+          <div
+            class="flex w-full h-full gap-8 md:gap-12 transition-all duration-500"
+            :class="thirdPlaceQuestionImage ? 'flex-col lg:flex-row lg:items-stretch' : 'flex-col items-center justify-center py-8'"
+          >
+            <div
+              class="flex flex-col gap-6 justify-center transition-all duration-500"
+              :class="thirdPlaceQuestionImage ? 'flex-1 min-w-[40%]' : 'w-full max-w-4xl items-center text-center'"
+            >
+              <div
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide bg-red-50 text-red-700 border border-red-200/60"
+                style="font-size: clamp(0.65rem, 1vw, 0.85rem)"
+                :class="thirdPlaceQuestionImage ? 'self-start' : 'self-center'"
+              >
+                <span>⚔️</span> PERGUNTA DE DESEMPATE
+              </div>
+              <h1
+                class="font-extrabold text-slate-800 leading-tight md:leading-snug transition-all duration-300"
+                :class="thirdPlaceQuestionImage ? 'text-left' : 'text-center'"
+                :style="{
+                  fontSize:
+                    currentThirdPlaceQuestion.text && currentThirdPlaceQuestion.text.length > 120
+                      ? 'clamp(1.4rem, 2.6vw, 2.25rem)'
+                      : 'clamp(1.8rem, 3.8vw, 3.5rem)'
+                }"
+              >
+                {{ currentThirdPlaceQuestion.text }}
+              </h1>
+              <div class="w-full mt-2 text-left">
+                <AnswerOptions
+                  :options="currentThirdPlaceQuestion.options"
+                  :correct-index="currentThirdPlaceQuestion.correctIndex"
+                  :team-a-answer="store.thirdPlaceTiebreak.teamAAnswer"
+                  :team-b-answer="store.thirdPlaceTiebreak.teamBAnswer"
+                  :team-a-correct="store.thirdPlaceTiebreak.teamACorrect"
+                  :team-b-correct="store.thirdPlaceTiebreak.teamBCorrect"
+                />
+              </div>
+            </div>
+            <div
+              v-if="thirdPlaceQuestionImage"
+              class="flex-[1.5] flex justify-center items-center bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-red-200 group relative min-h-[300px]"
+            >
+              <img
+                :src="formatImageUrl(thirdPlaceQuestionImage)"
+                alt="Imagem Ilustrativa"
+                class="absolute inset-0 w-full h-full object-contain p-2"
+              />
+            </div>
+          </div>
+        </div>
+        <div v-else class="text-white text-center" style="font-size: clamp(1rem, 1.6vw, 1.25rem)">
+          A aguardar pergunta de desempate do moderador...
+        </div>
+      </main>
+
+      <footer class="w-full max-w-7xl mx-auto px-4 mt-2 shrink-0">
+        <div class="relative w-full h-20 rounded-2xl bg-[#0a0f1d] border border-red-500/40 shadow-2xl overflow-hidden flex items-stretch">
+          <div class="relative flex-1 bg-gradient-to-r from-[#800010] via-[#60000c] to-[#3a0007] flex items-center justify-start pl-6 pr-12 text-white [clip-path:polygon(0_0,100%_0,85%_100%,0_100%)] z-10">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-full bg-white flex items-center justify-center p-1 shadow-md border-2 border-red-400/60 shrink-0">
+                <span class="text-gray-900 font-black text-lg">{{ (store.thirdPlaceTiebreak.teamAName ?? 'EQUIPA A').slice(0, 3).toUpperCase() }}</span>
+              </div>
+              <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">{{ store.thirdPlaceTiebreak.teamAName ?? 'EQUIPA A' }}</span>
+            </div>
+          </div>
+          <div class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+            <div class="bg-[#0a0f1d] px-8 py-2 border-x-2 border-red-400 shadow-2xl transform -skew-x-12 flex items-center justify-center">
+              <span class="transform skew-x-12 font-black text-white tracking-widest" style="font-size: clamp(1.25rem, 2vw, 1.75rem)">VS</span>
+            </div>
+          </div>
+          <div class="relative flex-1 bg-gradient-to-l from-[#002b66] via-[#001d47] to-[#000d24] flex items-center justify-end pr-6 pl-12 text-white [clip-path:polygon(15%_0,100%_0,100%_100%,0_100%)] z-10 ml-auto">
+            <div class="flex items-center gap-4 flex-row-reverse">
+              <div class="w-14 h-14 rounded-full bg-white flex items-center justify-center p-1 shadow-md border-2 border-red-400/60 shrink-0">
+                <span class="text-gray-900 font-black text-lg">{{ (store.thirdPlaceTiebreak.teamBName ?? 'EQUIPA B').slice(0, 3).toUpperCase() }}</span>
+              </div>
+              <span class="font-black tracking-wider uppercase text-white drop-shadow" style="font-size: clamp(1rem, 1.8vw, 1.5rem)">{{ store.thirdPlaceTiebreak.teamBName ?? 'EQUIPA B' }}</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
 
     <CountdownScreen
@@ -1118,8 +1290,8 @@ const roundJustEnded = computed(() => {
               class="flex justify-center items-center overflow-hidden relative shrink-0"
               :class="
                 questionTextLength > 500
-                  ? 'flex-1 min-h-[160px] max-h-[32vh] xl:max-h-none xl:min-w-[32%] xl:self-stretch'
-                  : 'flex-1 min-w-[40%] min-h-[200px] max-h-[45vh] lg:max-h-none lg:self-stretch'
+                  ? 'flex-1 min-h-[160px] max-h-[38vh] xl:max-h-none xl:min-w-[32%] xl:self-stretch'
+                  : 'flex-1 min-w-[40%] min-h-[200px] max-h-[52vh] lg:max-h-none lg:self-stretch'
               "
             >
               <img

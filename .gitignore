@@ -17,3 +17,5 @@ petrochamp-admin-cloud/
 petrochamp-backend/prisma/petrochamp.db
 
 petrochamp-backend/uploads/
+
+tsconfig.node.tsbuildinfo

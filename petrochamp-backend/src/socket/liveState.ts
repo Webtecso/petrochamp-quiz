@@ -140,7 +140,7 @@ export interface PodiumState {
 }
 
 export interface PodiumRevealState {
-  stage: 'idle' | 'suspense' | 'countdown' | 'revealed'
+  stage: 'idle' | 'suspense' | 'countdown' | 'revealed' | 'awaitingTiebreak'
   countdownValue: number
   suspensePhrase: string | null
   finalRankingVisible: boolean
@@ -175,6 +175,28 @@ export interface PhaseRankingReveal {
 }
 
 export type PublicVotingStatus = 'idle' | 'starting' | 'online' | 'failed'
+
+// NOVO - desempate do 3o lugar do podio final. Isolado do
+// liveState.tiebreak normal (que esta ligado ao confronto do Quiz em
+// curso, teamA/teamB) porque, nesta altura, o campeonato ja terminou
+// e teamA/teamB estao a null. Guarda os seus proprios campos de
+// resposta para nao interferir com o resetAnswerState() do Quiz.
+export interface ThirdPlaceTiebreakState {
+  active: boolean
+  teamAId: string | null
+  teamBId: string | null
+  teamAName: string | null
+  teamBName: string | null
+  teamAInstitution: string | null
+  teamBInstitution: string | null
+  currentQuestionId: string | null
+  usedQuestionIds: string[]
+  teamAAnswer: string | null
+  teamBAnswer: string | null
+  teamACorrect: boolean | null
+  teamBCorrect: boolean | null
+  winnerId: string | null
+}
 
 export interface LiveState {
   championship: string | null
@@ -229,6 +251,7 @@ export interface LiveState {
 
   phaseRankings: RankingEntry[]
   championshipRankings: RankingEntry[]
+  thirdPlaceTiebreak: ThirdPlaceTiebreakState
   eliminatedTeamIds: string[]
   phaseRankingReveal: PhaseRankingReveal
 
@@ -344,6 +367,22 @@ export const liveState: LiveState = {
 
   phaseRankings: [],
   championshipRankings: [],
+  thirdPlaceTiebreak: {
+    active: false,
+    teamAId: null,
+    teamBId: null,
+    teamAName: null,
+    teamBName: null,
+    teamAInstitution: null,
+    teamBInstitution: null,
+    currentQuestionId: null,
+    usedQuestionIds: [],
+    teamAAnswer: null,
+    teamBAnswer: null,
+    teamACorrect: null,
+    teamBCorrect: null,
+    winnerId: null
+  },
   eliminatedTeamIds: [],
 
   phaseRankingReveal: {
@@ -452,7 +491,9 @@ export function resetMatch(questionTimeSeconds: number, resetPhase = true): void
   liveState.currentQuestionIndex = 0
 
   liveState.presentationPhaseScores = []
-  liveState.carriedPresentationScores = []
+  // NAO limpar carriedPresentationScores aqui: guarda as notas ponderadas
+  // das equipas que ainda vao jogar o seu confronto do Quiz. Cada entrada
+  // e removida individualmente (splice) em finishMatch, assim que e consumida.
   liveState.presentationRoundReady = false
   liveState.usedQuestionIds = []
   liveState.usedAnalyticItemIds = []

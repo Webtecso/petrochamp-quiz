@@ -1,4 +1,4 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import os from 'os'
 
@@ -15,7 +15,8 @@ function getLocalNetworkIp(): string | null {
 }
 
 const api = {
-  getLocalNetworkIp
+  getLocalNetworkIp,
+  triggerProjecaoGestureClick: () => ipcRenderer.invoke('projecao:trigger-gesture-click')
 }
 
 if (process.contextIsolated) {
