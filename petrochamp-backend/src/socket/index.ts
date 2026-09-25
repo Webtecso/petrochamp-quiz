@@ -47,6 +47,8 @@ const RESTRICTED_TO_AREA: Record<string, string> = {
   'moderator:forceQuestion': 'quiz',
   'moderator:addScore': 'quiz',
   'moderator:endOpenQuestion': 'quiz',
+  'moderator:analyticNextPage': 'quiz',
+  'moderator:analyticPrevPage': 'quiz',
   'moderator:startTiebreak': 'quiz',
   'moderator:finishMatch': 'quiz',
   'moderator:confirmQuizIntro': 'quiz',
@@ -501,6 +503,7 @@ async function drawNextItemInner(team: 'A' | 'B'): Promise<void> {
     liveState.currentItemMode = chosen.mode
     liveState.currentAnalyticItemId = chosen.id
     liveState.currentQuestionId = null
+    liveState.analyticQuestionPage = 1
     liveState.usedAnalyticItemIds.push(chosen.id)
     liveState.activeTeam = team
     // Inicializa o estado de avaliação analítica para esta pergunta
@@ -604,6 +607,47 @@ async function drawTiebreakQuestion(): Promise<void> {
   const chosen = finalPool[Math.floor(Math.random() * finalPool.length)]
   liveState.tiebreak.currentQuestionId = chosen.id
   liveState.tiebreak.usedQuestionIds.push(chosen.id)
+}
+
+// NOVO - alvo de caracteres por pagina de um enunciado analitico. Calibrado
+// para a card da Projecao/Moderador manter uma fonte confortavel sem scroll.
+const ANALYTIC_PAGE_MAX_CHARS = 420
+
+// NOVO - divide um enunciado longo em paginas legiveis para a Projecao,
+// sem cortar a meio de uma palavra ou (sempre que possivel) a meio de uma
+// frase. maxChars e um alvo, nao um limite rigido: a funcao so corta numa
+// fronteira de frase/espaco proxima desse alvo.
+function paginateText(text: string, maxChars: number): string[] {
+  const trimmed = (text ?? '').trim()
+  if (trimmed.length <= maxChars) return [trimmed]
+
+  const pages: string[] = []
+  let rest = trimmed
+
+  while (rest.length > maxChars) {
+    const slice = rest.slice(0, maxChars + 1)
+
+    // Preferimos cortar depois de um fim de frase (. ; ! ?) dentro da fatia.
+    let cutIndex = -1
+    const sentenceEnders = ['. ', '; ', '! ', '? ']
+    for (const ender of sentenceEnders) {
+      const idx = slice.lastIndexOf(ender)
+      if (idx > cutIndex) cutIndex = idx + ender.length
+    }
+
+    // Sem fronteira de frase razoavel: corta no ultimo espaco antes do alvo,
+    // para nunca partir uma palavra a meio.
+    if (cutIndex <= 0 || cutIndex < maxChars * 0.4) {
+      const lastSpace = slice.lastIndexOf(' ')
+      cutIndex = lastSpace > 0 ? lastSpace + 1 : maxChars
+    }
+
+    pages.push(rest.slice(0, cutIndex).trim())
+    rest = rest.slice(cutIndex).trim()
+  }
+
+  if (rest.length > 0) pages.push(rest)
+  return pages
 }
 
 async function pickSuspensePhrase(): Promise<string> {
@@ -2018,13 +2062,30 @@ export function registerSocketHandlers(io: Server): void {
       }
     )
 
-    socket.on('moderator:showPhaseTransition', () => {
+    socket.on('moderator:showPhaseTransition', async () => {
       liveState.phaseTransition.stage = 'carousel'
       broadcast()
+      // CORRIGIDO - usava 8000ms fixo, independente da duracao configurada
+      // no Admin (partnersDurationSeconds) e do tempo real que o carrossel
+      // de parceiros (PartnerCarousel.vue, animacao CSS de 16s por volta)
+      // precisa para dar pelo menos uma volta completa. Isso cortava a
+      // sequencia a meio sempre que a volta demorava mais de 8s.
+      //
+      // CORRIGIDO #2 - mesmo respeitando partnersDurationSeconds, ainda
+      // cortava os ultimos parceiros: o PartnerCarousel.vue so comeca a
+      // animar depois de fetchPartners() (chamada de rede) resolver, mas
+      // este setTimeout comeca a contar antes disso. Impomos um minimo
+      // absoluto que cobre uma volta completa da animacao (16s) mais uma
+      // margem para o carregamento dos dados/imagens, mesmo que o valor
+      // configurado no Admin seja menor.
+      const ANIMATION_LOOP_SECONDS = 16
+      const LOAD_MARGIN_SECONDS = 5
+      const configuredSeconds = await getPartnersDurationSeconds()
+      const seconds = Math.max(configuredSeconds, ANIMATION_LOOP_SECONDS + LOAD_MARGIN_SECONDS)
       setTimeout(() => {
         liveState.phaseTransition.stage = 'webtec'
         broadcast()
-      }, 8000)
+      }, seconds * 1000)
     })
 
     socket.on('moderator:hidePhaseTransition', () => {
@@ -2214,6 +2275,28 @@ export function registerSocketHandlers(io: Server): void {
 
       flow.currentPage = Math.max(1, flow.currentPage - 1)
 
+      broadcast()
+    })
+
+    // NOVO - paginacao de enunciados analiticos longos (resposta aberta ou
+    // multipla escolha com texto extenso). Segue o mesmo padrao de
+    // presentationNextPage/PrevPage, mas calcula o total de paginas na hora
+    // porque o texto vive na BD (EvaluationItem.text), nao no liveState.
+    socket.on('moderator:analyticNextPage', async () => {
+      if (liveState.currentItemSource !== 'analytic' || !liveState.currentAnalyticItemId) return
+      const item = await prisma.evaluationItem.findUnique({
+        where: { id: liveState.currentAnalyticItemId }
+      })
+      if (!item) return
+      const totalPages = paginateText(item.text, ANALYTIC_PAGE_MAX_CHARS).length
+      if (liveState.analyticQuestionPage >= totalPages) return
+      liveState.analyticQuestionPage += 1
+      broadcast()
+    })
+
+    socket.on('moderator:analyticPrevPage', () => {
+      if (liveState.currentItemSource !== 'analytic' || !liveState.currentAnalyticItemId) return
+      liveState.analyticQuestionPage = Math.max(1, liveState.analyticQuestionPage - 1)
       broadcast()
     })
 

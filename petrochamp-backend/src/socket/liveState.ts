@@ -217,6 +217,8 @@ export interface LiveState {
   currentItemSource: 'question' | 'analytic' | null
   currentAnalyticItemId: string | null
   currentItemMode: 'multipla_escolha' | 'aberta' | null
+  // NOVO - pagina atual do enunciado analitico (ver comentario no state inicial)
+  analyticQuestionPage: number
   activeTeam: 'A' | 'B'
   timeLeft: number
   isRunning: boolean
@@ -361,6 +363,11 @@ export const liveState: LiveState = {
     currentPage: 1,
     totalPages: 0
   },
+
+  // NOVO - pagina atual do enunciado de uma pergunta analitica longa,
+  // paginado automaticamente na Projecao para manter o texto legivel sem
+  // scroll. Reiniciado a 1 sempre que uma nova pergunta analitica e sorteada.
+  analyticQuestionPage: 1,
 
   presentationPhaseScores: [],
   carriedPresentationScores: [],

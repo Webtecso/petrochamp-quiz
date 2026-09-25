@@ -405,8 +405,8 @@ async function removeCriteria(criteriaId: string): Promise<void> {
 
         <textarea
           v-model="form.text"
-          rows="2"
-          placeholder="Enunciado da pergunta analítica"
+          rows="6"
+          placeholder="Enunciado da pergunta analítica (usa Enter para criar parágrafos - eles aparecem exatamente assim na Projeção)"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
         ></textarea>
 

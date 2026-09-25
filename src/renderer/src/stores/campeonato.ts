@@ -188,6 +188,8 @@ interface LiveState {
   currentItemSource: 'question' | 'analytic' | null
   currentAnalyticItemId: string | null
   currentItemMode: 'multipla_escolha' | 'aberta' | null
+  // NOVO - pagina atual do enunciado analitico, paginado automaticamente
+  analyticQuestionPage: number
   awaitingJuryEvaluation: boolean
   moderatorAdjusting: boolean
   podium: {
@@ -303,6 +305,7 @@ export const useCampeonatoStore = defineStore('campeonato', {
     currentItemSource: null,
     currentAnalyticItemId: null,
     currentItemMode: null,
+    analyticQuestionPage: 1,
     awaitingJuryEvaluation: false,
     moderatorAdjusting: false,
     podium: {
@@ -391,6 +394,12 @@ export const useCampeonatoStore = defineStore('campeonato', {
     },
     submitThirdPlaceAnswer(team: 'A' | 'B', optionLabel: string) {
       getSocket().emit('thirdPlace:submitAnswer', { team, optionLabel })
+    },
+    analyticNextPage() {
+      getSocket().emit('moderator:analyticNextPage')
+    },
+    analyticPrevPage() {
+      getSocket().emit('moderator:analyticPrevPage')
     },
     finishMatch() {
       getSocket().emit('moderator:finishMatch')

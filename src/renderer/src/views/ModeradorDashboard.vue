@@ -9,6 +9,7 @@ import { useModeStore } from '../stores/mode'
 import { usePhasesStore } from '../stores/phases'
 import { startConfigSync } from '../services/configSync'
 import { buildEvaluationItemOptions } from '../data/evaluationItems'
+import { paginateText, ANALYTIC_PAGE_MAX_CHARS } from '../utils/paginateText'
 import LogoMark from '../components/LogoMark.vue'
 import TeamScoreCard from '../components/TeamScoreCard.vue'
 import QuestionPanel from '../components/QuestionPanel.vue'
@@ -143,6 +144,31 @@ const activeDisplay = computed(() => {
 
 const isAnalyticActive = computed(() => store.currentItemSource === 'analytic')
 const isAnalyticScopeAll = computed(() => currentAnalyticItem.value?.scope === 'all')
+
+// NOVO - paginacao de enunciados analiticos longos, espelhando a Projecao.
+const analyticQuestionPages = computed(() => {
+  if (!isAnalyticActive.value) return null
+  const text = currentAnalyticItem.value?.text
+  if (!text) return null
+  return paginateText(text, ANALYTIC_PAGE_MAX_CHARS)
+})
+
+const analyticTotalPages = computed(() => analyticQuestionPages.value?.length ?? 1)
+
+const displayedActiveText = computed(() => {
+  const pages = analyticQuestionPages.value
+  if (!pages) return activeDisplay.value?.text ?? ''
+  const idx = Math.min(store.analyticQuestionPage, pages.length) - 1
+  return pages[Math.max(0, idx)] ?? ''
+})
+
+function analyticPrevPage(): void {
+  store.analyticPrevPage()
+}
+
+function analyticNextPage(): void {
+  store.analyticNextPage()
+}
 
 const usesDevices = computed(() => modeStore.deviceMode === 'com-dispositivos')
 const phaseLabel = computed(() => phasesStore.labelFor(store.phase))
@@ -445,6 +471,8 @@ function finishMatch(): void {
         :team-b-options="activeTiebreakQuestion.options"
         :team-a-answer="tiebreakTeamAAnswer"
         :team-b-answer="tiebreakTeamBAnswer"
+        :team-a-correct="tiebreakTeamACorrect"
+        :team-b-correct="tiebreakTeamBCorrect"
         @pick="pickActiveTiebreakAnswer"
       />
     </template>
@@ -470,7 +498,7 @@ function finishMatch(): void {
           :active="store.activeTeam === 'A' && !store.teamAAnswer"
         />
         <QuestionPanel
-          :question-text="activeDisplay.text"
+          :question-text="displayedActiveText"
           :options="activeDisplay.options"
           :question-number="store.currentQuestionIndex"
           :total-questions="totalQuestionsForCounter"
@@ -490,6 +518,29 @@ function finishMatch(): void {
           :active="store.activeTeam === 'B' && !store.teamBAnswer"
         />
       </main>
+
+      <div
+        v-if="analyticQuestionPages && analyticTotalPages > 1"
+        class="flex items-center justify-center gap-4 py-2"
+      >
+        <button
+          class="bg-white border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+          :disabled="store.analyticQuestionPage <= 1"
+          @click="analyticPrevPage"
+        >
+          ← Anterior
+        </button>
+        <span class="text-xs font-semibold text-gray-500">
+          Página {{ store.analyticQuestionPage }} / {{ analyticTotalPages }}
+        </span>
+        <button
+          class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+          :disabled="store.analyticQuestionPage >= analyticTotalPages"
+          @click="analyticNextPage"
+        >
+          Seguinte →
+        </button>
+      </div>
       <div
         v-if="isOpenQuestionActive"
         class="flex items-center justify-center gap-4 py-3 px-4 sm:px-8 border-t border-gray-100"
@@ -516,6 +567,8 @@ function finishMatch(): void {
         :team-b-options="isAnalyticScopeAll || store.activeTeam === 'B' ? activeDisplay.options : []"
         :team-a-answer="store.teamAAnswer"
         :team-b-answer="store.teamBAnswer"
+        :team-a-correct="store.teamACorrect"
+        :team-b-correct="store.teamBCorrect"
         @pick="pickAnswer"
       />
     </template>

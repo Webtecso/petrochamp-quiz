@@ -7,9 +7,11 @@ const props = defineProps<{
   teamAName: string
   teamAOptions: OptionInput[]
   teamAAnswer: string | null
+  teamACorrect?: boolean | null
   teamBName: string
   teamBOptions: OptionInput[]
   teamBAnswer: string | null
+  teamBCorrect?: boolean | null
 }>()
 
 const emit = defineEmits<{ pick: [team: 'A' | 'B', label: string] }>()
@@ -51,7 +53,15 @@ const formattedTeamBOptions = computed(() => normalizeOptions(props.teamBOptions
             :key="opt.label"
             type="button"
             class="w-10 h-10 rounded-full text-sm font-bold border transition flex items-center justify-center cursor-pointer shadow-sm"
-            :class="teamAAnswer === opt.label ? 'bg-petro-primary text-white border-petro-primary' : 'bg-white border-gray-300 text-gray-700 hover:border-petro-primary hover:bg-gray-50'"
+            :class="
+              teamAAnswer === opt.label && teamACorrect === true
+                ? 'bg-green-500 text-white border-green-500'
+                : teamAAnswer === opt.label && teamACorrect === false
+                  ? 'bg-red-500 text-white border-red-500'
+                  : teamAAnswer === opt.label
+                    ? 'bg-petro-primary text-white border-petro-primary'
+                    : 'bg-white border-gray-300 text-gray-700 hover:border-petro-primary hover:bg-gray-50'
+            "
             :disabled="!!teamAAnswer"
             @click="emit('pick', 'A', opt.label)"
           >
@@ -76,7 +86,15 @@ const formattedTeamBOptions = computed(() => normalizeOptions(props.teamBOptions
             :key="opt.label"
             type="button"
             class="w-10 h-10 rounded-full text-sm font-bold border transition flex items-center justify-center cursor-pointer shadow-sm"
-            :class="teamBAnswer === opt.label ? 'bg-petro-primary text-white border-petro-primary' : 'bg-white border-gray-300 text-gray-700 hover:border-petro-primary hover:bg-gray-50'"
+            :class="
+              teamBAnswer === opt.label && teamBCorrect === true
+                ? 'bg-green-500 text-white border-green-500'
+                : teamBAnswer === opt.label && teamBCorrect === false
+                  ? 'bg-red-500 text-white border-red-500'
+                  : teamBAnswer === opt.label
+                    ? 'bg-petro-primary text-white border-petro-primary'
+                    : 'bg-white border-gray-300 text-gray-700 hover:border-petro-primary hover:bg-gray-50'
+            "
             :disabled="!!teamBAnswer"
             @click="emit('pick', 'B', opt.label)"
           >

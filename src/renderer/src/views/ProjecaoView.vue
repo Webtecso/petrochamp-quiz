@@ -15,6 +15,7 @@ import LogoMark from '../components/LogoMark.vue'
 import PhaseBadge from '../components/PhaseBadge.vue'
 import TimerRing from '../components/TimerRing.vue'
 import AnswerOptions from '../components/AnswerOptions.vue'
+import { paginateText, ANALYTIC_PAGE_MAX_CHARS } from '../utils/paginateText'
 import SuspenseScreen from '../components/SuspenseScreen.vue'
 import TournamentBracket from '../components/TournamentBracket.vue'
 import PodiumScreen from '../components/PodiumScreen.vue'
@@ -197,6 +198,16 @@ onMounted(async () => {
       questionResizeObserver = new ResizeObserver(() => scheduleQuestionFit())
       questionResizeObserver.observe(questionWrapperRef.value)
     }
+
+    // NOVO - a fonte Carlito e' custom (@font-face) e pode ainda nao estar
+    // carregada quando o primeiro fit corre (sobretudo na 1a execucao apos
+    // instalar, antes de qualquer cache de fontes do SO/Chromium). Se isso
+    // acontecer, o texto e' medido com a fonte de fallback (mais estreita),
+    // o fit calcula um tamanho maior do que cabe de verdade, e nunca mais
+    // recalcula. Assim que as fontes ficam prontas, forcamos um novo fit.
+    document.fonts?.ready?.then(() => {
+      scheduleQuestionFit()
+    })
   } catch (err) {
     console.error('Erro ao carregar dados na Projeção:', err)
   }
@@ -551,6 +562,25 @@ const isOpenAnalyticQuestion = computed(
   () => store.currentItemSource === 'analytic' && currentAnalyticItem.value?.mode === 'aberta'
 )
 
+// NOVO - paginacao de enunciados analiticos longos. So se aplica a perguntas
+// analiticas (currentItemSource === 'analytic'); o quiz normal continua a
+// usar o texto completo com auto-fit, tal como antes.
+const analyticQuestionPages = computed(() => {
+  if (store.currentItemSource !== 'analytic') return null
+  const text = currentAnalyticItem.value?.text
+  if (!text) return null
+  return paginateText(text, ANALYTIC_PAGE_MAX_CHARS)
+})
+
+const displayedQuestionText = computed(() => {
+  const pages = analyticQuestionPages.value
+  if (!pages) return currentQuestion.value?.text ?? ''
+  const idx = Math.min(store.analyticQuestionPage, pages.length) - 1
+  return pages[Math.max(0, idx)] ?? ''
+})
+
+const analyticTotalPages = computed(() => analyticQuestionPages.value?.length ?? 1)
+
 const currentPhaseFull = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
 
 watch(currentPhaseFull, async () => {
@@ -591,6 +621,7 @@ const questionCardWidthClass = computed(() => {
 
 const questionCardPaddingClass = computed(() => {
   const len = questionTextLength.value
+  if (len > 800) return 'p-3 md:p-4'
   if (len > 600) return 'p-5 md:p-6'
   if (len > 300) return 'p-6 md:p-8'
   return 'p-8 md:p-10'
@@ -598,6 +629,7 @@ const questionCardPaddingClass = computed(() => {
 
 const questionContentGapClass = computed(() => {
   const len = questionTextLength.value
+  if (len > 800) return 'gap-1 md:gap-2'
   if (len > 500) return 'gap-4 md:gap-6'
   return 'gap-6 md:gap-8'
 })
@@ -1240,12 +1272,16 @@ const roundJustEnded = computed(() => {
                 questionContentGapClass,
                 questionImage
                   ? (questionTextLength > 500 ? 'flex-[1.4] min-w-0' : 'flex-1 min-w-[40%]')
-                  : 'w-full max-w-4xl items-center text-center'
+                  : questionTextLength > 300
+                    ? 'w-full max-w-[92vw] items-center text-center'
+                    : 'w-full max-w-4xl items-center text-center'
               ]"
             >
               <div
                 class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide transition-all shrink-0"
-                style="font-size: clamp(0.65rem, 1vw, 0.85rem)"
+                :style="questionTextLength > 800
+                  ? 'font-size: clamp(0.55rem, 0.75vw, 0.65rem); padding-top: 0.25rem; padding-bottom: 0.25rem;'
+                  : 'font-size: clamp(0.65rem, 1vw, 0.85rem)'"
                 :class="questionImage ? 'bg-amber-50 text-amber-700 border border-amber-200/60 self-start' : 'bg-slate-100 text-slate-600 self-center'"
               >
                 <span>❓</span> {{ questionImage ? 'ENUNCIADO' : 'QUESTÃO POR RESPONDER' }}
@@ -1257,12 +1293,24 @@ const roundJustEnded = computed(() => {
               >
                 <h1
                   ref="questionTextRef"
-                  class="font-extrabold text-slate-800 leading-snug break-words [overflow-wrap:anywhere] whitespace-normal"
-                  :class="questionImage ? 'text-left' : 'text-center'"
+                  class="font-extrabold text-slate-800 leading-snug break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-justify"
+                  :class="questionImage ? '' : 'text-center'"
                   :style="{ fontSize: fittedQuestionFontSize + 'px' }"
                 >
-                  {{ currentQuestion?.text }}
+                  {{ displayedQuestionText }}
                 </h1>
+              </div>
+
+              <div
+                v-if="analyticQuestionPages && analyticTotalPages > 1"
+                class="w-full flex items-center justify-center gap-2 mt-1 shrink-0"
+              >
+                <span
+                  class="text-slate-400 font-semibold tracking-wide"
+                  style="font-size: clamp(0.6rem, 0.85vw, 0.75rem)"
+                >
+                  Página {{ store.analyticQuestionPage }} / {{ analyticTotalPages }}
+                </span>
               </div>
 
               <div class="w-full mt-1 text-left shrink-0">
@@ -1277,8 +1325,10 @@ const roundJustEnded = computed(() => {
                 />
                 <p
                   v-else-if="isOpenAnalyticQuestion"
-                  class="text-slate-500 font-semibold"
-                  style="font-size: clamp(0.9rem, 1.4vw, 1.15rem); text-align: center;"
+                  class="text-slate-500 font-semibold shrink-0"
+                  :style="questionTextLength > 400
+                    ? 'font-size: clamp(0.65rem, 0.9vw, 0.8rem); text-align: center; margin-top: 0.25rem;'
+                    : 'font-size: clamp(0.9rem, 1.4vw, 1.15rem); text-align: center;'"
                 >
                   Pergunta de resposta aberta - avaliação dos jurados em curso.
                 </p>

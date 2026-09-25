@@ -99,6 +99,16 @@ onMounted(() => {
   scheduleQuestionFit()
 })
 
+  // NOVO - a fonte Carlito e' custom (@font-face) e pode ainda nao estar
+  // carregada quando o primeiro fit corre (sobretudo na 1a execucao apos
+  // instalar, antes de qualquer cache de fontes do SO/Chromium). Se isso
+  // acontecer, o texto e' medido com a fonte de fallback (mais estreita),
+  // o fit calcula um tamanho maior do que cabe de verdade, e nunca mais
+  // recalcula. Assim que as fontes ficam prontas, forcamos um novo fit.
+  document.fonts?.ready?.then(() => {
+    scheduleQuestionFit()
+  })
+
 onUnmounted(() => {
   questionResizeObserver?.disconnect()
   if (questionFitRaf) cancelAnimationFrame(questionFitRaf)
@@ -164,8 +174,8 @@ const gapClass = computed(() => {
     <div ref="questionWrapperRef" class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
       <h2
         ref="questionTextRef"
-        class="font-semibold break-words [overflow-wrap:anywhere] whitespace-normal"
-        :class="imageUrl ? 'text-left' : 'text-center'"
+        class="font-semibold break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-justify"
+        :class="imageUrl ? '' : 'text-center'"
         :style="{ fontSize: fittedQuestionFontSize + 'px' }"
       >
         {{ questionText }}
