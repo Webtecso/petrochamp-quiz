@@ -37,6 +37,12 @@ const championshipLabels: Record<string, string> = {
   ensino_medio: 'Campeonato Ensino Médio',
   exibicao: 'Batalha de Exibição'
 }
+// NOVO - artigo correto por campeonato (Campeonato = masculino, Batalha = feminino)
+const championshipArticles: Record<string, string> = {
+  universitario: 'O',
+  ensino_medio: 'O',
+  exibicao: 'A'
+}
 
 onMounted(async () => {
   try {
@@ -149,7 +155,8 @@ function formatImageUrl(url: string | null | undefined): string {
 const slideCount = computed(() => Math.max(1, store.presentationFlow.totalPages ?? 0))
 const startMessage = computed(() => {
   if (!store.championship) return 'A aguardar o início do evento...'
-  const base = `A ${championshipLabels[store.championship]} vai começar dentro de momentos...`
+  const article = championshipArticles[store.championship] ?? 'O'
+  const base = `${article} ${championshipLabels[store.championship]} vai começar dentro de momentos...`
   return suspensePhrases.randomPhrase ? `${base} ${suspensePhrases.randomPhrase}` : base
 })
 

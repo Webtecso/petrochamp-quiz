@@ -173,6 +173,12 @@ const championshipLabels: Record<string, string> = {
   ensino_medio: 'Campeonato Ensino Médio',
   exibicao: 'Batalha de Exibição'
 }
+// NOVO - artigo correto por campeonato (Campeonato = masculino, Batalha = feminino)
+const championshipArticles: Record<string, string> = {
+  universitario: 'O',
+  ensino_medio: 'O',
+  exibicao: 'A'
+}
 
 const fullscreenBarTarget = ref<Element | null>(null)
 
@@ -661,7 +667,8 @@ function formatImageUrl(url: string | null | undefined): string {
 
 const startMessage = computed(() => {
   if (!store.championship) return 'A aguardar o início do evento...'
-  const base = `A ${championshipLabels[store.championship]} vai começar dentro de momentos...`
+  const article = championshipArticles[store.championship] ?? 'O'
+  const base = `${article} ${championshipLabels[store.championship]} vai começar dentro de momentos...`
   return suspensePhrases.randomPhrase ? `${base} ${suspensePhrases.randomPhrase}` : base
 })
 
@@ -781,7 +788,7 @@ const roundJustEnded = computed(() => {
       v-else-if="store.phaseFlow.stage === 'ranking'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
     >
-      <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem)">Ranking da Fase {{ store.phase }}</h2>
+      <h2 class="font-bold text-white" style="font-size: clamp(1.5rem, 2.6vw, 2.25rem)">Ranking da Fase {{ store.phase }}</h2>
       <PhaseRankingBoard :rankings="store.phaseRankings" :eliminated-team-ids="store.eliminatedTeamIds" />
     </div>
 
@@ -1448,7 +1455,7 @@ const roundJustEnded = computed(() => {
       v-if="store.phaseRankingReveal.visible"
       class="fixed inset-0 z-50 bg-petro-bg/90 flex flex-col items-center justify-center gap-6 p-10"
     >
-      <h2 class="font-bold text-petro-primary" style="font-size: clamp(1.5rem, 2.8vw, 2.25rem)">Ranking da Fase {{ store.phase }}</h2>
+      <h2 class="font-bold text-white" style="font-size: clamp(1.5rem, 2.8vw, 2.25rem)">Ranking da Fase {{ store.phase }}</h2>
       <div class="flex flex-col gap-3 w-full max-w-lg">
         <div
           v-for="(r, i) in sortedPhaseRanking"
