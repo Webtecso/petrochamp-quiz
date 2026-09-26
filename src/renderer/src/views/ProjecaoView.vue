@@ -1355,6 +1355,8 @@ const roundJustEnded = computed(() => {
                 :src="formatImageUrl(questionImage)"
                 alt="Imagem Ilustrativa"
                 class="max-w-full max-h-full w-auto h-auto object-contain object-center"
+                @load="scheduleQuestionFit"
+                @error="scheduleQuestionFit"
               />
             </div>
           </div>

@@ -4,6 +4,17 @@ import { mouse, Point, Button } from '@nut-tree-fork/nut-js'
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 app.commandLine.appendSwitch('disable-background-timer-throttling')
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+// NOVO - forca um fator de escala consistente em todas as janelas,
+// independentemente da escala (DPI) configurada em cada monitor no
+// Windows. Sem isto, quando o monitor de projecao tem uma escala
+// diferente do monitor principal (ex: portatil a 125%, projetor a 100%),
+// o Chromium pode medir clientWidth/clientHeight errados, fazendo o
+// algoritmo de auto-fit do texto da pergunta calcular tamanhos
+// inconsistentes (texto pequeno demais, cortado, ou por vezes nem
+// aparecer) - exatamente o sintoma relatado, e que so acontece em PCs
+// com configuracao de monitores diferente da maquina de desenvolvimento.
+app.commandLine.appendSwitch('force-device-scale-factor', '1')
+app.commandLine.appendSwitch('high-dpi-support', '1')
 import { autoUpdater } from 'electron-updater'
 import { join } from 'path'
 // import { pathToFileURL } from 'url'
@@ -435,6 +446,19 @@ if (!gotSingleInstanceLock) {
     const primaryDisplay = screen.getPrimaryDisplay()
     const targetDisplay =
       displays.find((d) => d.id !== primaryDisplay.id) ?? primaryDisplay
+
+    // NOVO - regista o scaleFactor (DPI) de cada monitor detetado, para
+    // diagnosticar problemas de dimensionamento do texto reportados em
+    // PCs de clientes com configuracoes de ecra diferentes da maquina de
+    // desenvolvimento. Consultar main.log apos reproduzir o problema.
+    displays.forEach((d) => {
+      logToFile(
+        '[projecao] monitor id=' + d.id +
+        ' bounds=' + JSON.stringify(d.bounds) +
+        ' scaleFactor=' + d.scaleFactor +
+        (d.id === targetDisplay.id ? ' <- ESCOLHIDO PARA PROJECAO' : '')
+      )
+    })
 
     const projectionWindow = new BrowserWindow({
       x: targetDisplay.bounds.x,
