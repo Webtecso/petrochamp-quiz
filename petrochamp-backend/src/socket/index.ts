@@ -302,11 +302,14 @@ async function triggerFinalPodiumSequence(broadcast: () => void): Promise<void> 
           return
         }
 
+        // CORRIGIDO - o podio mostra a media aritmetica (score / matches)
+        // em vez da soma bruta. A ordenacao (ranked, acima) e o desempate
+        // do 3o/4o lugar continuam a usar r.score (soma), inalterados.
         const top3 = ranked.slice(0, 3).map((r) => ({
           id: r.teamId,
           name: r.name,
           institution: r.institution,
-          score: r.score
+          score: Math.round(r.score / (r.matches ?? 1))
         }))
         liveState.podium.active = true
         liveState.podium.phaseNumber = liveState.phase
@@ -496,6 +499,7 @@ async function drawNextItemInner(team: 'A' | 'B'): Promise<void> {
     liveState.currentItemMode = null
     liveState.currentQuestionId = chosen.id
     liveState.currentAnalyticItemId = null
+    liveState.analyticQuestionPage = 1
     liveState.usedQuestionIds.push(chosen.id)
     liveState.activeTeam = team
   } else {
@@ -612,42 +616,70 @@ async function drawTiebreakQuestion(): Promise<void> {
 // NOVO - alvo de caracteres por pagina de um enunciado analitico. Calibrado
 // para a card da Projecao/Moderador manter uma fonte confortavel sem scroll.
 const ANALYTIC_PAGE_MAX_CHARS = 420
+const NORMAL_PAGE_MAX_CHARS = 700
 
 // NOVO - divide um enunciado longo em paginas legiveis para a Projecao,
 // sem cortar a meio de uma palavra ou (sempre que possivel) a meio de uma
 // frase. maxChars e um alvo, nao um limite rigido: a funcao so corta numa
 // fronteira de frase/espaco proxima desse alvo.
-function paginateText(text: string, maxChars: number): string[] {
-  const trimmed = (text ?? '').trim()
-  if (trimmed.length <= maxChars) return [trimmed]
+function normalizeTextBlocks(text: string): string[] {
+  let t = (text ?? '').replace(/\r\n/g, '\n')
+  t = t.replace(/([.:;?!])[ \t]*(?=[a-h]\)\s)/g, '$1\n')
+  t = t.replace(/([a-zà-ú]{3,}\.)(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/g, '$1\n')
+  t = t.replace(/([.?!)])[ \t]*(?=Quest[ãa]o\s*\d+)/gi, '$1\n')
+  return t.split(/\n+/).map((s) => s.trim()).filter(Boolean)
+}
 
-  const pages: string[] = []
-  let rest = trimmed
-
+function splitLongTextBlock(block: string, maxChars: number): string[] {
+  const enders = ['. ', '; ', '! ', '? ']
+  const chunks: string[] = []
+  let rest = block
   while (rest.length > maxChars) {
     const slice = rest.slice(0, maxChars + 1)
-
-    // Preferimos cortar depois de um fim de frase (. ; ! ?) dentro da fatia.
-    let cutIndex = -1
-    const sentenceEnders = ['. ', '; ', '! ', '? ']
-    for (const ender of sentenceEnders) {
-      const idx = slice.lastIndexOf(ender)
-      if (idx > cutIndex) cutIndex = idx + ender.length
+    let cut = -1
+    for (const e of enders) {
+      const idx = slice.lastIndexOf(e)
+      if (idx > cut) cut = idx + e.length
     }
-
-    // Sem fronteira de frase razoavel: corta no ultimo espaco antes do alvo,
-    // para nunca partir uma palavra a meio.
-    if (cutIndex <= 0 || cutIndex < maxChars * 0.4) {
-      const lastSpace = slice.lastIndexOf(' ')
-      cutIndex = lastSpace > 0 ? lastSpace + 1 : maxChars
+    if (cut <= 0 || cut < maxChars * 0.4) {
+      const sp = slice.lastIndexOf(' ')
+      cut = sp > 0 ? sp + 1 : maxChars
     }
-
-    pages.push(rest.slice(0, cutIndex).trim())
-    rest = rest.slice(cutIndex).trim()
+    chunks.push(rest.slice(0, cut).trim())
+    rest = rest.slice(cut).trim()
   }
+  if (rest.length > 0) chunks.push(rest)
+  return chunks
+}
 
-  if (rest.length > 0) pages.push(rest)
-  return pages
+function paginateText(text: string, maxChars: number): string[] {
+  const blocks = normalizeTextBlocks(text)
+  if (blocks.length === 0) return ['']
+  const whole = blocks.join('\n')
+  if (whole.length <= maxChars) return [whole]
+
+  const pages: string[] = []
+  let current = ''
+  const flush = (): void => {
+    if (current) pages.push(current.trim())
+    current = ''
+  }
+  for (const block of blocks) {
+    if (block.length > maxChars) {
+      flush()
+      for (const chunk of splitLongTextBlock(block, maxChars)) pages.push(chunk)
+      continue
+    }
+    const candidate = current ? current + '\n' + block : block
+    if (candidate.length > maxChars) {
+      flush()
+      current = block
+    } else {
+      current = candidate
+    }
+  }
+  flush()
+  return pages.length > 0 ? pages : [whole]
 }
 
 async function pickSuspensePhrase(): Promise<string> {
@@ -860,10 +892,9 @@ async function applyEvaluationConfirmation(itemId: string): Promise<void> {
 
     if (await roundQuestionsComplete()) {
       liveState.currentQuestionId = null
-    } else {
-      const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
-      await drawNextItem(nextTeam)
     }
+    // REMOVIDO - avanco automatico para a proxima pergunta/item. O
+    // moderador avanca manualmente com moderator:nextQuestion.
   }
 }
 
@@ -1159,6 +1190,7 @@ export function registerSocketHandlers(io: Server): void {
       liveState.currentItemSource = 'question'
       liveState.currentAnalyticItemId = null
       liveState.currentQuestionId = payload.questionId
+      liveState.analyticQuestionPage = 1
       if (!liveState.usedQuestionIds.includes(payload.questionId)) {
         liveState.usedQuestionIds.push(payload.questionId)
       }
@@ -1212,19 +1244,15 @@ export function registerSocketHandlers(io: Server): void {
         const readyToAdvance =
           item.scope === 'all' ? liveState.teamAAnswer && liveState.teamBAnswer : true
 
-        if (readyToAdvance) {
-          setTimeout(async () => {
-            if (await roundQuestionsComplete()) {
-              liveState.currentQuestionId = null
-              liveState.currentItemSource = null
-              liveState.currentAnalyticItemId = null
-              broadcast()
-              return
-            }
-            const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
-            await drawNextItem(nextTeam)
-            broadcast()
-          }, 2500)
+        // REMOVIDO - avanco automatico apos 2500ms. O moderador avanca
+        // manualmente com moderator:nextQuestion. Se a ronda ja terminou,
+        // marcamos de imediato para o botao "Finalizar Rodada" ficar
+        // disponivel.
+        if (readyToAdvance && (await roundQuestionsComplete())) {
+          liveState.currentQuestionId = null
+          liveState.currentItemSource = null
+          liveState.currentAnalyticItemId = null
+          broadcast()
         }
         return
       }
@@ -1258,16 +1286,12 @@ export function registerSocketHandlers(io: Server): void {
       }
       liveState.isRunning = false
       broadcast()
-      setTimeout(async () => {
-        if (await roundQuestionsComplete()) {
-          liveState.currentQuestionId = null
-          broadcast()
-          return
-        }
-        const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
-        await drawNextItem(nextTeam)
+      // REMOVIDO - avanco automatico apos 2500ms. O moderador avanca
+      // manualmente com moderator:nextQuestion.
+      if (await roundQuestionsComplete()) {
+        liveState.currentQuestionId = null
         broadcast()
-      }, 2500)
+      }
     })
 
     socket.on('moderator:endOpenQuestion', () => {
@@ -1379,15 +1403,22 @@ export function registerSocketHandlers(io: Server): void {
               const first = ranked[0]
               const second = ranked[1]
               const tiedScore = ranked[2]?.score ?? 0
+              // CORRIGIDO - mostra a media aritmetica (score / matches) no
+              // podio; a comparacao de empate do desempate continua a usar
+              // a soma (tiedScore/ranked[2].score), inalterada.
+              const avgOf = (r: typeof first): number => (r ? Math.round(r.score / (r.matches ?? 1)) : 0)
+              const winnerTeamId = winner === 'A' ? tb.teamAId : tb.teamBId
+              const winnerEntry = liveState.championshipRankings.find((r) => r.teamId === winnerTeamId)
+              const winnerAvg = winnerEntry ? Math.round(winnerEntry.score / (winnerEntry.matches ?? 1)) : tiedScore
 
               liveState.podium.active = true
               liveState.podium.phaseNumber = liveState.phase
               liveState.podium.phaseLabel = 'Grande Final'
               liveState.podium.entries = [
-                first && { id: first.teamId, name: first.name, institution: first.institution, score: first.score },
-                second && { id: second.teamId, name: second.name, institution: second.institution, score: second.score },
+                first && { id: first.teamId, name: first.name, institution: first.institution, score: avgOf(first) },
+                second && { id: second.teamId, name: second.name, institution: second.institution, score: avgOf(second) },
                 winnerId && winnerName
-                  ? { id: winnerId, name: winnerName, institution: winnerInstitution ?? '', score: tiedScore }
+                  ? { id: winnerId, name: winnerName, institution: winnerInstitution ?? '', score: winnerAvg }
                   : null
               ].filter(Boolean) as typeof liveState.podium.entries
               liveState.podium.isGrandFinal = true
@@ -1698,7 +1729,8 @@ export function registerSocketHandlers(io: Server): void {
       }
 
       const isLastPhase = liveState.phaseFlow.stage === 'partnersPending'
-      const seconds = await getPartnersDurationSeconds()
+      const partnersMinSeconds = Math.max(16, (await prisma.partner.count({ where: { deletedAt: null } })) * 4) + 5
+      const seconds = Math.max(await getPartnersDurationSeconds(), partnersMinSeconds)
 
       liveState.phaseFlow = { stage: 'partners', suspensePhrase: null }
       broadcast()
@@ -1848,6 +1880,15 @@ export function registerSocketHandlers(io: Server): void {
     })
 
     socket.on('moderator:resetChampionship', async () => {
+      // reset-usedAt-per-team: repoe as perguntas por equipa para voltarem a estar disponiveis
+      try {
+        await prisma.questionAssignment.updateMany({
+          where: { usedAt: { not: null } },
+          data: { usedAt: null }
+        })
+      } catch (err) {
+        console.error('[resetChampionship] falha ao repor usedAt das atribuicoes:', err)
+      }
       const questionTime = await getQuestionTimeSeconds()
       const championship = liveState.championship
 
@@ -2078,7 +2119,8 @@ export function registerSocketHandlers(io: Server): void {
       // absoluto que cobre uma volta completa da animacao (16s) mais uma
       // margem para o carregamento dos dados/imagens, mesmo que o valor
       // configurado no Admin seja menor.
-      const ANIMATION_LOOP_SECONDS = 16
+      const partnerCount = await prisma.partner.count({ where: { deletedAt: null } })
+      const ANIMATION_LOOP_SECONDS = Math.max(16, partnerCount * 4)
       const LOAD_MARGIN_SECONDS = 5
       const configuredSeconds = await getPartnersDurationSeconds()
       const seconds = Math.max(configuredSeconds, ANIMATION_LOOP_SECONDS + LOAD_MARGIN_SECONDS)
@@ -2283,19 +2325,27 @@ export function registerSocketHandlers(io: Server): void {
     // presentationNextPage/PrevPage, mas calcula o total de paginas na hora
     // porque o texto vive na BD (EvaluationItem.text), nao no liveState.
     socket.on('moderator:analyticNextPage', async () => {
-      if (liveState.currentItemSource !== 'analytic' || !liveState.currentAnalyticItemId) return
-      const item = await prisma.evaluationItem.findUnique({
-        where: { id: liveState.currentAnalyticItemId }
-      })
-      if (!item) return
-      const totalPages = paginateText(item.text, ANALYTIC_PAGE_MAX_CHARS).length
+      let pageText: string | null = null
+      let pageLimit = ANALYTIC_PAGE_MAX_CHARS
+      if (liveState.currentItemSource === 'analytic' && liveState.currentAnalyticItemId) {
+        const item = await prisma.evaluationItem.findUnique({
+          where: { id: liveState.currentAnalyticItemId }
+        })
+        pageText = item?.text ?? null
+      } else if (liveState.currentQuestionId) {
+        const q = await prisma.question.findUnique({ where: { id: liveState.currentQuestionId } })
+        pageText = q?.text ?? null
+        pageLimit = NORMAL_PAGE_MAX_CHARS
+      }
+      if (!pageText) return
+      const totalPages = paginateText(pageText, pageLimit).length
       if (liveState.analyticQuestionPage >= totalPages) return
       liveState.analyticQuestionPage += 1
       broadcast()
     })
 
     socket.on('moderator:analyticPrevPage', () => {
-      if (liveState.currentItemSource !== 'analytic' || !liveState.currentAnalyticItemId) return
+      if (!liveState.currentQuestionId && !liveState.currentAnalyticItemId) return
       liveState.analyticQuestionPage = Math.max(1, liveState.analyticQuestionPage - 1)
       broadcast()
     })
@@ -2412,11 +2462,10 @@ export function registerSocketHandlers(io: Server): void {
 
       // Reset local analyticEvaluation
       liveState.analyticEvaluation = { itemId: null, criteriaScores: [], jurorsSubmitted: [], expectedJurorCount: 0 }
+      // REMOVIDO - avanco automatico para a proxima pergunta/item. O
+      // moderador avanca manualmente com moderator:nextQuestion.
       if (await roundQuestionsComplete()) {
         liveState.currentQuestionId = null
-      } else {
-        const nextTeam = liveState.activeTeam === 'A' ? 'B' : 'A'
-        await drawNextItem(nextTeam)
       }
       broadcast()
     })
@@ -2478,64 +2527,8 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
     })
 
-    socket.on(
-      'juror:register',
-      async (payload: { code: string }, callback?: (res: unknown) => void) => {
-        const code = (payload.code || '').trim().toUpperCase()
-        const juror = await prisma.juror.findUnique({ where: { code } })
-        if (!juror || juror.deletedAt) {
-          callback?.({ success: false, error: 'Código de jurado inválido.' })
-          return
-        }
-
-        const phaseConfig = await getCurrentPhaseConfig()
-        if (phaseConfig) {
-          const authRows = await prisma.phaseJurorAuthorization.findMany({
-            where: { phaseId: phaseConfig.id, deletedAt: null }
-          })
-          if (authRows.length > 0 && !authRows.some((a) => a.jurorId === juror.id)) {
-            callback?.({
-              success: false,
-              error: 'Este jurado não está autorizado a avaliar esta fase.'
-            })
-            return
-          }
-        }
-
-        if (liveState.jurors.some((j) => j.id === juror.id)) {
-          callback?.({ success: false, error: 'Este jurado já está ligado a esta partida.' })
-          return
-        }
-
-        const maxJurors = await getMaxJurors()
-        if (liveState.jurors.length >= maxJurors) {
-          callback?.({
-            success: false,
-            error: 'Número máximo de jurados já atingido para esta partida.'
-          })
-          return
-        }
-
-        // CORRIGIDO - reconexao (mesmo jurorId a re-registar-se) ja
-        // nao duplica a entrada em liveState.jurors nem apaga as notas
-        // que ja tinha submetido; so re-associa o socket.id novo.
-        const pendingRemoval = jurorDisconnectTimers.get(juror.id)
-        if (pendingRemoval) {
-          clearTimeout(pendingRemoval)
-          jurorDisconnectTimers.delete(juror.id)
-          console.log('[juror:register] reconexao dentro do grace period, notas preservadas:', juror.id)
-        }
-        const alreadyPresent = liveState.jurors.some((j) => j.id === juror.id)
-        if (!alreadyPresent) {
-          liveState.jurors.push({ id: juror.id, name: juror.name })
-        }
-        socket.data.jurorId = juror.id
-        await refreshExpectedJurorCount()
-        broadcast()
-        callback?.({ success: true, jurorId: juror.id })
-      }
-    )
-
+    // REMOVIDO - portal remoto dos jurados (registo por codigo). As notas
+    // dos jurados passam a ser so locais, via moderator:registerJurorLocally.
     socket.on(
       'moderator:registerJurorLocally',
       async (payload: { jurorId: string }, callback?: (res: unknown) => void) => {

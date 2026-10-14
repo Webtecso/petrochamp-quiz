@@ -21,3 +21,6 @@ petrochamp-backend/uploads/
 tsconfig.node.tsbuildinfo
 
 *.bak-*
+
+# backups de edicao
+*.bak-*

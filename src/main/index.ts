@@ -475,6 +475,20 @@ if (!gotSingleInstanceLock) {
       }
     })
 
+    // NOVO - atalho de diagnostico F12 / Ctrl+Shift+I para abrir as DevTools
+    // na janela de Projecao. Necessario para investigar bugs de renderizacao
+    // (texto cortado, fonte errada) que so acontecem nesta janela e variam
+    // por maquina/monitor. Remover ou proteger com flag antes de distribuir
+    // a versao final ao cliente, se nao se quiser deixar isto acessivel.
+    projectionWindow.webContents.on('before-input-event', (_event, input) => {
+      if (input.type !== 'keyDown') return
+      const isF12 = input.key === 'F12'
+      const isCtrlShiftI = input.control && input.shift && input.key.toLowerCase() === 'i'
+      if (isF12 || isCtrlShiftI) {
+        projectionWindow.webContents.toggleDevTools()
+      }
+    })
+
     projectionWindow.on('ready-to-show', () => {
       projectionWindow.setBounds(targetDisplay.bounds)
       projectionWindow.webContents.setBackgroundThrottling(false)

@@ -17,6 +17,13 @@ export interface RankingEntry {
   name: string
   institution: string
   score: number
+  // NOVO - numero de confrontos/rondas que contribuiram para este score,
+  // para o podio final poder mostrar a media aritmetica (score / matches)
+  // em vez da soma bruta, sem alterar a ordenacao nem o desempate, que
+  // continuam a usar score. Opcional porque phaseRankings e
+  // presentationPhaseScores reaproveitam este mesmo tipo sem precisar
+  // de contar confrontos - so championshipRankings usa isto de facto.
+  matches?: number
 }
 
 export interface PodiumEntry {
@@ -590,12 +597,14 @@ export function addToChampionshipRanking(
 
   if (existing) {
     existing.score += score
+    existing.matches = (existing.matches ?? 0) + 1
   } else {
     liveState.championshipRankings.push({
       teamId: team.id,
       name: team.name,
       institution: team.institution,
-      score
+      score,
+      matches: 1
     })
   }
 }

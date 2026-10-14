@@ -13,6 +13,7 @@ const props = withDefaults(
     teamBAnswer?: string | null
     teamACorrect?: boolean | null
     teamBCorrect?: boolean | null
+    dark?: boolean
   }>(),
   {}
 )
@@ -31,7 +32,7 @@ function optionClass(index: number, label: string): string {
   if (props.teamAAnswer === label && props.teamACorrect === false) return 'bg-red-500 text-white border-red-500'
   if (props.teamBAnswer === label && props.teamBCorrect === false) return 'bg-red-500 text-white border-red-500'
   if (isCorrectOption(index) && anyWrong) return 'bg-green-500 text-white border-green-500'
-  return 'border-gray-200'
+  return props.dark ? 'border-white/30 bg-black/40 text-white' : 'border-gray-200'
 }
 </script>
 
@@ -45,7 +46,7 @@ function optionClass(index: number, label: string): string {
     >
       <span
         class="w-[clamp(1.5rem,2vw,2.2rem)] h-[clamp(1.5rem,2vw,2.2rem)] rounded-full flex items-center justify-center text-[clamp(0.7rem,1vw,1rem)] font-bold bg-petro-primary/10 text-petro-primary shrink-0"
-        :class="optionClass(i, opt.label) !== 'border-gray-200' ? 'bg-white/20 text-white' : ''"
+        :class="optionClass(i, opt.label).includes('border-gray-200') || optionClass(i, opt.label).includes('border-white/30') ? (dark ? 'bg-white/20 text-white' : '') : 'bg-white/20 text-white'"
       >
         {{ opt.label }}
       </span>

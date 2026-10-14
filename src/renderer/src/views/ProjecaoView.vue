@@ -15,7 +15,7 @@ import LogoMark from '../components/LogoMark.vue'
 import PhaseBadge from '../components/PhaseBadge.vue'
 import TimerRing from '../components/TimerRing.vue'
 import AnswerOptions from '../components/AnswerOptions.vue'
-import { paginateText, ANALYTIC_PAGE_MAX_CHARS } from '../utils/paginateText'
+import { paginateText, ANALYTIC_PAGE_MAX_CHARS, NORMAL_PAGE_MAX_CHARS } from '../utils/paginateText'
 import SuspenseScreen from '../components/SuspenseScreen.vue'
 import TournamentBracket from '../components/TournamentBracket.vue'
 import PodiumScreen from '../components/PodiumScreen.vue'
@@ -85,7 +85,7 @@ const questionTextRef = ref<HTMLElement | null>(null)     // o <h1>
 
 const fittedQuestionFontSize = ref(64)
 
-const MAX_QUESTION_FONT = 72
+const MAX_QUESTION_FONT = 140
 const MIN_QUESTION_FONT = 14
 const ABSOLUTE_MIN_QUESTION_FONT = 8
 
@@ -136,7 +136,7 @@ function fitQuestionText(): void {
     else hi = mid
   }
 
-  fittedQuestionFontSize.value = Math.floor(lo)
+  fittedQuestionFontSize.value = Math.max(ABSOLUTE_MIN_QUESTION_FONT, Math.floor(lo * 0.99))
   textEl.style.fontSize = `${fittedQuestionFontSize.value}px`
 }
 
@@ -203,6 +203,9 @@ onMounted(async () => {
     if (questionWrapperRef.value) {
       questionResizeObserver = new ResizeObserver(() => scheduleQuestionFit())
       questionResizeObserver.observe(questionWrapperRef.value)
+      if (questionWrapperRef.value.parentElement) {
+        questionResizeObserver.observe(questionWrapperRef.value.parentElement)
+      }
     }
 
     // NOVO - a fonte Carlito e' custom (@font-face) e pode ainda nao estar
@@ -572,10 +575,15 @@ const isOpenAnalyticQuestion = computed(
 // analiticas (currentItemSource === 'analytic'); o quiz normal continua a
 // usar o texto completo com auto-fit, tal como antes.
 const analyticQuestionPages = computed(() => {
-  if (store.currentItemSource !== 'analytic') return null
-  const text = currentAnalyticItem.value?.text
-  if (!text) return null
-  return paginateText(text, ANALYTIC_PAGE_MAX_CHARS)
+  if (store.currentItemSource === 'analytic') {
+    const text = currentAnalyticItem.value?.text
+    if (!text) return null
+    return paginateText(text, ANALYTIC_PAGE_MAX_CHARS)
+  }
+  const qt = currentQuestion.value?.text
+  if (!qt) return null
+  const pages = paginateText(qt, NORMAL_PAGE_MAX_CHARS)
+  return pages.length > 1 ? pages : null
 })
 
 const displayedQuestionText = computed(() => {
@@ -617,12 +625,19 @@ watch(
 
 const questionTextLength = computed(() => currentQuestion.value?.text?.length ?? 0)
 
+// NOVO - opcoes cujo texto e so a letra (A, B...) nao acrescentam nada
+// na Projecao; escondemos para dar altura ao enunciado.
+const optionsAreOnlyLetters = computed(() => {
+  const o = currentQuestionOptions.value as { text?: string }[] | null | undefined
+  return !!o && o.length > 0 && o.every((x) => (x.text ?? '').trim().length <= 1)
+})
+
 const questionCardWidthClass = computed(() => {
   const len = questionTextLength.value
   if (len > 700) return 'max-w-[96vw]'
   if (len > 400) return 'max-w-[92vw]'
-  if (len > 250) return 'max-w-7xl'
-  return 'max-w-6xl'
+  if (len > 250) return 'max-w-[92vw]'
+  return 'max-w-[90vw]'
 })
 
 const questionCardPaddingClass = computed(() => {
@@ -1242,7 +1257,7 @@ const roundJustEnded = computed(() => {
         </div>
         <div class="flex flex-col items-center justify-center text-center">
           <LogoMark />
-          <span class="font-bold tracking-widest uppercase mt-1 whitespace-nowrap" style="font-size: clamp(0.55rem, 0.8vw, 0.7rem); color:aliceblue">
+          <span v-if="questionTextLength <= 400" class="font-bold tracking-widest uppercase mt-1 whitespace-nowrap" style="font-size: clamp(0.55rem, 0.8vw, 0.7rem); color:aliceblue">
             O QUIZ COMPETITIVO DO MUNDO DO PETRÓLEO
           </span>
         </div>
@@ -1256,13 +1271,11 @@ const roundJustEnded = computed(() => {
         :class="questionCardWidthClass"
       >
         <div
-          class="w-full h-full bg-white rounded-3xl shadow-2xl border border-gray-100/90 relative overflow-hidden flex flex-col justify-center"
+          class="w-full h-full relative overflow-hidden flex flex-col justify-center"
           :class="questionCardPaddingClass"
         >
-          <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 via-red-600 to-blue-600"></div>
-
           <div
-            class="flex w-full h-full transition-all duration-500 min-h-0"
+            class="flex w-full h-full min-h-0"
             :class="[
               questionContentGapClass,
               questionImage
@@ -1274,22 +1287,24 @@ const roundJustEnded = computed(() => {
           >
             <!-- Texto + opções -->
             <div
-              class="flex flex-col justify-center transition-all duration-500 min-h-0"
+              class="flex flex-col justify-center min-h-0"
               :class="[
                 questionContentGapClass,
                 questionImage
-                  ? (questionTextLength > 500 ? 'flex-[1.4] min-w-0' : 'flex-1 min-w-[40%]')
+                  ? (questionTextLength > 500 ? 'flex-[1.4] min-w-0 h-full' : 'flex-1 min-w-[40%] h-full')
                   : questionTextLength > 300
-                    ? 'w-full max-w-[92vw] items-center text-center'
-                    : 'w-full max-w-4xl items-center text-center'
+                    ? 'w-full max-w-[92vw] items-center text-center h-full'
+                    : 'w-full max-w-[92vw] items-center text-center h-full'
               ]"
             >
               <div
                 class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide transition-all shrink-0"
                 :style="questionTextLength > 800
-                  ? 'font-size: clamp(0.55rem, 0.75vw, 0.65rem); padding-top: 0.25rem; padding-bottom: 0.25rem;'
-                  : 'font-size: clamp(0.65rem, 1vw, 0.85rem)'"
-                :class="questionImage ? 'bg-amber-50 text-amber-700 border border-amber-200/60 self-start' : 'bg-slate-100 text-slate-600 self-center'"
+                  ? 'font-size: clamp(0.55rem, 0.75vw, 0.65rem); padding-top: 0.2rem; padding-bottom: 0.2rem; margin-bottom: 0.35rem;'
+                  : questionTextLength > 400
+                    ? 'font-size: clamp(0.6rem, 0.85vw, 0.75rem); padding-top: 0.25rem; padding-bottom: 0.25rem; margin-bottom: 0.4rem;'
+                    : 'font-size: clamp(0.65rem, 1vw, 0.85rem)'"
+                :class="questionImage ? 'bg-white/15 text-amber-200 border border-white/20 self-start' : 'bg-white/15 text-white self-center'"
               >
                 <span>❓</span> {{ questionImage ? 'ENUNCIADO' : 'QUESTÃO POR RESPONDER' }}
               </div>
@@ -1300,7 +1315,7 @@ const roundJustEnded = computed(() => {
               >
                 <h1
                   ref="questionTextRef"
-                  class="font-extrabold text-slate-800 leading-snug break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-justify"
+                  class="font-extrabold text-white leading-snug break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-left [text-shadow:0_2px_8px_rgba(0,0,0,0.95),0_0_2px_rgba(0,0,0,0.9)]"
                   :class="questionImage ? '' : 'text-center'"
                   :style="{ fontSize: fittedQuestionFontSize + 'px' }"
                 >
@@ -1313,7 +1328,7 @@ const roundJustEnded = computed(() => {
                 class="w-full flex items-center justify-center gap-2 mt-1 shrink-0"
               >
                 <span
-                  class="text-slate-400 font-semibold tracking-wide"
+                  class="text-white/70 font-semibold tracking-wide"
                   style="font-size: clamp(0.6rem, 0.85vw, 0.75rem)"
                 >
                   Página {{ store.analyticQuestionPage }} / {{ analyticTotalPages }}
@@ -1322,7 +1337,8 @@ const roundJustEnded = computed(() => {
 
               <div class="w-full mt-1 text-left shrink-0">
                 <AnswerOptions
-                  v-if="currentQuestion && currentQuestionOptions"
+                  dark
+                  v-if="currentQuestion && currentQuestionOptions && !optionsAreOnlyLetters"
                   :options="currentQuestionOptions"
                   :correct-index="currentQuestionCorrectIndex"
                   :team-a-answer="store.teamAAnswer"
@@ -1332,7 +1348,7 @@ const roundJustEnded = computed(() => {
                 />
                 <p
                   v-else-if="isOpenAnalyticQuestion"
-                  class="text-slate-500 font-semibold shrink-0"
+                  class="text-white/80 font-semibold shrink-0"
                   :style="questionTextLength > 400
                     ? 'font-size: clamp(0.65rem, 0.9vw, 0.8rem); text-align: center; margin-top: 0.25rem;'
                     : 'font-size: clamp(0.9rem, 1.4vw, 1.15rem); text-align: center;'"

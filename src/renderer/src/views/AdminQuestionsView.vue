@@ -4,6 +4,7 @@ import { useQuizContentStore } from '../stores/quizContent'
 import { usePhasesStore, type Phase } from '../stores/phases'
 import { uploadImage } from '../services/upload'
 import type { ChampionshipType } from '../stores/campeonato'
+import { paginateText, NORMAL_PAGE_MAX_CHARS } from '../utils/paginateText'
 
 interface QuestionOption {
   label: string
@@ -21,6 +22,8 @@ interface QuizQuestionExtended {
 }
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+const questionTextPages = computed(() => paginateText(form.value.text, NORMAL_PAGE_MAX_CHARS))
 const MAX_OPTIONS = 8
 const MIN_OPTIONS = 2
 
@@ -217,6 +220,23 @@ const groupedByPhase = computed(() => {
           placeholder="Texto da pergunta"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-petro-primary"
         ></textarea>
+
+        <div
+          v-if="questionTextPages.length > 1"
+          class="flex flex-col gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3"
+        >
+          <p class="text-xs font-semibold text-amber-700">
+            ⚠️ Este texto vai ocupar {{ questionTextPages.length }} páginas na Projeção/Moderador
+          </p>
+          <div
+            v-for="(page, idx) in questionTextPages"
+            :key="idx"
+            class="text-xs bg-white border border-amber-100 rounded-md p-2"
+          >
+            <span class="font-semibold text-amber-600">Página {{ idx + 1 }}/{{ questionTextPages.length }}:</span>
+            <span class="text-gray-700"> {{ page }}</span>
+          </div>
+        </div>
 
         <div class="flex items-center gap-4">
           <div class="w-20 h-14 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">

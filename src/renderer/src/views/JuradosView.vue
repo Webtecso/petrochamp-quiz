@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useCampeonatoStore } from '../stores/campeonato'
 import { useJuradosStore } from '../stores/jurados'
 import { useQuizContentStore, type EvaluationCriteria } from '../stores/quizContent'
@@ -26,8 +27,6 @@ onMounted(async () => {
   await phasesStore.fetchPhases(store.championship ?? undefined)
   await settings.fetchSettings()
   jurados.listenToServer()
-  await jurados.restoreSession()
-  jurados.listenForReconnect()
   startConfigSync()
   await loadAvailableJurors()
 })
@@ -55,26 +54,7 @@ function jurorsAllowedFor(item: EvaluationItem | undefined): typeof jurados.juro
   return jurados.jurors.filter((j) => item.jurorIds!.includes(j.id))
 }
 
-const newJurorName = ref('')
-const newJurorCode = ref('')
-const registerError = ref('')
-
-async function addJuror(): Promise<void> {
-  if (jurados.jurors.length >= settings.maxJurors) return
-  const code = (newJurorCode.value || '').trim().toUpperCase()
-  if (!code) {
-    registerError.value = 'Introduz o código do jurado.'
-    return
-  }
-  const result = await jurados.registerJuror(code)
-  if (!result.success) {
-    registerError.value = result.error || 'Falha ao registar jurado.'
-    return
-  }
-  registerError.value = ''
-  newJurorName.value = ''
-  newJurorCode.value = ''
-}
+const router = useRouter()
 
 const availableLocalJurors = ref<{ id: string; name: string }[]>([])
 const selectedLocalJurorId = ref('')
@@ -104,6 +84,19 @@ async function addJurorLocally(): Promise<void> {
   localRegisterError.value = ''
   selectedLocalJurorId.value = ''
 }
+
+// Regista localmente TODOS os jurados cadastrados (sem portal, o servidor ja nao os recebe)
+async function autoRegisterAllJurors(): Promise<void> {
+  await loadAvailableJurors()
+  for (const j of availableLocalJurors.value) {
+    if (jurados.jurors.some((x) => x.id === j.id)) continue
+    await jurados.registerJurorLocally(j.id)
+  }
+}
+
+onMounted(() => {
+  setTimeout(() => { void autoRegisterAllJurors() }, 1000)
+})
 
 // ==================== Notas Iniciais ====================
 
@@ -307,33 +300,21 @@ const presentationStageLabel = computed(() => {
 
 <template>
   <div class="min-h-screen bg-petro-bg flex flex-col items-center px-8 py-10 gap-6">
+    <div class="w-full max-w-4xl flex items-center gap-3">
+      <button class="bg-petro-dark text-white rounded-lg px-4 py-2 text-sm font-semibold" @click="router.push({ name: 'moderador-jogo' })">
+        ← Voltar ao jogo
+      </button>
+      <button class="border border-white/20 text-gray-800 rounded-lg px-4 py-2 text-sm font-semibold" @click="router.push({ name: 'moderador-campeonato' })">
+        Campeonato
+      </button>
+    </div>
     <LogoRed />
     <div class="text-xs font-semibold text-petro-primary uppercase tracking-wide" style="font-size: large;">Painel dos Jurados</div>
 
     <!-- Registo de jurado -->
     <div v-if="!jurados.jurors.length && !jurados.myJurorId" class="w-full max-w-md bg-petro-card p-6 rounded-2xl border border-white/10 flex flex-col gap-3">
-      <p>Nome do Jurado</p>
-      <input
-        v-model="newJurorName"
-        type="text"
-        placeholder="Nome do jurado (opcional)"
-        class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-transparent text-red"
-      />
-
-      <p>Código do Jurado</p>
-      <input
-        v-model="newJurorCode"
-        type="text"
-        placeholder="Código do jurado (4 dígitos)"
-        class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-transparent text-red"
-      />
-      <button class="bg-petro-primary text-white rounded-lg px-4 py-2 text-sm font-semibold" @click="addJuror">
-        Registar
-      </button>
-      <p v-if="registerError" class="text-xs text-red-400">{{ registerError }}</p>
-
-      <div class="border-t border-white/10 pt-3 mt-1 flex flex-col gap-2">
-        <p class="text-xs text-gray-400">Ou seleciona um jurado já cadastrado (avaliação local, sem portal):</p>
+      <div class="flex flex-col gap-2">
+        <p class="text-xs text-gray-400">Seleciona o teu nome na lista de jurados cadastrados:</p>
         <select v-model="selectedLocalJurorId" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-transparent text-red">
           <option value="" disabled>Escolhe um jurado</option>
           <option v-for="j in availableLocalJurors" :key="j.id" :value="j.id">{{ j.name }}</option>

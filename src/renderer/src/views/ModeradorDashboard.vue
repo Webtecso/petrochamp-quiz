@@ -9,7 +9,7 @@ import { useModeStore } from '../stores/mode'
 import { usePhasesStore } from '../stores/phases'
 import { startConfigSync } from '../services/configSync'
 import { buildEvaluationItemOptions } from '../data/evaluationItems'
-import { paginateText, ANALYTIC_PAGE_MAX_CHARS } from '../utils/paginateText'
+import { paginateText, ANALYTIC_PAGE_MAX_CHARS, NORMAL_PAGE_MAX_CHARS } from '../utils/paginateText'
 import LogoMark from '../components/LogoMark.vue'
 import TeamScoreCard from '../components/TeamScoreCard.vue'
 import QuestionPanel from '../components/QuestionPanel.vue'
@@ -147,10 +147,15 @@ const isAnalyticScopeAll = computed(() => currentAnalyticItem.value?.scope === '
 
 // NOVO - paginacao de enunciados analiticos longos, espelhando a Projecao.
 const analyticQuestionPages = computed(() => {
-  if (!isAnalyticActive.value) return null
-  const text = currentAnalyticItem.value?.text
-  if (!text) return null
-  return paginateText(text, ANALYTIC_PAGE_MAX_CHARS)
+  if (isAnalyticActive.value) {
+    const text = currentAnalyticItem.value?.text
+    if (!text) return null
+    return paginateText(text, ANALYTIC_PAGE_MAX_CHARS)
+  }
+  const qt = currentQuestion.value?.text
+  if (!qt) return null
+  const pages = paginateText(qt, NORMAL_PAGE_MAX_CHARS)
+  return pages.length > 1 ? pages : null
 })
 
 const analyticTotalPages = computed(() => analyticQuestionPages.value?.length ?? 1)
@@ -279,6 +284,16 @@ const canFinish = computed(
   () => roundIsComplete.value && !isTiedUnresolved.value && !store.awaitingJuryEvaluation
 )
 const dashboardDisabled = computed(() => store.isRunning)
+// NOVO - botao "Proxima Pergunta": so fica ativo depois da resposta ser
+// processada (tempo parado), enquanto a ronda ainda nao terminou e nao
+// ha avaliacao de jurados pendente. O avanco deixou de ser automatico.
+const canAdvanceQuestion = computed(
+  () => !store.isRunning && !roundIsComplete.value && !store.awaitingJuryEvaluation && !isOpenQuestionActive.value
+)
+function nextQuestion(): void {
+  if (!canAdvanceQuestion.value) return
+  store.nextQuestion()
+}
 const isOpenQuestionActive = computed(() => store.currentItemMode === 'aberta')
 
 function endOpenQuestion(): void {
@@ -635,10 +650,12 @@ function finishMatch(): void {
       :is-running="store.isRunning"
       :dashboard-disabled="dashboardDisabled"
       :can-finish="canFinish"
+      :can-advance="canAdvanceQuestion"
       @start="store.startTimer"
       @pause="store.pauseTimer"
       @finish="finishMatch"
       @dashboard="goToDashboard"
+      @next="nextQuestion"
     />
   </div>
 </template>

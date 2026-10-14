@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { usePartnersStore } from '../stores/partners'
 
 const partnersStore = usePartnersStore()
+
+// 4s por parceiro (minimo 16s) - mesma formula usada no backend
+const SECONDS_PER_PARTNER = 4
+const loopSeconds = computed(() => Math.max(16, partnersStore.partners.length * SECONDS_PER_PARTNER))
+const loopedPartners = computed(() => [...partnersStore.partners, ...partnersStore.partners])
 onMounted(() => {
   partnersStore.fetchPartners()
 })
@@ -29,10 +34,10 @@ defineProps<{ transparent?: boolean }>()
          ocupar quase toda a largura do ecrã em vez de ficar limitado a
          uma faixa central estreita. -->
     <div v-else class="w-full max-w-[90vw] overflow-hidden">
-      <div class="flex gap-[clamp(2rem,4vw,5rem)] items-center partner-track">
+      <div class="flex gap-[clamp(2rem,4vw,5rem)] items-center partner-track" :style="{ animationDuration: loopSeconds + 's' }">
         <div
-          v-for="p in [...partnersStore.partners, ...partnersStore.partners]"
-          :key="p.id + '-' + Math.random()"
+          v-for="(p, i) in loopedPartners"
+          :key="p.id + '-' + i"
           class="flex flex-col items-center gap-[clamp(0.75rem,1.5vh,1.5rem)] shrink-0"
         >
           <div class="bg-white rounded-2xl shadow flex items-center justify-center p-[clamp(0.6rem,1.2vw,1.25rem)] w-[clamp(12rem,26vw,36rem)] h-[clamp(12rem,26vw,36rem)]">
