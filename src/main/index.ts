@@ -484,7 +484,7 @@ if (!gotSingleInstanceLock) {
       if (input.type !== 'keyDown') return
       const isF12 = input.key === 'F12'
       const isCtrlShiftI = input.control && input.shift && input.key.toLowerCase() === 'i'
-      if (isF12 || isCtrlShiftI) {
+      if (!app.isPackaged && (isF12 || isCtrlShiftI)) {
         projectionWindow.webContents.toggleDevTools()
       }
     })

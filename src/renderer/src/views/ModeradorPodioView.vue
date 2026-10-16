@@ -45,6 +45,14 @@ const canShowChampions = computed(
   () => isLastPhase.value && !!championId.value
 )
 
+// tiebreak-nav: quando o desempate 3o/4o arranca, abre o ecra do jogo no moderador
+watch(
+  () => store.thirdPlaceTiebreak.active,
+  (active) => {
+    if (active) router.push({ name: 'moderador-jogo' })
+  }
+)
+
 const podiumSequenceAlreadyTriggered = computed(
   () => store.podiumReveal.stage !== 'idle'
 )

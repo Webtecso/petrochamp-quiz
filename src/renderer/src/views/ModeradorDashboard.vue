@@ -567,12 +567,19 @@ function finishMatch(): void {
         >
           ⏹️ Terminar Resposta
         </button>
-        <span
-          v-else-if="store.awaitingJuryEvaluation"
+        <div v-else-if="store.awaitingJuryEvaluation" class="flex items-center gap-3">
+          <span
           class="bg-amber-100 text-amber-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wide"
         >
           ⏳ A aguardar avaliação dos jurados
         </span>
+          <RouterLink
+            to="/moderador/jurados"
+            class="bg-petro-primary text-white rounded-lg px-4 py-1.5 text-xs font-bold"
+          >
+            Avaliar no Painel dos Jurados
+          </RouterLink>
+        </div>
       </div>
       <ModeratorAnswerPicker
         v-if="!usesDevices && !isOpenQuestionActive"

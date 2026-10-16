@@ -8,7 +8,8 @@ const DEFAULTS = {
   maxJurors: 5,
   partnersDurationSeconds: 20,
   tiebreakAutoEnabled: false,
-  tiebreakMethod: 'quiz'
+  tiebreakMethod: 'quiz',
+  questionFontScale: 1
 }
 
 router.get('/', async (_req, res) => {
@@ -19,12 +20,14 @@ router.get('/', async (_req, res) => {
     maxJurors: Number(map.maxJurors ?? DEFAULTS.maxJurors),
     partnersDurationSeconds: Number(map.partnersDurationSeconds ?? DEFAULTS.partnersDurationSeconds),
     tiebreakAutoEnabled: (map.tiebreakAutoEnabled ?? String(DEFAULTS.tiebreakAutoEnabled)) === 'true',
-    tiebreakMethod: map.tiebreakMethod ?? DEFAULTS.tiebreakMethod
+    tiebreakMethod: map.tiebreakMethod ?? DEFAULTS.tiebreakMethod,
+    questionTextJustify: (map.questionTextJustify ?? 'false') === 'true',
+    questionFontScale: Number(map.questionFontScale ?? DEFAULTS.questionFontScale)
   })
 })
 
 router.put('/', async (req, res) => {
-  const { questionTimeSeconds, maxJurors, partnersDurationSeconds, tiebreakAutoEnabled, tiebreakMethod } = req.body
+  const { questionTimeSeconds, maxJurors, partnersDurationSeconds, tiebreakAutoEnabled, tiebreakMethod, questionTextJustify, questionFontScale } = req.body
   await prisma.setting.upsert({
     where: { key: 'questionTimeSeconds' },
     update: { value: String(questionTimeSeconds) },
@@ -54,7 +57,21 @@ router.put('/', async (req, res) => {
       create: { key: 'tiebreakMethod', value: String(tiebreakMethod) }
     })
   }
-  res.json({ questionTimeSeconds, maxJurors, partnersDurationSeconds, tiebreakAutoEnabled, tiebreakMethod })
+  if (questionTextJustify !== undefined) {
+    await prisma.setting.upsert({
+      where: { key: 'questionTextJustify' },
+      update: { value: String(questionTextJustify) },
+      create: { key: 'questionTextJustify', value: String(questionTextJustify) }
+    })
+  }
+  if (questionFontScale !== undefined) {
+    await prisma.setting.upsert({
+      where: { key: 'questionFontScale' },
+      update: { value: String(questionFontScale) },
+      create: { key: 'questionFontScale', value: String(questionFontScale) }
+    })
+  }
+  res.json({ questionTimeSeconds, maxJurors, partnersDurationSeconds, tiebreakAutoEnabled, tiebreakMethod, questionTextJustify, questionFontScale })
 })
 
 export default router

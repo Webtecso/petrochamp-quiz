@@ -24,6 +24,10 @@ export interface RankingEntry {
   // presentationPhaseScores reaproveitam este mesmo tipo sem precisar
   // de contar confrontos - so championshipRankings usa isto de facto.
   matches?: number
+  // fases distintas em que a equipa pontuou; matches = phases.length,
+  // para a media ser por fase e nao por confronto (empates geram 2
+  // confrontos na mesma fase).
+  phases?: number[]
 }
 
 export interface PodiumEntry {
@@ -133,6 +137,7 @@ export interface PhaseFlowState {
     | 'organizer'
     | 'suspense'
     | 'quizIntro'
+    | 'lastPhaseIntro'
     | 'battleEnded'
     | 'presentationRanking'
   suspensePhrase: string | null
@@ -597,14 +602,18 @@ export function addToChampionshipRanking(
 
   if (existing) {
     existing.score += score
-    existing.matches = (existing.matches ?? 0) + 1
+    const played = existing.phases ?? []
+    if (!played.includes(liveState.phase)) played.push(liveState.phase)
+    existing.phases = played
+    existing.matches = Math.max(played.length, 1)
   } else {
     liveState.championshipRankings.push({
       teamId: team.id,
       name: team.name,
       institution: team.institution,
       score,
-      matches: 1
+      matches: 1,
+      phases: [liveState.phase]
     })
   }
 }

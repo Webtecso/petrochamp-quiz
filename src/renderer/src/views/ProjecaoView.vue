@@ -98,7 +98,10 @@ function fitQuestionText(): void {
   let hi = MAX_QUESTION_FONT
 
   const fitsAt = (size: number): boolean => {
-    textEl.style.fontSize = `${size}px`
+    // NOVO - testa o tamanho JA com a escala do Admin aplicada, para a
+    // busca binaria reservar espaco suficiente e nunca dar overflow,
+    // mesmo com escalas acima de 100%.
+    textEl.style.fontSize = `${size * settings.questionFontScale}px`
 
     return textEl.scrollHeight <= wrapper.clientHeight + 1 && textEl.scrollWidth <= wrapper.clientWidth + 1
   }
@@ -136,7 +139,10 @@ function fitQuestionText(): void {
     else hi = mid
   }
 
-  fittedQuestionFontSize.value = Math.max(ABSOLUTE_MIN_QUESTION_FONT, Math.floor(lo * 0.99))
+  // NOVO - lo/hi ja foram testados com a escala aplicada dentro de
+  // fitsAt(), por isso o resultado final e' so o tamanho escalado em si,
+  // sem multiplicar de novo.
+  fittedQuestionFontSize.value = Math.max(ABSOLUTE_MIN_QUESTION_FONT, Math.floor(lo * 0.99 * settings.questionFontScale))
   textEl.style.fontSize = `${fittedQuestionFontSize.value}px`
 }
 
@@ -151,6 +157,19 @@ function scheduleQuestionFit(): void {
 }
 
 let questionResizeObserver: ResizeObserver | null = null
+// fit-observer: liga o observador sempre que a caixa do enunciado aparece (o onMounted corre antes de ela existir)
+watch(questionWrapperRef, (el, oldEl) => {
+  if (!questionResizeObserver) questionResizeObserver = new ResizeObserver(() => scheduleQuestionFit())
+  if (oldEl) {
+    questionResizeObserver.unobserve(oldEl)
+    if (oldEl.parentElement) questionResizeObserver.unobserve(oldEl.parentElement)
+  }
+  if (el) {
+    questionResizeObserver.observe(el)
+    if (el.parentElement) questionResizeObserver.observe(el.parentElement)
+    scheduleQuestionFit()
+  }
+})
 
 function recomputeStageSize(): void {
   const el = stageOuterRef.value
@@ -595,6 +614,11 @@ const displayedQuestionText = computed(() => {
 
 const analyticTotalPages = computed(() => analyticQuestionPages.value?.length ?? 1)
 
+// paragrafos compactos: a linha em branco entre paragrafos ocupava uma linha inteira e obrigava a letra a encolher
+const displayedQuestionParagraphs = computed(() =>
+  displayedQuestionText.value.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+)
+
 const currentPhaseFull = computed(() => phasesStore.phases.find((p) => p.order === store.phase))
 
 watch(currentPhaseFull, async () => {
@@ -688,7 +712,15 @@ const startMessage = computed(() => {
 })
 
 const sortedPhaseRanking = computed(() => [...store.phaseRankings].sort((a, b) => b.score - a.score))
-const sortedChampionshipRanking = computed(() => [...store.championshipRankings].sort((a, b) => b.score - a.score))
+// ranking-media: o ranking final mostra a media aritmetica das fases (score acumulado / fases jogadas)
+const sortedChampionshipRanking = computed(() =>
+  store.championshipRankings
+    .map((r) => ({
+      ...r,
+      score: Math.round(r.score / ((r as typeof r & { matches?: number }).matches || 1))
+    }))
+    .sort((a, b) => b.score - a.score)
+)
 const highlightQualified = computed(() => store.eliminatedTeamIds.length > 0)
 
 const isPhaseBracketVisible = computed(() => {
@@ -787,6 +819,13 @@ const roundJustEnded = computed(() => {
       transparent
     />
 
+    <!-- Empate no 3o lugar: aviso antes da batalha decisiva -->
+    <SuspenseScreen
+      v-else-if="store.podiumReveal.stage === 'awaitingTiebreak' && !store.thirdPlaceTiebreak.active && !store.countdown.active"
+      message="Antes de revelarmos os vencedores, temos ainda uma última batalha decisiva para disputar o 3º lugar. Preparem-se!"
+      transparent
+    />
+
     <div
       v-else-if="store.phaseFlow.stage === 'battleEnded'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10 text-white text-center"
@@ -819,7 +858,12 @@ const roundJustEnded = computed(() => {
 
     <SuspenseScreen
       v-else-if="store.phaseFlow.stage === 'partnersPending'"
-      message="A preparar os parceiros..."
+      message="Chegamos ao fim do campeonato. Agora chegou o momento de revelarmos os campeões."
+      transparent
+    />
+    <SuspenseScreen
+      v-else-if="store.phaseFlow.stage === 'lastPhaseIntro'"
+      message="Estamos prestes a iniciar a última fase do campeonato. Preparem-se!"
       transparent
     />
     <PartnerCarousel v-else-if="store.phaseFlow.stage === 'partners'" transparent />
@@ -1240,7 +1284,7 @@ const roundJustEnded = computed(() => {
 
     <div
       v-else-if="isBattleActiveState"
-      class="h-screen w-screen flex flex-col justify-between p-6 select-none overflow-hidden battle-container"
+      class="h-screen w-screen flex flex-col justify-between select-none overflow-hidden battle-container" :class="questionTextLength > 400 ? 'p-3' : 'p-6'"
     >
       <header class="grid grid-cols-3 items-center px-4 py-2 w-full max-w-7xl mx-auto shrink-0">
         <div class="flex items-center justify-start">
@@ -1267,8 +1311,8 @@ const roundJustEnded = computed(() => {
       </header>
 
       <main
-        class="flex-1 flex flex-col items-center justify-center my-3 px-3 md:px-4 w-full mx-auto min-h-0"
-        :class="questionCardWidthClass"
+        class="flex-1 flex flex-col items-center justify-center px-3 md:px-4 w-full mx-auto min-h-0"
+        :class="[questionCardWidthClass, questionTextLength > 400 ? 'my-1' : 'my-3']"
       >
         <div
           class="w-full h-full relative overflow-hidden flex flex-col justify-center"
@@ -1282,7 +1326,7 @@ const roundJustEnded = computed(() => {
                 ? (questionTextLength > 500
                     ? 'flex-col xl:flex-row xl:items-stretch'
                     : 'flex-col lg:flex-row lg:items-stretch')
-                : 'flex-col items-center justify-center py-4 md:py-8'
+                : (questionTextLength > 400 ? 'flex-col items-center justify-center py-0' : 'flex-col items-center justify-center py-4 md:py-8')
             ]"
           >
             <!-- Texto + opções -->
@@ -1316,10 +1360,10 @@ const roundJustEnded = computed(() => {
                 <h1
                   ref="questionTextRef"
                   class="font-extrabold text-white leading-snug break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-left [text-shadow:0_2px_8px_rgba(0,0,0,0.95),0_0_2px_rgba(0,0,0,0.9)]"
-                  :class="questionImage ? '' : 'text-center'"
+                  :class="[questionImage ? '' : 'text-center', settings.questionTextJustify ? (questionImage ? 'text-justify [text-align-last:start]' : 'text-justify [text-align-last:center]') : '']"
                   :style="{ fontSize: fittedQuestionFontSize + 'px' }"
                 >
-                  {{ displayedQuestionText }}
+                  <span v-for="(para, i) in displayedQuestionParagraphs" :key="i" class="block" :class="i > 0 ? 'mt-[0.45em]' : ''">{{ para }}</span>
                 </h1>
               </div>
 

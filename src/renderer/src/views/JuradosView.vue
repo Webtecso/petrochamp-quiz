@@ -56,6 +56,14 @@ function jurorsAllowedFor(item: EvaluationItem | undefined): typeof jurados.juro
 
 const router = useRouter()
 
+// auto-return: quando a avaliacao analitica termina, volta ao jogo
+watch(
+  () => store.awaitingJuryEvaluation,
+  (now, before) => {
+    if (before && !now && hasBattle.value) router.push({ name: 'moderador-jogo' })
+  }
+)
+
 const availableLocalJurors = ref<{ id: string; name: string }[]>([])
 const selectedLocalJurorId = ref('')
 const localRegisterError = ref('')
@@ -236,11 +244,7 @@ const allAnalyticJurorsSubmitted = computed(() => {
   return allowed.every((juror) => jurorHasSubmittedAnalytic(juror.id))
 })
 
-const canAdvanceAnalyticEvaluation = computed(() => allAnalyticJurorsSubmitted.value)
 
-function advanceAnalyticEvaluation(): void {
-  if (!canAdvanceAnalyticEvaluation.value) return
-}
 
 // ==================== Apresentação de Projetos ====================
 
@@ -328,72 +332,97 @@ const presentationStageLabel = computed(() => {
 
     <div
       v-if="activeAnalyticItem && analyticCriteria.length"
-      class="w-full max-w-4xl bg-petro-card p-6 rounded-2xl flex flex-col gap-4 border border-white/10"
+      class="w-full max-w-5xl overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl"
     >
-      <div class="flex items-center justify-between gap-3">
-        <h3 class="text-lg font-bold text-white">{{ activeAnalyticItem.text }}</h3>
-        <div class="flex items-center gap-3">
-          <span v-if="allAnalyticJurorsSubmitted" class="text-xs text-emerald-400 font-medium">
-            ✓ Todos os jurados avaliaram
-          </span>
-          <span v-else class="text-xs text-amber-400">
-            {{ missingAnalyticJurors.length }} de {{ analyticAllowedJurors.length }} jurados por confirmar
-          </span>
-          <button
-            v-if="canAdvanceAnalyticEvaluation"
-            class="px-4 py-1.5 rounded-lg bg-petro-primary text-white font-semibold text-xs"
-            @click="advanceAnalyticEvaluation"
-          >
-            Avançar
-          </button>
+      <div class="flex flex-col gap-4 bg-gradient-to-r from-petro-dark to-petro-primary px-8 py-6 text-white md:flex-row md:items-start md:justify-between">
+        <div class="min-w-0">
+          <p class="text-xs font-bold uppercase tracking-widest text-white/70">Avaliação analítica</p>
+          <h3 class="mt-1 max-h-40 overflow-y-auto whitespace-pre-line text-xl font-bold leading-snug md:text-2xl">{{ activeAnalyticItem.text }}</h3>
         </div>
+        <span
+          class="shrink-0 self-start rounded-full px-4 py-2 text-sm font-bold"
+          :class="allAnalyticJurorsSubmitted ? 'bg-emerald-400 text-emerald-950' : 'bg-white/15 text-white'"
+        >
+          <template v-if="allAnalyticJurorsSubmitted">✓ Todos os jurados avaliaram</template>
+          <template v-else>{{ missingAnalyticJurors.length }} de {{ analyticAllowedJurors.length }} por confirmar</template>
+        </span>
       </div>
 
-      <div v-for="juror in analyticAllowedJurors" :key="juror.id" class="border border-white/10 rounded-xl p-4 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-semibold text-gray-800">{{ juror.name }}</span>
-          <span v-if="jurorHasSubmittedAnalytic(juror.id)" class="text-xs text-emerald-400">✓ Avaliação enviada</span>
-        </div>
+      <div class="flex flex-col gap-6 bg-gray-50 p-6 md:p-8">
+        <div
+          v-for="juror in analyticAllowedJurors"
+          :key="juror.id"
+          class="rounded-2xl border bg-white p-6 shadow-sm"
+          :class="jurorHasSubmittedAnalytic(juror.id) ? 'border-emerald-300' : 'border-gray-200'"
+        >
+          <div class="mb-5 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="flex h-11 w-11 items-center justify-center rounded-full bg-petro-primary text-lg font-black text-white">
+                {{ (juror.name || '?').charAt(0).toUpperCase() }}
+              </div>
+              <span class="text-xl font-bold text-gray-900">{{ juror.name }}</span>
+            </div>
+            <span v-if="jurorHasSubmittedAnalytic(juror.id)" class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-700">✓ Avaliação enviada</span>
+          </div>
 
-        <div v-for="c in analyticCriteria" :key="c.id" class="grid grid-cols-3 gap-3 items-center">
-          <span class="text-sm text-gray-700">{{ c.label }} <span class="text-gray-400">/{{ c.maxPoints }}</span></span>
-          <input
-            type="number"
-            min="0"
-            :max="c.maxPoints"
-            :value="analyticScoreFor(juror.id, c.id, 'A')"
-            :disabled="jurorHasSubmittedAnalytic(juror.id)"
-            @input="updateAnalyticScore(juror.id, c.id, 'A', c.maxPoints, Number(($event.target as HTMLInputElement).value))"
-            class="border border-white/20 rounded-lg px-2 py-1.5 text-sm bg-transparent text-white"
-            placeholder="Equipa A"
-          />
-          <input
-            type="number"
-            min="0"
-            :max="c.maxPoints"
-            :value="analyticScoreFor(juror.id, c.id, 'B')"
-            :disabled="jurorHasSubmittedAnalytic(juror.id)"
-            @input="updateAnalyticScore(juror.id, c.id, 'B', c.maxPoints, Number(($event.target as HTMLInputElement).value))"
-            class="border border-white/20 rounded-lg px-2 py-1.5 text-sm bg-transparent text-white"
-            placeholder="Equipa B"
-          />
-        </div>
+          <div class="grid grid-cols-[1fr_11rem_11rem] items-center gap-4 border-b border-gray-200 pb-3 text-xs font-bold uppercase tracking-wider">
+            <span class="text-gray-400">Critério</span>
+            <span class="flex items-center gap-2 text-red-700"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>{{ store.teamA?.name ?? 'Equipa A' }}</span>
+            <span class="flex items-center gap-2 text-blue-800"><span class="h-2.5 w-2.5 rounded-full bg-blue-700"></span>{{ store.teamB?.name ?? 'Equipa B' }}</span>
+          </div>
 
-        <div class="flex items-center justify-between text-xs text-gray-600">
-          <span>Total - A: {{ jurorAnalyticTotal(juror.id, 'A') }} · B: {{ jurorAnalyticTotal(juror.id, 'B') }}</span>
-          <button
-            v-if="!jurorHasSubmittedAnalytic(juror.id)"
-            class="px-4 py-1.5 rounded-lg bg-petro-primary text-white font-semibold text-xs"
-            @click="submitAnalyticEvaluation(juror.id)"
+          <div
+            v-for="c in analyticCriteria"
+            :key="c.id"
+            class="grid grid-cols-[1fr_11rem_11rem] items-center gap-4 border-b border-gray-100 py-4 last:border-b-0"
           >
-            Confirmar Avaliação
-          </button>
+            <div>
+              <p class="text-lg font-semibold text-gray-900">{{ c.label }}</p>
+              <p class="text-sm text-gray-500">máximo {{ c.maxPoints }} pontos</p>
+            </div>
+            <div class="relative">
+              <select
+                :value="analyticScoreFor(juror.id, c.id, 'A')"
+                :disabled="jurorHasSubmittedAnalytic(juror.id)"
+                class="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-xl font-bold text-gray-900 outline-none transition focus:border-petro-primary focus:ring-4 focus:ring-petro-primary/15 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                @change="updateAnalyticScore(juror.id, c.id, 'A', c.maxPoints, Number(($event.target as HTMLSelectElement).value))"
+              >
+                <option v-for="n in c.maxPoints + 1" :key="n" :value="n - 1">{{ n - 1 }}</option>
+              </select>
+              <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-petro-primary">▾</span>
+            </div>
+            <div class="relative">
+              <select
+                :value="analyticScoreFor(juror.id, c.id, 'B')"
+                :disabled="jurorHasSubmittedAnalytic(juror.id)"
+                class="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-xl font-bold text-gray-900 outline-none transition focus:border-petro-primary focus:ring-4 focus:ring-petro-primary/15 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                @change="updateAnalyticScore(juror.id, c.id, 'B', c.maxPoints, Number(($event.target as HTMLSelectElement).value))"
+              >
+                <option v-for="n in c.maxPoints + 1" :key="n" :value="n - 1">{{ n - 1 }}</option>
+              </select>
+              <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-petro-primary">▾</span>
+            </div>
+          </div>
+
+          <div class="mt-5 flex flex-col gap-4 border-t border-gray-200 pt-5 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-wrap gap-3">
+              <span class="rounded-xl bg-red-50 px-4 py-2 text-base font-bold text-red-700">
+                {{ store.teamA?.name ?? 'Equipa A' }}: {{ jurorAnalyticTotal(juror.id, 'A') }}
+              </span>
+              <span class="rounded-xl bg-blue-50 px-4 py-2 text-base font-bold text-blue-800">
+                {{ store.teamB?.name ?? 'Equipa B' }}: {{ jurorAnalyticTotal(juror.id, 'B') }}
+              </span>
+            </div>
+            <button
+              v-if="!jurorHasSubmittedAnalytic(juror.id)"
+              class="rounded-xl bg-petro-primary px-8 py-3 text-base font-bold text-white shadow transition hover:bg-petro-dark active:scale-95"
+              @click="submitAnalyticEvaluation(juror.id)"
+            >
+              Confirmar avaliação
+            </button>
+          </div>
         </div>
       </div>
-
-      <p class="text-[11px] text-gray-400">
-        O moderador só pode finalizar esta pergunta depois de todos os jurados acima confirmarem.
-      </p>
     </div>
 
     <!-- Notas Iniciais -->

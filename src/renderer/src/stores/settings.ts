@@ -8,6 +8,8 @@ interface SettingsPayload {
   partnersDurationSeconds: number
   tiebreakAutoEnabled: boolean
   tiebreakMethod: string
+  questionTextJustify?: boolean
+  questionFontScale?: number
 }
 
 export const useSettingsStore = defineStore('settings', {
@@ -17,7 +19,9 @@ export const useSettingsStore = defineStore('settings', {
     showScoreOnProjection: true,
     partnersDurationSeconds: 20,
     tiebreakAutoEnabled: false,
-    tiebreakMethod: 'quiz'
+    tiebreakMethod: 'quiz',
+    questionTextJustify: false,
+    questionFontScale: 1
   }),
   actions: {
     async fetchSettings() {
@@ -28,6 +32,8 @@ export const useSettingsStore = defineStore('settings', {
       this.partnersDurationSeconds = data.partnersDurationSeconds
       this.tiebreakAutoEnabled = data.tiebreakAutoEnabled
       this.tiebreakMethod = data.tiebreakMethod
+      this.questionTextJustify = Boolean(data.questionTextJustify)
+      this.questionFontScale = Number(data.questionFontScale ?? 1)
     },
     async setQuestionTime(seconds: number) {
       const clamped = Math.max(5, Math.min(120, seconds))
@@ -68,6 +74,30 @@ export const useSettingsStore = defineStore('settings', {
         partnersDurationSeconds: clamped
       })
       this.partnersDurationSeconds = clamped
+    },
+    async setQuestionTextJustify(value: boolean) {
+      await api.put('/settings', {
+        questionTimeSeconds: this.questionTimeSeconds,
+        maxJurors: this.maxJurors,
+        showScoreOnProjection: this.showScoreOnProjection,
+        partnersDurationSeconds: this.partnersDurationSeconds,
+        questionTextJustify: value
+      })
+      this.questionTextJustify = value
+    },
+    // NOVO - multiplicador aplicado por cima do tamanho calculado pelo
+    // auto-fit da Projecao, para o moderador poder pedir letra maior ou
+    // menor sem mexer no algoritmo de ajuste automatico.
+    async setQuestionFontScale(value: number) {
+      const clamped = Math.max(0.7, Math.min(1.6, value))
+      await api.put('/settings', {
+        questionTimeSeconds: this.questionTimeSeconds,
+        maxJurors: this.maxJurors,
+        showScoreOnProjection: this.showScoreOnProjection,
+        partnersDurationSeconds: this.partnersDurationSeconds,
+        questionFontScale: clamped
+      })
+      this.questionFontScale = clamped
     },
     // NOVO - desempate automatico do 3o/4o lugar no podio final
     async setTiebreakConfig(autoEnabled: boolean, method: string) {

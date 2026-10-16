@@ -91,6 +91,24 @@ onMounted(() => {
         </p>
       </div>
 
+      <div>
+        <label class="text-sm font-semibold text-gray-600 block mb-2">
+          Tamanho da letra das perguntas ({{ Math.round(settings.questionFontScale * 100) }}%)
+        </label>
+        <input
+          type="range"
+          min="0.7"
+          max="1.6"
+          step="0.05"
+          :value="settings.questionFontScale"
+          class="w-full"
+          @change="settings.setQuestionFontScale(Number(($event.target as HTMLInputElement).value))"
+        />
+        <p class="text-xs text-gray-400 mt-1">
+          Ajusta o tamanho da letra das perguntas na Projeção, por cima do ajuste automático. 100% é o tamanho calculado automaticamente.
+        </p>
+      </div>
+
       <div class="flex items-center justify-between">
         <div>
           <label class="text-sm font-semibold text-gray-600 block">Desempate automático (3.º/4.º lugar)</label>
@@ -137,6 +155,23 @@ onMounted(() => {
           <span
             class="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all"
             :class="settings.showScoreOnProjection ? 'left-6' : 'left-0.5'"
+          ></span>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <div>
+          <label class="text-sm font-semibold text-gray-600 block">Justificar o texto das perguntas</label>
+          <p class="text-xs text-gray-400">O enunciado fica alinhado às duas margens na Projeção. A Projeção lê esta opção ao abrir.</p>
+        </div>
+        <button
+          class="w-12 h-6 rounded-full transition relative shrink-0"
+          :class="settings.questionTextJustify ? 'bg-petro-primary' : 'bg-gray-200'"
+          @click="settings.setQuestionTextJustify(!settings.questionTextJustify)"
+        >
+          <span
+            class="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all"
+            :class="settings.questionTextJustify ? 'left-6' : 'left-0.5'"
           ></span>
         </button>
       </div>

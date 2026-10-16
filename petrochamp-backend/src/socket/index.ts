@@ -509,6 +509,12 @@ async function drawNextItemInner(team: 'A' | 'B'): Promise<void> {
     liveState.currentQuestionId = null
     liveState.analyticQuestionPage = 1
     liveState.usedAnalyticItemIds.push(chosen.id)
+    liveState.analyticEvaluation = {
+      itemId: chosen.id,
+      criteriaScores: [],
+      jurorsSubmitted: [],
+      expectedJurorCount: liveState.expectedJurorCount
+    }
     liveState.activeTeam = team
     // Inicializa o estado de avaliação analítica para esta pergunta
     liveState.analyticEvaluation = {
@@ -1799,13 +1805,29 @@ export function registerSocketHandlers(io: Server): void {
       const totalPhases = await getTotalPhases()
 
       if (liveState.phase < totalPhases) liveState.phase += 1
+      const isNewPhaseLast = liveState.phase >= totalPhases
       liveState.phaseRankings = []
       liveState.usedQuestionIds = []
       liveState.eliminatedTeamIds = []
       liveState.phaseRankingReveal = { visible: false }
-      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.presentationPhaseScores = []
       resetPresentationFlow()
+
+      if (isNewPhaseLast) {
+        liveState.phaseFlow = { stage: 'lastPhaseIntro', suspensePhrase: null }
+        broadcast()
+        setTimeout(() => {
+          if (liveState.phaseFlow.stage !== 'lastPhaseIntro') return
+          liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+          liveState.bracketVisible = true
+          resetMatch(questionTime, false)
+          refreshExpectedJurorCount().then(() => broadcast())
+        }, 6000)
+        callback?.({ success: true })
+        return
+      }
+
+      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.bracketVisible = true
       resetMatch(questionTime, false)
       await refreshExpectedJurorCount()
@@ -1824,13 +1846,29 @@ export function registerSocketHandlers(io: Server): void {
       const totalPhases = await getTotalPhases()
 
       if (liveState.phase < totalPhases) liveState.phase += 1
+      const isNewPhaseLast = liveState.phase >= totalPhases
       liveState.phaseRankings = []
       liveState.usedQuestionIds = []
       liveState.eliminatedTeamIds = []
       liveState.phaseRankingReveal = { visible: false }
-      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.presentationPhaseScores = []
       resetPresentationFlow()
+
+      if (isNewPhaseLast) {
+        liveState.phaseFlow = { stage: 'lastPhaseIntro', suspensePhrase: null }
+        broadcast()
+        setTimeout(() => {
+          if (liveState.phaseFlow.stage !== 'lastPhaseIntro') return
+          liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
+          liveState.bracketVisible = true
+          resetMatch(questionTime, false)
+          refreshExpectedJurorCount().then(() => broadcast())
+        }, 6000)
+        callback?.({ success: true })
+        return
+      }
+
+      liveState.phaseFlow = { stage: 'idle', suspensePhrase: null }
       liveState.bracketVisible = true
       resetMatch(questionTime, false)
       await refreshExpectedJurorCount()

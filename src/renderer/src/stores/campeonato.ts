@@ -81,6 +81,7 @@ interface PhaseFlowState {
     | 'organizer'
     | 'suspense'
     | 'quizIntro'
+    | 'lastPhaseIntro'
   suspensePhrase: string | null
 }
 

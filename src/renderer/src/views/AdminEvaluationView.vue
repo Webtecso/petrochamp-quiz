@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { paginateText, ANALYTIC_PAGE_MAX_CHARS } from '../utils/paginateText'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useQuizContentStore, type EvaluationCriteria } from '../stores/quizContent'
 import { usePhasesStore } from '../stores/phases'
@@ -332,6 +333,9 @@ async function removeCriteria(criteriaId: string): Promise<void> {
     errorMsg.value = 'Não foi possível remover o critério.'
   }
 }
+
+// preview de paginas do enunciado analitico (mesmo limite usado na Projecao)
+const analyticTextPages = computed(() => paginateText(form.value.text ?? '', ANALYTIC_PAGE_MAX_CHARS))
 </script>
 
 <template>
@@ -409,6 +413,23 @@ async function removeCriteria(criteriaId: string): Promise<void> {
           placeholder="Enunciado da pergunta analítica (usa Enter para criar parágrafos - eles aparecem exatamente assim na Projeção)"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
         ></textarea>
+
+        <div
+          v-if="analyticTextPages.length > 1"
+          class="flex flex-col gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3"
+        >
+          <p class="text-xs font-semibold text-amber-700">
+            Atenção: este texto vai ocupar {{ analyticTextPages.length }} páginas na Projeção/Moderador
+          </p>
+          <div
+            v-for="(page, idx) in analyticTextPages"
+            :key="idx"
+            class="text-xs bg-white border border-amber-100 rounded-md p-2 whitespace-pre-wrap"
+          >
+            <span class="font-semibold text-amber-600">Página {{ idx + 1 }}/{{ analyticTextPages.length }}:</span>
+            <span class="text-gray-700"> {{ page }}</span>
+          </div>
+        </div>
 
         <div>
           <label class="text-xs text-gray-500 block mb-1">Pontuação Máxima</label>

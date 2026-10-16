@@ -71,4 +71,4 @@ export function paginateText(text: string, maxChars: number): string[] {
 export const ANALYTIC_PAGE_MAX_CHARS = 420
 
 
-export const NORMAL_PAGE_MAX_CHARS = 700
+export const NORMAL_PAGE_MAX_CHARS = 520

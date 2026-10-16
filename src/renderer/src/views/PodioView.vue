@@ -161,7 +161,15 @@ const startMessage = computed(() => {
 })
 
 const sortedPhaseRanking = computed(() => [...store.phaseRankings].sort((a, b) => b.score - a.score))
-const sortedChampionshipRanking = computed(() => [...store.championshipRankings].sort((a, b) => b.score - a.score))
+// ranking-media: o ranking final mostra a media aritmetica das fases (score acumulado / fases jogadas)
+const sortedChampionshipRanking = computed(() =>
+  store.championshipRankings
+    .map((r) => ({
+      ...r,
+      score: Math.round(r.score / ((r as typeof r & { matches?: number }).matches || 1))
+    }))
+    .sort((a, b) => b.score - a.score)
+)
 const highlightQualified = computed(() => store.eliminatedTeamIds.length > 0)
 
 const isPhaseBracketVisible = computed(() => {
