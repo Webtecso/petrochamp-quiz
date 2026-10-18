@@ -380,6 +380,10 @@ async function drawNextItem(team: 'A' | 'B'): Promise<void> {
     return
   }
   isDrawingNextItem = true
+  // Limpa sempre a resposta da pergunta anterior antes de sortear a seguinte.
+  // O ramo per_team do drawNextItemInner sai cedo sem a limpar, e a marcacao
+  // da pergunta anterior aparecia na nova como se fosse um palpite.
+  resetAnswerState()
   try {
     await drawNextItemInner(team)
   } finally {
@@ -1270,6 +1274,8 @@ export function registerSocketHandlers(io: Server): void {
 
       if (payload.team === 'A') liveState.teamAAnswer = payload.optionLabel
       else liveState.teamBAnswer = payload.optionLabel
+      // mostra a opcao escolhida de imediato, sem esperar pela consulta a BD
+      broadcast()
 
       const question = await prisma.question.findUnique({
         where: { id: liveState.currentQuestionId }
@@ -1277,6 +1283,7 @@ export function registerSocketHandlers(io: Server): void {
       if (!question) {
         if (payload.team === 'A') liveState.teamAAnswer = null
         else liveState.teamBAnswer = null
+        broadcast()
         return
       }
       const correctIdxs = parseCorrectIndexes(question.correctIndexes)
@@ -1294,10 +1301,8 @@ export function registerSocketHandlers(io: Server): void {
       broadcast()
       // REMOVIDO - avanco automatico apos 2500ms. O moderador avanca
       // manualmente com moderator:nextQuestion.
-      if (await roundQuestionsComplete()) {
-        liveState.currentQuestionId = null
-        broadcast()
-      }
+      // A pergunta e as opcoes escolhidas ficam visiveis ate o moderador
+      // finalizar a rodada (antes, currentQuestionId = null limpava o ecra).
     })
 
     socket.on('moderator:endOpenQuestion', () => {
@@ -1743,7 +1748,11 @@ export function registerSocketHandlers(io: Server): void {
 
       if (partnersTimerHandle) clearTimeout(partnersTimerHandle)
 
-      scheduleInstitutionalStep(() => {
+      // REMOVIDO - passos 'webtec' e 'organizer' (ecras Webtec e do
+      // organizador do evento) tirados da sequencia. Parceiros liga
+      // agora diretamente ao passo seguinte (intro do quiz, suspense,
+      // ou podio final se for a ultima fase).
+      scheduleInstitutionalStep(async () => {
         if (liveState.phaseFlow.stage !== 'partners') return
 
         // Fluxo especial:
@@ -1755,33 +1764,18 @@ export function registerSocketHandlers(io: Server): void {
           return
         }
 
-        // Fluxo institucional normal
-        liveState.phaseFlow = { stage: 'webtec', suspensePhrase: null }
+        if (isLastPhase) {
+          // Não há próxima fase — avança automaticamente para o pódio final
+          await triggerFinalPodiumSequence(broadcast)
+          return
+        }
+
+        const phrase = await pickSuspensePhrase()
+        liveState.phaseFlow = {
+          stage: 'suspense',
+          suspensePhrase: phrase
+        }
         broadcast()
-
-        scheduleInstitutionalStep(() => {
-          if (liveState.phaseFlow.stage !== 'webtec') return
-
-          liveState.phaseFlow = { stage: 'organizer', suspensePhrase: null }
-          broadcast()
-
-          scheduleInstitutionalStep(async () => {
-            if (liveState.phaseFlow.stage !== 'organizer') return
-
-            if (isLastPhase) {
-              // Não há próxima fase — avança automaticamente para o pódio final
-              await triggerFinalPodiumSequence(broadcast)
-              return
-            }
-
-            const phrase = await pickSuspensePhrase()
-            liveState.phaseFlow = {
-              stage: 'suspense',
-              suspensePhrase: phrase
-            }
-            broadcast()
-          }, seconds * 1000)
-        }, seconds * 1000)
       }, seconds * 1000)
     })
 
@@ -2162,8 +2156,10 @@ export function registerSocketHandlers(io: Server): void {
       const LOAD_MARGIN_SECONDS = 5
       const configuredSeconds = await getPartnersDurationSeconds()
       const seconds = Math.max(configuredSeconds, ANIMATION_LOOP_SECONDS + LOAD_MARGIN_SECONDS)
+      // REMOVIDO - passo 'webtec' tirado da transicao institucional manual.
+      // Depois do carrossel de parceiros, volta diretamente a 'idle'.
       setTimeout(() => {
-        liveState.phaseTransition.stage = 'webtec'
+        liveState.phaseTransition.stage = 'idle'
         broadcast()
       }, seconds * 1000)
     })

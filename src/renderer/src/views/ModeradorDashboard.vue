@@ -653,6 +653,25 @@ function finishMatch(): void {
       </div>
     </main>
 
+    <div
+      v-if="roundIsComplete && activeDisplay && !store.tiebreak?.active && !store.tiebreak?.pending && !store.thirdPlaceTiebreak.active"
+      class="flex flex-col items-center gap-2 py-3"
+    >
+      <p v-if="isTiedUnresolved" class="text-amber-700 text-sm font-semibold">
+        Empate! ({{ store.teamAScore }} - {{ store.teamBScore }}) - dispara o desempate antes de finalizar.
+      </p>
+      <button
+        v-if="isTiedUnresolved"
+        class="bg-amber-500 text-white rounded-lg px-6 py-3 font-semibold shadow"
+        @click="startTiebreak"
+      >
+        ⚔️ Iniciar Desempate
+      </button>
+      <p v-else class="text-gray-500 text-sm">
+        As duas equipas completaram as perguntas desta ronda. Já podes finalizar a rodada.
+      </p>
+    </div>
+
     <ModeratorControls
       :is-running="store.isRunning"
       :dashboard-disabled="dashboardDisabled"

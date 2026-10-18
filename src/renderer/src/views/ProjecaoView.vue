@@ -21,8 +21,6 @@ import TournamentBracket from '../components/TournamentBracket.vue'
 import PodiumScreen from '../components/PodiumScreen.vue'
 import CountdownScreen from '../components/CountdownScreen.vue'
 import PartnerCarousel from '../components/PartnerCarousel.vue'
-import WebtecPresentation from '../components/WebtecPresentation.vue'
-import EventOrganizerPresentation from '../components/EventOrganizerPresentation.vue'
 import PhaseRankingBoard from '../components/PhaseRankingBoard.vue'
 import PresentationRankingBoard from '../components/PresentationRankingBoard.vue'
 import projectionBg from '../assets/projecao-bg.jpg'
@@ -84,6 +82,133 @@ const questionWrapperRef = ref<HTMLElement | null>(null) // o div que tem overfl
 const questionTextRef = ref<HTMLElement | null>(null)     // o <h1>
 
 const fittedQuestionFontSize = ref(64)
+
+// AUDITORIA (so em npm run dev): percorre todas as perguntas da fase atual no
+// ecra real e regista a letra de cada uma. Uso: abre uma pergunta na Projecao
+// e corre na consola:  await __fitAudit()
+const fitAudit = async (): Promise<void> => {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const s = store as any
+  const saved = {
+    src: s.currentItemSource,
+    qid: s.currentQuestionId,
+    aid: s.currentAnalyticItemId,
+    page: s.analyticQuestionPage,
+    phase: s.phase
+  }
+  const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+  const items: Array<{ kind: string; id: any; phase: number }> = []
+  const phaseOrders = Array.from(new Set((phasesStore.phases as any[]).map((p) => Number(p.order)))).sort((a, b) => a - b)
+  for (const ord of phaseOrders) {
+    store.$patch((st: any) => { st.phase = ord })
+    await nextTick()
+    await wait(200)
+    phaseQuestions.value.forEach((q: any) => items.push({ kind: 'question', id: q.id, phase: ord }))
+    phaseEvaluationItems.value.forEach((i: any) => items.push({ kind: 'analytic', id: i.id, phase: ord }))
+    console.log('[fitAudit] fase ' + ord + ': ' + phaseQuestions.value.length + ' perguntas, ' + phaseEvaluationItems.value.length + ' analiticas')
+  }
+  console.log('[fitAudit] total: ' + items.length + ' itens (~' + Math.round(items.length * 2) + 's). Nao mexas no ecra.')
+  const rows: Array<Record<string, any>> = []
+  for (const it of items) {
+    store.$patch((st: any) => {
+      st.currentItemSource = it.kind
+      st.currentQuestionId = it.kind === 'question' ? it.id : null
+      st.currentAnalyticItemId = it.kind === 'analytic' ? it.id : null
+      st.analyticQuestionPage = 1
+      st.phase = it.phase
+    })
+    await nextTick()
+    await wait(150)
+    const h0 = questionTextRef.value
+    const letra150 = h0 ? parseFloat(h0.style.fontSize) : NaN
+    await wait(1650)
+    const cur = it.kind === 'question' ? s.currentQuestionId : s.currentAnalyticItemId
+    if (String(cur) !== String(it.id)) {
+      rows.push({ tipo: it.kind, id: String(it.id).slice(0, 8), erro: 'estado sobrescrito pelo servidor' })
+      continue
+    }
+    const h = questionTextRef.value
+    const w = questionWrapperRef.value
+    if (!h || !w) {
+      rows.push({ tipo: it.kind, id: String(it.id).slice(0, 8), erro: 'ecra da pergunta fechado' })
+      continue
+    }
+    const card = w.closest('.bg-white') as any
+    const animacoes = card && card.getAnimations ? card.getAnimations({ subtree: true }).length : 0
+    const opts = w.nextElementSibling as HTMLElement | null
+    const optsGrid = opts ? (opts.firstElementChild as HTMLElement | null) : null
+    const letraFinal = parseFloat(h.style.fontSize)
+    const caixaH = w.clientHeight
+    const textoH = h.scrollHeight
+    fitQuestionText()
+    await nextTick()
+    await wait(120)
+    const letraRecalculada = parseFloat(h.style.fontSize)
+    rows.push({
+      fase: it.phase,
+      tipo: it.kind,
+      id: String(it.id).slice(0, 8),
+      chars: h.innerText.length,
+      letra150ms: letra150,
+      letraFinal,
+      letraRecalculada,
+      desfasada: Math.abs(letraRecalculada - letraFinal) >= 1,
+      opcoes: optsGrid ? optsGrid.children.length : 0,
+      charsOpcoes: opts ? opts.innerText.length : 0,
+      opcoesH: opts ? opts.offsetHeight : 0,
+      caixaH,
+      textoH,
+      cortado: textoH > caixaH + 1,
+      imagem: !!(w.parentElement && w.parentElement.parentElement && w.parentElement.parentElement.querySelector('img')),
+      animacoes
+    })
+  }
+  store.$patch((st: any) => {
+    st.currentItemSource = saved.src
+    st.currentQuestionId = saved.qid
+    st.currentAnalyticItemId = saved.aid
+    st.analyticQuestionPage = saved.page
+    st.phase = saved.phase
+  })
+  const ok = rows.filter((r) => typeof r.letraFinal === 'number')
+  ok.sort((a, b) => a.letraFinal - b.letraFinal)
+  console.log('[fitAudit] ' + rows.length + ' itens, ' + ok.length + ' medidos. Mais pequenos primeiro:')
+  console.table(ok)
+  const falhas = rows.filter((r) => r.erro)
+  if (falhas.length) console.warn('[fitAudit] itens nao medidos:', falhas)
+  console.log(
+    '[fitAudit] DIAGNOSTICO -> desfasadas (temporizacao): ' + ok.filter((r) => r.desfasada).length +
+      ' | pequenas e estaveis (conteudo/layout, < 20px): ' + ok.filter((r) => !r.desfasada && r.letraFinal < 20).length +
+      ' | cortadas: ' + ok.filter((r) => r.cortado).length +
+      ' | mudaram entre 150ms e o fim: ' + ok.filter((r) => Math.abs(r.letraFinal - r.letra150ms) >= 1).length
+  )
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+if (import.meta.env.DEV) (window as unknown as { __fitAudit?: unknown }).__fitAudit = fitAudit
+
+// DIAGNOSTICO - regista cada ajuste de letra (ultimos 50) em window.__fitLog.
+// Quando uma pergunta aparecer com letra pequena, abre a consola (npm run dev)
+// e corre: window.__fitLog.slice(-8)
+const fitLog: Array<Record<string, unknown>> = []
+;(window as unknown as { __fitLog?: unknown[] }).__fitLog = fitLog
+watch(fittedQuestionFontSize, async (px) => {
+  await nextTick()
+  const h = questionTextRef.value
+  const w = questionWrapperRef.value
+  if (!h || !w) return
+  const entry = {
+    hora: new Date().toLocaleTimeString(),
+    fontPx: px,
+    chars: h.innerText.length,
+    textH: h.scrollHeight,
+    boxH: w.clientHeight,
+    boxW: w.clientWidth,
+    opcoesH: (w.nextElementSibling as HTMLElement | null)?.offsetHeight ?? 0
+  }
+  fitLog.push(entry)
+  if (fitLog.length > 50) fitLog.shift()
+  if (px < 24 && entry.chars < 400) console.warn('[fit] letra pequena em texto curto', entry)
+})
 
 const MAX_QUESTION_FONT = 140
 const MIN_QUESTION_FONT = 14
@@ -147,13 +272,24 @@ function fitQuestionText(): void {
 }
 
 let questionFitRaf = 0
+let questionFitSettleTimeout: ReturnType<typeof setTimeout> | null = null
 function scheduleQuestionFit(): void {
   if (questionFitRaf) cancelAnimationFrame(questionFitRaf)
+  if (questionFitSettleTimeout) clearTimeout(questionFitSettleTimeout)
   questionFitRaf = requestAnimationFrame(() => {
     // roda 2x seguidas: a 1ª pode medir um layout ainda "assentando"
     fitQuestionText()
     requestAnimationFrame(fitQuestionText)
   })
+  // CORRIGIDO - confirmado por auditoria: ao trocar de fase, o cabecalho
+  // (separador de fases, badges) pode continuar a mudar de layout depois
+  // dos 2 rAF acima, e o fit mede a caixa antes dela assentar de vez -
+  // produz um tamanho maior do que cabe e o texto fica cortado. Esta
+  // terceira passagem, atrasada, reconfirma o ajuste depois desse
+  // reflow tardio.
+  questionFitSettleTimeout = setTimeout(() => {
+    fitQuestionText()
+  }, 180)
 }
 
 let questionResizeObserver: ResizeObserver | null = null
@@ -256,6 +392,7 @@ onUnmounted(() => {
   if (resizeRaf) cancelAnimationFrame(resizeRaf)
   questionResizeObserver?.disconnect()
   if (questionFitRaf) cancelAnimationFrame(questionFitRaf)
+  if (questionFitSettleTimeout) clearTimeout(questionFitSettleTimeout)
 })
 
 interface DocumentInfo {
@@ -642,7 +779,12 @@ const teamBLogo = computed(() => store.teamB?.logoUrl ?? null)
 const questionImage = computed(() => (currentQuestion.value as { imageUrl?: string | null } | undefined)?.imageUrl ?? null)
 
 watch(
-  [() => currentQuestion.value?.text, () => questionImage.value, stageWidth, stageHeight],
+  // CORRIGIDO - confirmado por auditoria: ao trocar de fase, o texto da
+  // pergunta pode ficar igual (ou ser a mesma pergunta repetida), e sem
+  // store.phase aqui o Vue nao disparava este watch (comparacao por
+  // igualdade de referencia), deixando o fit desatualizado com o
+  // layout da fase anterior - produzia texto cortado.
+  [() => currentQuestion.value?.text, () => questionImage.value, stageWidth, stageHeight, () => store.phase],
   () => nextTick(() => scheduleQuestionFit()),
   { immediate: true }
 )
@@ -867,8 +1009,6 @@ const roundJustEnded = computed(() => {
       transparent
     />
     <PartnerCarousel v-else-if="store.phaseFlow.stage === 'partners'" transparent />
-    <WebtecPresentation v-else-if="store.phaseFlow.stage === 'webtec'" transparent />
-    <EventOrganizerPresentation v-else-if="store.phaseFlow.stage === 'organizer'" transparent />
     <SuspenseScreen
       v-else-if="store.phaseFlow.stage === 'suspense'"
       :message="store.phaseFlow.suspensePhrase ?? 'Preparem-se - a próxima fase está prestes a começar...'"
@@ -925,7 +1065,6 @@ const roundJustEnded = computed(() => {
     </div>
 
     <PartnerCarousel v-else-if="store.phaseTransition.stage === 'carousel'" transparent />
-    <WebtecPresentation v-else-if="store.phaseTransition.stage === 'webtec'" transparent />
 
     <CountdownScreen
       v-else-if="store.presentationFlow.stage === 'countdown'"
