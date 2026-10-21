@@ -168,7 +168,17 @@ const sortedChampionshipRanking = computed(() =>
       ...r,
       score: Math.round(r.score / ((r as typeof r & { matches?: number }).matches || 1))
     }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      // O ranking final segue o podio (1o/2o/3o pela progressao no mata-mata);
+      // as restantes equipas ficam ordenadas pela media.
+      const order = store.podiumReveal.stage === 'revealed' ? store.podium.entries.map((e) => e.id) : []
+      const ia = order.indexOf(a.teamId)
+      const ib = order.indexOf(b.teamId)
+      const ra = ia === -1 ? Infinity : ia
+      const rb = ib === -1 ? Infinity : ib
+      if (ra !== rb) return ra - rb
+      return b.score - a.score
+    })
 )
 const highlightQualified = computed(() => store.eliminatedTeamIds.length > 0)
 

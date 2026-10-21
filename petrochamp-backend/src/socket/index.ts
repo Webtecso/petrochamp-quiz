@@ -254,6 +254,82 @@ function applyPresentationWeighting(phaseConfig: {
   }
 }
 
+type ChampRankEntry = (typeof liveState.championshipRankings)[number]
+
+// NOVO - ordem do podio final pela PROGRESSAO no mata-mata, nao pela soma:
+//  1o = vencedor do ultimo confronto da ultima fase;
+//  2o = o outro finalista;
+//  3o = maior nota na penultima fase entre as equipas que nao chegaram a final.
+// A nota mostrada continua a ser a media (score / matches). Se faltarem dados
+// (ex.: penultima fase de apresentacao sem confrontos), mantem a ordem por soma.
+async function computeFinalPodiumOrder(): Promise<{ ordered: ChampRankEntry[]; thirdTie: boolean }> {
+  const bySum = [...liveState.championshipRankings].sort((a, b) => b.score - a.score)
+  const fallback = {
+    ordered: bySum,
+    thirdTie: Boolean(bySum[2] && bySum[3] && bySum[2].score === bySum[3].score)
+  }
+
+  try {
+    if (!liveState.championship) return fallback
+    const lastPhase = await getTotalPhases()
+    if (lastPhase < 2) return fallback
+
+    const rows = await prisma.matchHistory.findMany({
+      where: {
+        championship: liveState.championship,
+        editionName: liveState.editionName,
+        deletedAt: null
+      },
+      orderBy: { endedAt: 'asc' }
+    })
+
+    const finalRows = rows.filter((r) => r.phase === lastPhase && r.winnerId)
+    const finalMatch = finalRows[finalRows.length - 1]
+    if (!finalMatch || !finalMatch.winnerId) return fallback
+
+    const championId = finalMatch.winnerId
+    const runnerUpId = finalMatch.teamAId === championId ? finalMatch.teamBId : finalMatch.teamAId
+    const champEntry = liveState.championshipRankings.find((r) => r.teamId === championId)
+    const runnerEntry = liveState.championshipRankings.find((r) => r.teamId === runnerUpId)
+    if (!champEntry || !runnerEntry) return fallback
+
+    const rest = liveState.championshipRankings.filter(
+      (r) => r.teamId !== championId && r.teamId !== runnerUpId
+    )
+
+    const penultimate = lastPhase - 1
+    const phaseScore = new Map<string, number>()
+    for (const r of rows) {
+      if (r.phase !== penultimate) continue
+      phaseScore.set(r.teamAId, (phaseScore.get(r.teamAId) ?? 0) + r.teamAScore)
+      phaseScore.set(r.teamBId, (phaseScore.get(r.teamBId) ?? 0) + r.teamBScore)
+    }
+
+    if (!rest.some((r) => phaseScore.has(r.teamId))) {
+      const restBySum = [...rest].sort((a, b) => b.score - a.score)
+      return {
+        ordered: [champEntry, runnerEntry, ...restBySum],
+        thirdTie: Boolean(restBySum[0] && restBySum[1] && restBySum[0].score === restBySum[1].score)
+      }
+    }
+
+    const penOf = (r: ChampRankEntry): number => phaseScore.get(r.teamId) ?? -1
+    const restOrdered = [...rest].sort((a, b) => penOf(b) - penOf(a) || b.score - a.score)
+    return {
+      ordered: [champEntry, runnerEntry, ...restOrdered],
+      thirdTie: Boolean(
+        restOrdered[0] &&
+          restOrdered[1] &&
+          penOf(restOrdered[0]) >= 0 &&
+          penOf(restOrdered[0]) === penOf(restOrdered[1])
+      )
+    }
+  } catch (err) {
+    console.error('[podio] falha ao calcular a ordem pela progressao; a usar a soma:', err)
+    return fallback
+  }
+}
+
 async function triggerFinalPodiumSequence(broadcast: () => void): Promise<void> {
   const phrase = await pickSuspensePhrase()
   liveState.podiumReveal.stage = 'suspense'
@@ -270,7 +346,7 @@ async function triggerFinalPodiumSequence(broadcast: () => void): Promise<void> 
       liveState.podiumReveal.countdownValue -= 1
       if (liveState.podiumReveal.countdownValue <= 0) {
         clearInterval(interval)
-        const ranked = [...liveState.championshipRankings].sort((a, b) => b.score - a.score)
+        const { ordered: ranked, thirdTie } = await computeFinalPodiumOrder()
         const thirdEntry = ranked[2]
         const fourthEntry = ranked[3]
         const tiebreakConfig = await getTiebreakConfig()
@@ -279,7 +355,7 @@ async function triggerFinalPodiumSequence(broadcast: () => void): Promise<void> 
           tiebreakConfig.autoEnabled &&
           thirdEntry &&
           fourthEntry &&
-          thirdEntry.score === fourthEntry.score
+          thirdTie
         ) {
           liveState.thirdPlaceTiebreak = {
             active: false,
@@ -304,7 +380,7 @@ async function triggerFinalPodiumSequence(broadcast: () => void): Promise<void> 
 
         // CORRIGIDO - o podio mostra a media aritmetica (score / matches)
         // em vez da soma bruta. A ordenacao (ranked, acima) e o desempate
-        // do 3o/4o lugar continuam a usar r.score (soma), inalterados.
+        // do 3o/4o lugar seguem a progressao no mata-mata (computeFinalPodiumOrder).
         const top3 = ranked.slice(0, 3).map((r) => ({
           id: r.teamId,
           name: r.name,
@@ -1410,7 +1486,7 @@ export function registerSocketHandlers(io: Server): void {
               tb.active = false
               tb.winnerId = winnerId
 
-              const ranked = [...liveState.championshipRankings].sort((a, b) => b.score - a.score)
+              const { ordered: ranked } = await computeFinalPodiumOrder()
               const first = ranked[0]
               const second = ranked[1]
               const tiedScore = ranked[2]?.score ?? 0

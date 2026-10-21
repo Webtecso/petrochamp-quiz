@@ -82,6 +82,7 @@ const questionWrapperRef = ref<HTMLElement | null>(null) // o div que tem overfl
 const questionTextRef = ref<HTMLElement | null>(null)     // o <h1>
 
 const fittedQuestionFontSize = ref(64)
+const questionOptionsRef = ref<HTMLElement | null>(null) // bloco das alternativas (para reduzir a escala quando tomam o espaco do enunciado)
 
 // AUDITORIA (so em npm run dev): percorre todas as perguntas da fase atual no
 // ecra real e regista a letra de cada uma. Uso: abre uma pergunta na Projecao
@@ -214,7 +215,32 @@ const MAX_QUESTION_FONT = 140
 const MIN_QUESTION_FONT = 14
 const ABSOLUTE_MIN_QUESTION_FONT = 8
 
+// NOVO - as alternativas (shrink-0) ficam com a altura que precisarem e o
+// enunciado so ganha o que sobra. Com alternativas altas a sobra era minima e
+// o ajuste dava letra minuscula (ou 8px, invisivel dentro de overflow-hidden).
+// Aqui, se a letra do enunciado ficar abaixo de um minimo legivel, reduz-se a
+// escala das alternativas (zoom CSS altera o layout) em passos ate o enunciado
+// atingir esse minimo ou as alternativas chegarem a 55%.
+const OPTIONS_MIN_ZOOM = 0.55
+
 function fitQuestionText(): void {
+  const opts = questionOptionsRef.value
+  if (opts) opts.style.zoom = '1'
+  fitQuestionTextCore()
+  if (!opts) return
+  const textEl = questionTextRef.value
+  if (!textEl) return
+  const chars = textEl.innerText.length
+  const wanted = (chars <= 300 ? 28 : chars <= 500 ? 22 : 18) * settings.questionFontScale
+  let zoom = 1
+  while (fittedQuestionFontSize.value < wanted && zoom > OPTIONS_MIN_ZOOM) {
+    zoom = Math.max(OPTIONS_MIN_ZOOM, zoom - 0.05)
+    opts.style.zoom = String(zoom)
+    fitQuestionTextCore()
+  }
+}
+
+function fitQuestionTextCore(): void {
   const wrapper = questionWrapperRef.value
   const textEl = questionTextRef.value
   if (!wrapper || !textEl) return
@@ -291,6 +317,35 @@ function scheduleQuestionFit(): void {
     fitQuestionText()
   }, 180)
 }
+
+// NOVO - contagem antes do ranking da fase. So a Projecao a mostra, ao entrar no
+// estado 'ranking' (fases intermedias: na ultima fase o fluxo segue por
+// 'partnersPending', e o ranking final apos o podio nao tem contagem). Nao corre
+// ao recarregar a pagina com o ranking ja aberto.
+const RANKING_COUNTDOWN_SECONDS = 5
+const rankingCountdownValue = ref(0)
+let rankingCountdownTimer: ReturnType<typeof setInterval> | null = null
+function stopRankingCountdown(): void {
+  if (rankingCountdownTimer) {
+    clearInterval(rankingCountdownTimer)
+    rankingCountdownTimer = null
+  }
+}
+watch(
+  () => store.phaseFlow.stage,
+  (stage, prevStage) => {
+    stopRankingCountdown()
+    rankingCountdownValue.value = 0
+    if (stage === 'ranking' && prevStage !== 'ranking') {
+      rankingCountdownValue.value = RANKING_COUNTDOWN_SECONDS
+      rankingCountdownTimer = setInterval(() => {
+        rankingCountdownValue.value -= 1
+        if (rankingCountdownValue.value <= 0) stopRankingCountdown()
+      }, 1000)
+    }
+  }
+)
+onUnmounted(stopRankingCountdown)
 
 let questionResizeObserver: ResizeObserver | null = null
 // fit-observer: liga o observador sempre que a caixa do enunciado aparece (o onMounted corre antes de ela existir)
@@ -980,6 +1035,13 @@ const roundJustEnded = computed(() => {
       </p>
     </div>
 
+    <CountdownScreen
+      v-else-if="store.phaseFlow.stage === 'ranking' && rankingCountdownValue > 0"
+      :seconds="rankingCountdownValue"
+      message="O ranking da fase vai ser revelado..."
+      transparent
+    />
+
     <div
       v-else-if="store.phaseFlow.stage === 'ranking'"
       class="min-h-screen flex flex-col items-center justify-center gap-6 p-10"
@@ -1518,7 +1580,7 @@ const roundJustEnded = computed(() => {
                 </span>
               </div>
 
-              <div class="w-full mt-1 text-left shrink-0">
+              <div ref="questionOptionsRef" class="w-full mt-1 text-left shrink-0">
                 <AnswerOptions
                   dark
                   v-if="currentQuestion && currentQuestionOptions && !optionsAreOnlyLetters"
