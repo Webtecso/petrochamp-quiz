@@ -1414,9 +1414,17 @@ export function registerSocketHandlers(io: Server): void {
           currentQuestionId: null,
           usedQuestionIds: []
         }
+        // A ultima pergunta da ronda ficou guardada para continuar visivel ate
+        // aqui. Ao comecar o desempate limpa-se, senao reaparece quando a
+        // batalha termina.
+        liveState.currentQuestionId = null
+        liveState.currentItemSource = null
+        liveState.currentAnalyticItemId = null
+        liveState.currentItemMode = null
         await drawTiebreakQuestion()
         liveState.timeLeft = await getQuestionTimeSeconds()
         resetAnswerState()
+        broadcast()
       })
     })
 

@@ -157,6 +157,9 @@ const fitAudit = async (): Promise<void> => {
       opcoes: optsGrid ? optsGrid.children.length : 0,
       charsOpcoes: opts ? opts.innerText.length : 0,
       opcoesH: opts ? opts.offsetHeight : 0,
+      zoomOpcoes: opts ? Number(opts.style.zoom || 1) : 1,
+      escalaLetra: settings.questionFontScale,
+      alvoEnunciado: (h.innerText.length <= 300 ? 28 : h.innerText.length <= 500 ? 22 : 18) * settings.questionFontScale,
       caixaH,
       textoH,
       cortado: textoH > caixaH + 1,
@@ -233,10 +236,21 @@ function fitQuestionText(): void {
   const chars = textEl.innerText.length
   const wanted = (chars <= 300 ? 28 : chars <= 500 ? 22 : 18) * settings.questionFontScale
   let zoom = 1
+  // As alternativas so encolhem enquanto cada passo der ao enunciado pelo menos
+  // 2px. Quando o ganho e menor, desfaz esse passo e para, para nao reduzir as
+  // alternativas por quase nada. O enunciado mantem a prioridade (piso e alvos iguais).
   while (fittedQuestionFontSize.value < wanted && zoom > OPTIONS_MIN_ZOOM) {
+    const fontBefore = fittedQuestionFontSize.value
+    const zoomBefore = zoom
     zoom = Math.max(OPTIONS_MIN_ZOOM, zoom - 0.05)
     opts.style.zoom = String(zoom)
     fitQuestionTextCore()
+    if (fittedQuestionFontSize.value - fontBefore < 2) {
+      zoom = zoomBefore
+      opts.style.zoom = String(zoom)
+      fitQuestionTextCore()
+      break
+    }
   }
 }
 
