@@ -47,12 +47,13 @@ const cardPaddingClass = computed(() => {
 
 const questionWrapperRef = ref<HTMLElement | null>(null)
 const questionTextRef = ref<HTMLElement | null>(null)
+const questionOptionsRef = ref<HTMLElement | null>(null)
 const fittedQuestionFontSize = ref(20)
 
 const MAX_QUESTION_FONT = 56
 const MIN_QUESTION_FONT = 10
 
-function fitQuestionText(): void {
+function fitQuestionTextCore(): void {
   const wrapper = questionWrapperRef.value
   const textEl = questionTextRef.value
   if (!wrapper || !textEl) return
@@ -78,6 +79,44 @@ function fitQuestionText(): void {
 
   fittedQuestionFontSize.value = Math.floor(lo)
   textEl.style.fontSize = `${fittedQuestionFontSize.value}px`
+}
+
+// NOVO - ajuste conjunto: as alternativas nunca cedem espaco sozinhas, por isso
+// reduzimos o zoom delas (minimo 0.6) ate o enunciado ficar legivel.
+const OPTIONS_MIN_ZOOM = 0.6
+function fitQuestionText(): void {
+  const opts = questionOptionsRef.value
+  const textEl = questionTextRef.value
+  if (!textEl) return
+  if (!opts) {
+    fitQuestionTextCore()
+    return
+  }
+  const chars = textEl.innerText.length
+  const wanted = chars <= 300 ? 24 : chars <= 500 ? 20 : 16
+  const measure = (zoom: number): number => {
+    opts.style.zoom = String(zoom)
+    fitQuestionTextCore()
+    return fittedQuestionFontSize.value
+  }
+  const score = (font: number, zoom: number): number => Math.min(font / wanted, 1, zoom)
+  let bestZoom = 1
+  let font = measure(1)
+  let bestScore = score(font, 1)
+  if (font < wanted) {
+    const minStep = Math.round(OPTIONS_MIN_ZOOM * 20)
+    for (let step = 19; step >= minStep; step--) {
+      const zoom = step / 20
+      font = measure(zoom)
+      const s = score(font, zoom)
+      if (s > bestScore + 0.01) {
+        bestScore = s
+        bestZoom = zoom
+      }
+      if (font >= wanted) break
+    }
+  }
+  measure(bestZoom)
 }
 
 let questionFitRaf = 0
@@ -115,7 +154,7 @@ onUnmounted(() => {
 })
 
 watch(
-  () => [props.questionText, props.imageUrl],
+  () => [props.questionText, props.imageUrl, props.options],
   () => nextTick(() => scheduleQuestionFit())
 )
 
@@ -171,7 +210,7 @@ const gapClass = computed(() => {
       />
     </div>
 
-    <div ref="questionWrapperRef" class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+    <div ref="questionWrapperRef" class="flex-1 min-h-[4rem] overflow-y-auto overflow-x-hidden overscroll-contain">
       <h2
         ref="questionTextRef"
         class="font-semibold break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-justify"
@@ -182,7 +221,7 @@ const gapClass = computed(() => {
       </h2>
     </div>
 
-    <div class="shrink-0 min-h-0 overflow-x-hidden">
+    <div ref="questionOptionsRef" class="shrink-0 min-h-0 overflow-x-hidden">
       <AnswerOptions
         :options="options"
         :correct-index="correctIndex"

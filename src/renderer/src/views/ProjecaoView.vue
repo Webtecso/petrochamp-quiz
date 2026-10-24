@@ -136,7 +136,9 @@ const fitAudit = async (): Promise<void> => {
     }
     const card = w.closest('.bg-white') as any
     const animacoes = card && card.getAnimations ? card.getAnimations({ subtree: true }).length : 0
-    const opts = w.nextElementSibling as HTMLElement | null
+    // CORRIGIDO - antes lia w.nextElementSibling, que com paginacao e' a linha
+    // 'Pagina x / y' e nao as alternativas.
+    const opts = questionOptionsRef.value
     const optsGrid = opts ? (opts.firstElementChild as HTMLElement | null) : null
     const letraFinal = parseFloat(h.style.fontSize)
     const caixaH = w.clientHeight
@@ -158,6 +160,15 @@ const fitAudit = async (): Promise<void> => {
       charsOpcoes: opts ? opts.innerText.length : 0,
       opcoesH: opts ? opts.offsetHeight : 0,
       zoomOpcoes: opts ? Number(opts.style.zoom || 1) : 1,
+      opcoesNatH: opts ? Math.round(opts.offsetHeight / Number(opts.style.zoom || 1)) : 0,
+      colunaH: w.parentElement ? w.parentElement.clientHeight : 0,
+      cadeia: (() => {
+        const alturas: string[] = []
+        let el: HTMLElement | null = h
+        for (let i = 0; i < 6 && el; i++, el = el.parentElement) alturas.push(String(el.clientHeight))
+        return alturas.join('>')
+      })(),
+      janela: window.innerWidth + 'x' + window.innerHeight,
       escalaLetra: settings.questionFontScale,
       alvoEnunciado: (h.innerText.length <= 300 ? 28 : h.innerText.length <= 500 ? 22 : 18) * settings.questionFontScale,
       caixaH,
@@ -228,30 +239,44 @@ const OPTIONS_MIN_ZOOM = 0.55
 
 function fitQuestionText(): void {
   const opts = questionOptionsRef.value
-  if (opts) opts.style.zoom = '1'
-  fitQuestionTextCore()
-  if (!opts) return
   const textEl = questionTextRef.value
   if (!textEl) return
+  if (!opts) {
+    fitQuestionTextCore()
+    return
+  }
+
+  // Ajuste conjunto (maximin): escolhe a escala das alternativas que equilibra
+  // a legibilidade dos dois blocos, em vez de dar a um deles so o que sobra.
   const chars = textEl.innerText.length
   const wanted = (chars <= 300 ? 28 : chars <= 500 ? 22 : 18) * settings.questionFontScale
-  let zoom = 1
-  // As alternativas so encolhem enquanto cada passo der ao enunciado pelo menos
-  // 2px. Quando o ganho e menor, desfaz esse passo e para, para nao reduzir as
-  // alternativas por quase nada. O enunciado mantem a prioridade (piso e alvos iguais).
-  while (fittedQuestionFontSize.value < wanted && zoom > OPTIONS_MIN_ZOOM) {
-    const fontBefore = fittedQuestionFontSize.value
-    const zoomBefore = zoom
-    zoom = Math.max(OPTIONS_MIN_ZOOM, zoom - 0.05)
+
+  const measure = (zoom: number): number => {
     opts.style.zoom = String(zoom)
     fitQuestionTextCore()
-    if (fittedQuestionFontSize.value - fontBefore < 2) {
-      zoom = zoomBefore
-      opts.style.zoom = String(zoom)
-      fitQuestionTextCore()
-      break
+    return fittedQuestionFontSize.value
+  }
+  // menor dos dois racios: enunciado face ao alvo, alternativas face ao tamanho natural
+  const score = (font: number, zoom: number): number => Math.min(font / wanted, 1, zoom)
+
+  let bestZoom = 1
+  let font = measure(1)
+  let bestScore = score(font, 1)
+
+  if (font < wanted) {
+    const minStep = Math.round(OPTIONS_MIN_ZOOM * 20)
+    for (let step = 19; step >= minStep; step--) {
+      const zoom = step / 20
+      font = measure(zoom)
+      const s = score(font, zoom)
+      if (s > bestScore + 0.01) {
+        bestScore = s
+        bestZoom = zoom
+      }
+      if (font >= wanted) break
     }
   }
+  measure(bestZoom)
 }
 
 function fitQuestionTextCore(): void {
@@ -273,7 +298,7 @@ function fitQuestionTextCore(): void {
 
   // Se até no tamanho máximo já cabe, usa o máximo direto
   if (fitsAt(hi)) {
-    fittedQuestionFontSize.value = hi
+    fittedQuestionFontSize.value = Math.floor(hi * settings.questionFontScale)
     return
   }
 
@@ -292,7 +317,7 @@ function fitQuestionTextCore(): void {
       if (fitsAt(mid)) extremeLo = mid
       else extremeHi = mid
     }
-    fittedQuestionFontSize.value = Math.floor(extremeLo)
+    fittedQuestionFontSize.value = Math.floor(extremeLo * settings.questionFontScale)
     textEl.style.fontSize = `${fittedQuestionFontSize.value}px`
     return
   }
@@ -879,15 +904,15 @@ const questionCardPaddingClass = computed(() => {
   const len = questionTextLength.value
   if (len > 800) return 'p-3 md:p-4'
   if (len > 600) return 'p-5 md:p-6'
-  if (len > 300) return 'p-6 md:p-8'
-  return 'p-8 md:p-10'
+  if (len > 300) return 'p-4 md:p-6'
+  return 'p-5 md:p-6'
 })
 
 const questionContentGapClass = computed(() => {
   const len = questionTextLength.value
   if (len > 800) return 'gap-1 md:gap-2'
-  if (len > 500) return 'gap-4 md:gap-6'
-  return 'gap-6 md:gap-8'
+  if (len > 500) return 'gap-2 md:gap-3'
+  return 'gap-3 md:gap-4'
 })
 
 const currentTiebreakQuestion = computed(() =>
@@ -1499,7 +1524,7 @@ const roundJustEnded = computed(() => {
 
     <div
       v-else-if="isBattleActiveState"
-      class="h-screen w-screen flex flex-col justify-between select-none overflow-hidden battle-container" :class="questionTextLength > 400 ? 'p-3' : 'p-6'"
+      class="h-screen w-screen flex flex-col justify-between select-none overflow-hidden battle-container" :class="questionTextLength > 400 ? 'p-3' : 'p-4'"
     >
       <header class="grid grid-cols-3 items-center px-4 py-2 w-full max-w-7xl mx-auto shrink-0">
         <div class="flex items-center justify-start">
@@ -1527,7 +1552,7 @@ const roundJustEnded = computed(() => {
 
       <main
         class="flex-1 flex flex-col items-center justify-center px-3 md:px-4 w-full mx-auto min-h-0"
-        :class="[questionCardWidthClass, questionTextLength > 400 ? 'my-1' : 'my-3']"
+        :class="[questionCardWidthClass, questionTextLength > 400 ? 'my-1' : 'my-2']"
       >
         <div
           class="w-full h-full relative overflow-hidden flex flex-col justify-center"
@@ -1541,7 +1566,7 @@ const roundJustEnded = computed(() => {
                 ? (questionTextLength > 500
                     ? 'flex-col xl:flex-row xl:items-stretch'
                     : 'flex-col lg:flex-row lg:items-stretch')
-                : (questionTextLength > 400 ? 'flex-col items-center justify-center py-0' : 'flex-col items-center justify-center py-4 md:py-8')
+                : 'flex-col items-center justify-center py-0'
             ]"
           >
             <!-- Texto + opções -->
@@ -1556,17 +1581,6 @@ const roundJustEnded = computed(() => {
                     : 'w-full max-w-[92vw] items-center text-center h-full'
               ]"
             >
-              <div
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full font-bold tracking-wide transition-all shrink-0"
-                :style="questionTextLength > 800
-                  ? 'font-size: clamp(0.55rem, 0.75vw, 0.65rem); padding-top: 0.2rem; padding-bottom: 0.2rem; margin-bottom: 0.35rem;'
-                  : questionTextLength > 400
-                    ? 'font-size: clamp(0.6rem, 0.85vw, 0.75rem); padding-top: 0.25rem; padding-bottom: 0.25rem; margin-bottom: 0.4rem;'
-                    : 'font-size: clamp(0.65rem, 1vw, 0.85rem)'"
-                :class="questionImage ? 'bg-white/15 text-amber-200 border border-white/20 self-start' : 'bg-white/15 text-white self-center'"
-              >
-                <span>❓</span> {{ questionImage ? 'ENUNCIADO' : 'QUESTÃO POR RESPONDER' }}
-              </div>
 
               <div
                 ref="questionWrapperRef"
